@@ -27,7 +27,7 @@
     "access": "public"
   },
   "bin": {
-    "redline": "./dist/cli.js"
+    "redline": "dist/cli.js"
   },
   "exports": {
     "./vite": {
