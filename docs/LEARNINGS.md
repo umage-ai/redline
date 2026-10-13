@@ -61,3 +61,8 @@ Prune entries whose cause is gone from the code.
 ## L13 — Tooling: shell-quoted code edits on Windows lose backslashes
 - Editing code through `node -e "…"` or bash heredocs mangled regexes (`\d` became `d`, `\(` became `(`) and broke theme detection and a filter, with no compile error.
 - **Rule:** make code edits with the Edit/Write tools, not shell string-replacement.
+
+## L14 — Keys pressed right after a popover opens are lost or switch modes (tests only)
+- **Cause:** the popover focuses its textarea in a `setTimeout`. Typing earlier hits the page: `S` of "Switch" started a new sketch, `Enter` saved nothing. Showed up as CI-only flakiness on the slower Linux runner.
+- **Fix:** tests and scripts wait for the textarea to be focused before typing (`comment` helper, text-mode test, `screenshots.mjs`).
+- **Guard:** `overlay.spec.ts` "text mode: rewrite in place → diff note".

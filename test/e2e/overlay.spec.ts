@@ -81,6 +81,7 @@ test('text mode: rewrite in place → diff note', async ({ page }) => {
   await page.keyboard.type('Choose how your agent answers webhooks.');
   await page.keyboard.press('Enter');
   await expect(ui(page, '.pop .diff')).toBeVisible();
+  await expect(ui(page, '.pop textarea')).toBeFocused();   // focused a tick later; Enter before that is lost (flaky on CI)
   const saved = waitForSave(page);
   await page.keyboard.press('Enter');            // empty note + Enter saves text changes
   const note = await saved;
