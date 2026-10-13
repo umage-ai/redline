@@ -45,14 +45,14 @@ regenerate the images with `npm run screenshots`.</sub>
 ## Setup in a repo
 
 ```bash
-npm install -D @umage-ai/redline
+npm install -D @umage.ai/redline
 npx redline init        # skill in .claude/skills/redline, .redline/ in .gitignore, a CLAUDE.md note
 ```
 
 **Vite / React** (`vite.config.ts`). Put Redline first, before the framework plugin:
 
 ```ts
-import redline from '@umage-ai/redline/vite'
+import redline from '@umage.ai/redline/vite'
 
 export default defineConfig({ plugins: [redline(), react()] })
 ```
@@ -62,12 +62,12 @@ export default defineConfig({ plugins: [redline(), react()] })
 **Astro** (`astro.config.mjs`). It only activates under `astro dev`:
 
 ```js
-import redline from '@umage-ai/redline/astro'
+import redline from '@umage.ai/redline/astro'
 
 export default defineConfig({ integrations: [redline()] })
 ```
 
-**Other Node dev servers**: `@umage-ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
+**Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
 
 **Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import
 `<checkout>/dist/vite.js` directly from the app's config.
@@ -125,6 +125,7 @@ npm run dev         # rebuild dist/ on change (reload the app for client changes
 npm test            # unit tests (node:test) + docs check
 npm run test:e2e    # Playwright against fixture apps: vanilla, React, SvelteKit, Astro
 npm run check       # typecheck + unit + docs + e2e
+npm run test:package   # install the packed tarball into fresh apps per framework and test it end to end
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app
 ```
 

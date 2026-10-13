@@ -1,6 +1,6 @@
 // Vite plugin. Only active for `vite dev` (apply: 'serve'), so nothing reaches a build.
 //
-//   import redline from '@umage-ai/redline/vite'
+//   import redline from '@umage.ai/redline/vite'
 //   export default defineConfig({ plugins: [redline(), react()] })
 
 import { fileURLToPath } from 'node:url';

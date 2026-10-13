@@ -53,6 +53,11 @@ Prune entries whose cause is gone from the code.
 - **Fix:** a `closed` guard in `SketchLayer.textAt`, so the first close wins.
 - **Guard:** `overlay.spec.ts` "sketch text label: Enter adds it once, Escape drops it".
 
-## L12 — Tooling: shell-quoted code edits on Windows lose backslashes
+## L12 — Source path came out as `../../../../Users/…/index.astro`
+- **Cause:** root came from cwd as a Windows 8.3 short path (`C:\Users\MORTEN~1\…`) while the framework reported the long one, and `path.relative` compares strings. Symlinks do the same (macOS `/var` → `/private/var`).
+- **Fix:** `normaliseSource` compares `realpathSync.native` of both. (Vite itself 403s on short-path roots, so `test-package.mjs` uses the canonical temp path.)
+- **Guard:** unit "source paths are repo-relative even when root is reached through a link".
+
+## L13 — Tooling: shell-quoted code edits on Windows lose backslashes
 - Editing code through `node -e "…"` or bash heredocs mangled regexes (`\d` became `d`, `\(` became `(`) and broke theme detection and a filter, with no compile error.
 - **Rule:** make code edits with the Edit/Write tools, not shell string-replacement.

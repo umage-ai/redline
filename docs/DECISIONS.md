@@ -18,11 +18,11 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** `redline init` adds `.redline/` to `.gitignore`.
 - **Why:** user call. Feedback is a local work queue, merge collisions on shared markdown would be painful, and team knowledge belongs elsewhere.
 
-## D4 — Distribute as the public npm package `@umage-ai/redline` (2026-10-13, amended)
-- **Decision:** publish to npmjs under MIT; apps add it as a normal devDependency and import `@umage-ai/redline/vite` (or `/astro`, `/server`).
+## D4 — Distribute as the public npm package `@umage.ai/redline` (2026-10-13, amended)
+- **Decision:** publish to npmjs under MIT; apps add it as a normal devDependency and import `@umage.ai/redline/vite` (or `/astro`, `/server`).
 - **Before:** consumers dynamically imported `<REDLINE_PATH | ../redline>/dist/...` from a sibling checkout and skipped it if absent,
   because a `file:` devDependency breaks `npm ci` on CI runners without the sibling. That still works for hacking on Redline itself.
-- **Why changed:** more than one team and app want it, and a registry package needs no sibling checkout. The unscoped name `redline` is taken.
+- **Why changed:** more than one team and app want it, and a registry package needs no sibling checkout. The unscoped name `redline` is taken; the npm org is `umage.ai`, hence the dotted scope.
 
 ## D5 — Inject via HTTP response buffering, not framework hooks (2026-10-13)
 - **Decision:** a middleware buffers `text/html` responses and inserts the script before `</body>`.

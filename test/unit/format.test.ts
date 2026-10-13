@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pageSlug, parsePage, serializePage } from '../../src/server/format.ts';
 import { createStore } from '../../src/server/store.ts';
 import { stampJsx } from '../../src/server/jsx-source.ts';
+import { normaliseSource } from '../../src/server/handler.ts';
 import type { Note } from '../../src/shared/types.ts';
 
 const base = (o: Partial<Note>): Note => ({
@@ -64,6 +65,25 @@ test('store: create, update keeps concurrent edits, remove cleans up', async () 
   await assert.rejects(fs.stat(path.join(root, `.redline/assets/${a.id}.png`)));
   await store.remove(b.id);
   await assert.rejects(fs.stat(file));
+});
+
+test('source paths are repo-relative even when root is reached through a link', async () => {
+  // Frameworks may report the canonical path while root came from cwd through a symlink/junction
+  // (macOS /var → /private/var, Windows 8.3 short names). Used to give ../../../<abs path>.
+  const realRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-src-'));
+  const linkRoot = realRoot + '-link';
+  await fs.mkdir(path.join(realRoot, 'src/pages'), { recursive: true });
+  await fs.writeFile(path.join(realRoot, 'src/pages/index.astro'), '');
+  await fs.symlink(realRoot, linkRoot, 'junction');
+  try {
+    const abs = path.join(realRoot, 'src/pages/index.astro');
+    assert.equal(normaliseSource(abs, linkRoot, linkRoot), 'src/pages/index.astro');
+    assert.equal(normaliseSource(path.join(linkRoot, 'src/pages/index.astro'), realRoot, realRoot), 'src/pages/index.astro');
+    assert.equal(normaliseSource('src/pages/index.astro', linkRoot, linkRoot), 'src/pages/index.astro');
+  } finally {
+    await fs.rm(linkRoot, { recursive: true, force: true });
+    await fs.rm(realRoot, { recursive: true, force: true });
+  }
 });
 
 test('jsx stamping touches only html tags', () => {

@@ -33,6 +33,7 @@ npm run typecheck      # tsc --noEmit (src, test/unit, test/e2e)
 npm test               # unit tests (node:test, runs .ts directly) + docs check
 npm run test:e2e       # build + Playwright against 4 fixture apps (installed Chrome; PW_CHROMIUM=1 for bundled)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
+npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests (slow; runs on prepublishOnly)
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
 npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
 npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright
@@ -71,7 +72,7 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 (`src/server/jsx-source.ts` stamps `data-redline-src` on an HTML-tag allowlist), then the fiber chain for components;
 Svelte through `__svelte_meta`; Astro through `data-astro-source-*` (from the snapshot, because Astro's toolbar strips them).
 
-**Consumers** install `@umage-ai/redline` as a devDependency and import `@umage-ai/redline/{vite,astro,server}` (D4).
+**Consumers** install `@umage.ai/redline` as a devDependency and import `@umage.ai/redline/{vite,astro,server}` (D4).
 Exports map to the flat `dist/*.js` plus `dist/types/` (tsc declarations). `dist/cli.js init <repo>`
 copies the skill, gitignores `.redline/` and adds a CLAUDE.md section.
 

@@ -22,6 +22,8 @@
     "src",
     "test/unit",
     "test/e2e",
+    "test/package",
+    "playwright.package.config.ts",
     "playwright.config.ts"
   ]
 }

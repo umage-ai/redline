@@ -2,7 +2,7 @@
 // <script> injection into HTML pages. Works in any Node dev server that accepts
 // (req, res, next) middleware: Vite, Astro, SvelteKit, Express.
 
-import { promises as fs, existsSync } from 'node:fs';
+import { promises as fs, existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Target } from '../shared/types.ts';
@@ -75,7 +75,13 @@ export function normaliseSource(file: string, root: string, serverRoot: string):
   else if (existsSync(path.join(serverRoot, f))) abs = path.join(serverRoot, f);
   else if (existsSync(path.join(root, f))) abs = path.join(root, f);
   else return f.replace(/\\/g, '/');
-  return path.relative(root, abs).replace(/\\/g, '/');
+  // Compare canonical paths: the framework and the dev server can spell the same folder differently
+  // (symlinks such as macOS /var → /private/var, Windows junctions and 8.3 short names).
+  return path.relative(real(root), real(abs)).replace(/\\/g, '/');
+}
+
+function real(p: string): string {
+  try { return realpathSync.native(p); } catch { return p; }
 }
 
 export function createHandler(opts: RedlineOptions & { serverRoot: string; clientFile: string }): { api: Middleware; inject: Middleware; store: Store; root: string } {

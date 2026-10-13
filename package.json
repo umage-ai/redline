@@ -1,5 +1,5 @@
 {
-  "name": "@umage-ai/redline",
+  "name": "@umage.ai/redline",
   "version": "0.1.0",
   "description": "Dev-only UI feedback overlay: pin comments, sketches and text changes on any web UI, saved as markdown an AI agent can work through.",
   "type": "module",
@@ -69,6 +69,8 @@
     "test:e2e": "npm run build && playwright test",
     "check:docs": "node scripts/check-docs.mjs",
     "check": "npm run typecheck && npm test && npm run test:e2e",
+    "test:package": "node scripts/test-package.mjs",
+    "prepublishOnly": "npm run check && npm run test:package",
     "smoke": "node scripts/smoke.mjs",
     "demo": "npm run build && vite --config examples/demo/vite.config.mjs",
     "screenshots": "npm run build && node scripts/screenshots.mjs",

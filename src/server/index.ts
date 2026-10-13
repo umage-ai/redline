@@ -1,6 +1,6 @@
 // Framework-free entry for other Node dev servers (Express, custom http):
 //
-//   import { redlineMiddleware } from '@umage-ai/redline/server'
+//   import { redlineMiddleware } from '@umage.ai/redline/server'
 //   const { api, inject } = redlineMiddleware({ serverRoot: process.cwd() })
 //   app.use(api); app.use(inject)
 
