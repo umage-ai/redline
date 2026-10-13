@@ -111,6 +111,22 @@ test('sketch: records scroll, saves svg + composited png, anchors to the contain
   await expect(ui(page, '.bar')).toBeVisible();          // back to the toolbar after saving
 });
 
+test('sketch text label: Enter adds it once, Escape drops it', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('s');
+  await page.keyboard.press('4');
+  const label = async (x: number, text: string, key: string) => {
+    await page.mouse.click(x, 300);
+    await expect(ui(page, '.rl-sketch-input')).toBeFocused();
+    await page.keyboard.type(text);
+    await page.keyboard.press(key);
+    await expect(ui(page, '.rl-sketch-input')).toHaveCount(0);
+  };
+  await label(200, 'keep me', 'Enter');
+  await label(500, 'drop me', 'Escape');
+  await expect(ui(page, '.rl-sketch text')).toHaveText(['keep me']);   // removing the input fires blur, which used to commit again
+});
+
 test('agent edits to the markdown show up live; done/delete from the panel', async ({ page }) => {
   await openOverlay(page, f);
   const note = await comment(page, page.getByTestId('agent-save'), 'Rename to "Save as draft".');

@@ -97,14 +97,19 @@ export class SketchLayer {
     inp.className = 'rl-sketch-input';
     inp.style.left = `${x}px`; inp.style.top = `${y - 16}px`;
     inp.placeholder = 'Label…';
-    const commit = () => {
-      if (inp.value.trim()) { this.shapes.push({ t: 'text', x, y: y + 4, s: inp.value.trim() }); this.onChange(); }
+    // Removing a focused input fires `blur` synchronously, so Enter/Escape would run this twice.
+    let closed = false;
+    const close = (keep: boolean) => {
+      if (closed) return;
+      closed = true;
+      if (keep && inp.value.trim()) { this.shapes.push({ t: 'text', x, y: y + 4, s: inp.value.trim() }); this.onChange(); }
       inp.remove(); this.input = null; this.render();
     };
+    const commit = () => close(true);
     inp.addEventListener('keydown', e => {
       e.stopPropagation();
       if (e.key === 'Enter') commit();
-      if (e.key === 'Escape') { inp.remove(); this.input = null; }
+      if (e.key === 'Escape') close(false);
     });
     inp.addEventListener('blur', commit);
     this.root.appendChild(inp);

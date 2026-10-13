@@ -2,6 +2,8 @@
 
 **Mark up a running web UI, and let an AI agent apply the changes.**
 
+![Commenting on a button: the popover shows the element and its React source, App.tsx:32](docs/images/comment.png)
+
 Redline is a dev-only overlay for any web app. Press **Alt+Shift+R** in the browser, then pin
 comments on elements, rewrite text in place, or sketch on the page. Each note is saved by the
 dev server as markdown under `.redline/` with everything an agent needs to find the code:
@@ -30,6 +32,15 @@ It works with Vite, SvelteKit, Astro and React, and was built on real apps in ea
 
 Clicks never reach the app while you're picking. Notes show as numbered pins that follow their
 element, and hovering a pin shows the note and the agent's reply.
+
+| Text: edit in place, saved as a diff | Sketch: box, arrow, pen and labels |
+|---|---|
+| ![Text mode diff](docs/images/text.png) | ![Sketch mode](docs/images/sketch.png) |
+
+![The notes panel with an agent's reply on a done note](docs/images/panel.png)
+
+<sub>Screenshots are from the fictional demo app in [`examples/demo`](examples/demo). Run it with `npm run demo`;
+regenerate the images with `npm run screenshots`.</sub>
 
 ## Setup in a repo
 

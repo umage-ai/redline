@@ -34,6 +34,8 @@ npm test               # unit tests (node:test, runs .ts directly) + docs check
 npm run test:e2e       # build + Playwright against 4 fixture apps (installed Chrome; PW_CHROMIUM=1 for bundled)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
+npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
+npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright
 
 node --test --test-name-pattern="round-trips" test/unit/format.test.ts   # one unit test
 npx playwright test -g "disabled"                                         # one e2e test (run `npm run build` first)

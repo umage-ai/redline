@@ -48,6 +48,11 @@ Prune entries whose cause is gone from the code.
 - **Problem:** modern-screenshot clones the DOM, and clones lose their `scrollTop`.
 - **Fix:** before capture, mark the children of scrolled containers (and of `<body>` for page scroll) with their offset, then translate the clones in `onCloneEachNode`. Fixed elements are skipped, so sticky headers are still lost.
 
-## L11 — Tooling: shell-quoted code edits on Windows lose backslashes
+## L11 — Sketch label added twice; Escape kept it anyway
+- **Cause:** removing a focused `<input>` fires `blur` synchronously. Enter → commit → `remove()` → blur → commit again (and `remove()` threw); Escape → `remove()` → blur → commit.
+- **Fix:** a `closed` guard in `SketchLayer.textAt`, so the first close wins.
+- **Guard:** `overlay.spec.ts` "sketch text label: Enter adds it once, Escape drops it".
+
+## L12 — Tooling: shell-quoted code edits on Windows lose backslashes
 - Editing code through `node -e "…"` or bash heredocs mangled regexes (`\d` became `d`, `\(` became `(`) and broke theme detection and a filter, with no compile error.
 - **Rule:** make code edits with the Edit/Write tools, not shell string-replacement.
