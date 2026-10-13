@@ -64,9 +64,17 @@ jobs:
         if: github.event_name == 'release' || !inputs.dry_run
         run: npm publish --ignore-scripts
 
+      # npm refuses even a dry run for a version that is already published, so between releases show the tarball instead.
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
-        run: npm publish --ignore-scripts --dry-run
+        run: |
+          spec="$(node -p "const p = require('./package.json'); p.name + '@' + p.version")"
+          if npm view "$spec" version > /dev/null 2>&1; then
+            echo "::notice::$spec is already on npm. Bump the version before releasing; showing the tarball instead."
+            npm pack --dry-run --ignore-scripts
+          else
+            npm publish --ignore-scripts --dry-run
+          fi
 
       - name: Upload Playwright results
         if: failure()
