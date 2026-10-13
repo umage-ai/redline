@@ -1,0 +1,9 @@
+node_modules
+dist
+.redline
+test-results
+playwright-report
+test/fixtures/sveltekit/.svelte-kit
+test/fixtures/astro/.astro
+test/fixtures/*/.vite-cache
+.local

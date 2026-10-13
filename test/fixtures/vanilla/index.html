@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Fixture — Agents</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f6f6f8; color: #222; min-height: 1400px; }
+    header { position: sticky; top: 0; background: #fff; padding: 12px 24px; border-bottom: 1px solid #ddd; }
+    main { padding: 24px; max-width: 760px; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    button { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; }
+    .scroller { height: 120px; overflow: auto; border: 1px solid #ddd; }
+    .scroller p { margin: 8px; }
+  </style>
+</head>
+<body>
+  <header><strong>Acme</strong> · Agents</header>
+  <main>
+    <section class="card">
+      <h1 id="title">Agent settings</h1>
+      <p class="lead">Configure how your agent responds to <a href="#">incoming</a> webhooks.</p>
+      <!-- autofocus: opening the overlay must blur it, or C/T/S/N get typed into it -->
+      <input data-testid="agent-name" placeholder="Agent name" autofocus />
+      <button data-testid="agent-save" onclick="window.clicked = (window.clicked||0)+1">Save draft</button>
+      <button>Publish</button>
+      <!-- disabled: browsers fire no click on it; picking must still work -->
+      <button data-testid="agent-delete" disabled>Delete</button>
+    </section>
+    <section class="card">
+      <h2>Logs</h2>
+      <div class="scroller">
+        <p>Line 1</p><p>Line 2</p><p>Line 3</p><p>Line 4</p><p>Line 5</p><p>Line 6</p><p>Line 7</p><p>Line 8</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
