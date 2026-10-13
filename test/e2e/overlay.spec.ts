@@ -63,6 +63,7 @@ test('alt+click and ↑ Parent widen the target; shift+click is a whole-page not
   await page.keyboard.down('Shift');
   await page.mouse.click(b.x + 5, b.y + 5);
   await page.keyboard.up('Shift');
+  await expect(ui(page, '.pop textarea')).toBeFocused();   // L14
   await page.keyboard.type('Page feels cramped.');
   const saved = waitForSave(page);
   await page.keyboard.press('Control+Enter');
