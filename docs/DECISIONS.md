@@ -55,3 +55,8 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D12 — Toggle with Alt+Shift+R; single-letter keys only while the overlay is open (2026-10-13)
 - **Decision:** a global chord opens and closes the overlay. `C`/`T`/`S`/`N`/`Esc` work only while it's open and focus isn't in a field. The hotkey is configurable (`hotkey` option).
 - **Why:** the slide-review tool used bare letters, which collide with typing and app shortcuts in real web apps. A small launcher button is shown by default (`launcher: false` hides it).
+
+## D13 — Release from GitHub Actions with npm Trusted Publishing (2026-10-13)
+- **Decision:** a published GitHub release `v<version>` runs `.github/workflows/publish.yml`: `npm run check`, `npm run test:package`, then `npm publish` authenticated by OIDC. A manual run defaults to `--dry-run`.
+- **Why:** no long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package.
+- **Revisit if:** releases need to come from somewhere other than this repo's workflow.

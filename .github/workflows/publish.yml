@@ -1,0 +1,69 @@
+# Publishes @umage.ai/redline to npm through Trusted Publishing (OIDC): no npm token is stored anywhere.
+# npm side: package settings → Trusted Publisher → GitHub Actions, repo umage-ai/redline, workflow publish.yml.
+#
+# Release: bump "version" in package.json, push, then publish a GitHub release tagged v<version>.
+# Try the pipeline without publishing: Actions → Publish to npm → Run workflow (dry run is the default).
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run every check and `npm publish --dry-run`, without publishing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write   # the OIDC token npm exchanges for a one-off publish credential
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PW_CHROMIUM: '1'   # Playwright's bundled Chromium instead of an installed Chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: npm with Trusted Publishing support (11.5.1+)
+        run: npm install -g npm@^11.5.1
+
+      - name: Release tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Release tag $GITHUB_REF_NAME does not match package.json ($version)"; exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Typecheck, unit, docs, e2e
+        run: npm run check
+
+      - name: Packed tarball in fresh React / SvelteKit / Astro / node apps
+        run: npm run test:package
+
+      # Scripts already ran above (and built dist/), so skip prepublishOnly's second pass.
+      - name: Publish
+        if: github.event_name == 'release' || !inputs.dry_run
+        run: npm publish --ignore-scripts
+
+      - name: Publish (dry run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: npm publish --ignore-scripts --dry-run

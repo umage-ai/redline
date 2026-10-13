@@ -4,8 +4,9 @@ Last updated: 2026-10-13 · Cap: 150 lines · Rewrite sections in place; this is
 
 ## Status
 
-v0.1.0 published to npm as `@umage.ai/redline` (D4), MIT. Used on several internal apps (Astro, React + Vite, SvelteKit).
-The tarball ships only `dist/` (JS + `dist/types`), `skill/`, README and LICENSE. GitHub repo `umage-ai/redline` is still private.
+v0.1.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
+React + Vite 7, SvelteKit) install it as a devDependency. The tarball ships only `dist/` (JS + `dist/types`), `skill/`,
+README and LICENSE. Later releases go through `.github/workflows/publish.yml` (Trusted Publishing, D13).
 
 ## What works (covered by tests)
 
@@ -37,8 +38,8 @@ The tarball ships only `dist/` (JS + `dist/types`), `skill/`, README and LICENSE
 
 ## Next up
 
-1. Make the GitHub repo public (README images on npmjs.com load from it). Move the internal apps from the sibling-path import to the package.
-   Verify a dev server behind a reverse proxy (HTML through the proxy, `/__redline` routing, HMR unaffected).
+1. Verify a dev server behind a reverse proxy (HTML through the proxy, `/__redline` routing, HMR unaffected).
+   Run the publish workflow once on GitHub (dry run): the e2e and package tests have only run on Windows so far.
 2. Chrome extension reusing `dist/client.js` + `captureVisibleTab`, for non-Vite apps and staging (with a `redline serve` store).
 3. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
 4. Optional MCP tools (`list_open_notes`, `close_note`), only if plain files prove insufficient.
