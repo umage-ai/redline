@@ -82,6 +82,9 @@ function matchHotkey(e: KeyboardEvent, spec: string): boolean {
   return e.code === (key.length === 1 ? (/[0-9]/.test(key) ? 'Digit' : 'Key') + key.toUpperCase() : key) || e.key.toLowerCase() === key;
 }
 
+/** Touch-first device: no hover, no keyboard shortcuts to advertise. */
+const coarse = () => matchMedia('(pointer: coarse)').matches;
+
 const isTyping = (e: Event) => e.composedPath().some(n => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
 
 const ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/><path d="M14 20h6"/></svg>`;
@@ -206,12 +209,17 @@ async function boot() {
       h('button', { title: `Close (${config.hotkey})`, onclick: () => setOpen(false) }, '✕'),
     );
     const hk = config.hotkey.split('+').map(k => `<kbd>${esc(k[0].toUpperCase() + k.slice(1))}</kbd>`).join('+');
-    hint.innerHTML = {
+    hint.innerHTML = (coarse() ? {
+      idle: `Pick a mode: <b>Comment</b>, <b>Text</b> or <b>Sketch</b>`,
+      comment: `<b>Tap</b> an element to comment · <b>↑ Parent</b> / <b>Page</b> widen it`,
+      text: `<b>Tap</b> any text and rewrite it in place`,
+      sketch: `Draw with your finger · <b>Done</b> when finished`,
+    } : {
       idle: `Pick a mode: <kbd>C</kbd> comment · <kbd>T</kbd> text · <kbd>S</kbd> sketch · <kbd>N</kbd> notes · ${hk} hide`,
       comment: `<b>Click</b> an element to comment · <kbd>Alt</kbd>+click picks its parent · <kbd>Shift</kbd>+click = whole page · <kbd>Esc</kbd> stop`,
       text: `<b>Click</b> any text and rewrite it in place · <kbd>Enter</kbd> keep · <kbd>Esc</kbd> stop`,
       sketch: `Drag to draw · <kbd>1</kbd> box <kbd>2</kbd> arrow <kbd>3</kbd> pen <kbd>4</kbd> text · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Enter</kbd> done · <kbd>Esc</kbd> cancel`,
-    }[state.mode];
+    })[state.mode];
     // Astro's dev toolbar also lives bottom-centre; sit above it.
     ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
     hint.style.bottom = state.mode === 'sketch' ? 'calc(16px + var(--lift))' : '';
@@ -247,17 +255,24 @@ async function boot() {
 
   // Swallow pointer input while picking so the app never sees the click. Picks happen on
   // pointerup, not click: browsers don't fire click on disabled buttons and inputs.
-  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'touchstart', 'touchend', 'submit']) {
+  // touchstart/touchmove are hidden from the app but not cancelled, so a finger can still
+  // scroll; a scroll fires pointercancel, so only a tap reaches pointerup (L15).
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'touchstart', 'touchmove', 'touchend', 'submit']) {
+    const scrolls = type === 'touchstart' || type === 'touchmove';
     addEventListener(type, e => {
       if (!picking() || fromUs(e)) return;
-      e.preventDefault();
+      if (!scrolls && e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
       if (type === 'pointerup' && (e as PointerEvent).button === 0) onPick(e as MouseEvent);
-    }, { capture: true, passive: false });
+    }, { capture: true, passive: scrolls });
   }
+  addEventListener('pointercancel', () => { if (picking() && !draft) hideHl(); }, true);
 
   function onPick(e: MouseEvent) {
     if (draft) {
+      // Tapping outside a text edit finishes it. The page's pointerdown is cancelled, so the
+      // editor never blurs by itself (and phones have no Enter-to-confirm habit).
+      if (draft.editor?.isContentEditable) { draft.editor.blur(); return; }
       const ta = popLayer.querySelector('textarea');
       if (draft.editor || (ta && ta.value.trim())) { popLayer.querySelector('.pop')?.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 160); return; }
       cancelDraft();
@@ -324,14 +339,27 @@ async function boot() {
     );
     (pop as HTMLElement & { _shot?: HTMLInputElement })._shot = shot;
     popLayer.replaceChildren(pop);
-    // place near the anchor point, inside the viewport
-    const W = 360, H = pop.offsetHeight || 200;
-    let x = d.x + 14, y = d.y + 14;
-    if (x + W > innerWidth - 8) x = Math.max(8, d.x - W - 14);
-    if (y + H > innerHeight - 8) y = Math.max(8, innerHeight - H - 8);
-    Object.assign(pop.style, { left: `${x}px`, top: `${y}px` });
+    placePop();
     setTimeout(() => ta.focus());
   }
+
+  // Near the anchor point, inside the visible viewport. On phones the on-screen keyboard
+  // shrinks only the visual viewport, so re-place when it opens or closes.
+  function placePop() {
+    const pop = popLayer.querySelector<HTMLElement>('.pop');
+    if (!pop || !draft) return;
+    const vv = visualViewport;
+    const top = vv?.offsetTop ?? 0, bottom = vv ? vv.offsetTop + vv.height : innerHeight;
+    const W = pop.offsetWidth || 360, H = pop.offsetHeight || 200;
+    let x = draft.x + 14, y = draft.y + 14;
+    if (x + W > innerWidth - 8) x = Math.max(8, draft.x - W - 14);
+    if (x + W > innerWidth - 8) x = Math.max(8, innerWidth - W - 8);
+    if (y + H > bottom - 8) y = Math.max(top + 8, bottom - H - 8);
+    if (y < top + 8) y = top + 8;
+    Object.assign(pop.style, { left: `${x}px`, top: `${y}px` });
+  }
+  visualViewport?.addEventListener('resize', placePop);
+  visualViewport?.addEventListener('scroll', placePop);
 
   async function saveDraft(text: string) {
     const d = draft!;
@@ -437,7 +465,7 @@ async function boot() {
   /* ---------- sketch mode ---------- */
   let tools: HTMLElement | null = null;
   function startSketch() {
-    const layer = new SketchLayer(shadow, () => renderTools());
+    const layer = new SketchLayer(ui, () => renderTools(), bar);
     draft = { type: 'sketch', sketch: layer, x: 0, y: 0 };
     tools = h('div', { class: 'tools' });
     ui.append(tools);
@@ -512,8 +540,10 @@ async function boot() {
       pin.className = `pin ${n.type}${n.done ? ' done' : ''}`;
       pin.textContent = String(numberOf(n));
       const fx = Math.min(Math.max(n.target!.fx ?? 1, 0), 1), fy = Math.min(Math.max(n.target!.fy ?? 0, 0), 1);
-      pin.style.left = `${r.x + fx * r.width}px`;
-      pin.style.top = `${r.y + fy * r.height}px`;
+      // Kept on screen: full-width targets on a phone would put the pin past the right edge.
+      const size = pin.offsetWidth || 24;
+      pin.style.left = `${Math.min(r.x + fx * r.width, innerWidth - size - 4)}px`;
+      pin.style.top = `${Math.max(r.y + fy * r.height, size + 4)}px`;
       pin.style.display = r.bottom < 0 || r.top > innerHeight ? 'none' : '';
     }
     for (const [id, el] of pinEls) if (!keep.has(id)) { el.remove(); pinEls.delete(id); }
@@ -650,7 +680,8 @@ async function boot() {
             catch { toast(prompt, false, 8000); }
           } }, 'Copy prompt for Claude'),
         ),
-        h('label', { title: 'Capture the real pixels of this tab (needed for WebGL/maps/video). Chrome asks for permission once per page load.' },
+        // Mobile browsers have no getDisplayMedia.
+        typeof navigator.mediaDevices?.getDisplayMedia === 'function' && h('label', { title: 'Capture the real pixels of this tab (needed for WebGL/maps/video). Chrome asks for permission once per page load.' },
           h('input', { type: 'checkbox', ...(tab ? { checked: true } : {}), onchange: async (e: Event) => {
             const on = (e.target as HTMLInputElement).checked;
             ls.set('tabcapture', on ? '1' : '0');

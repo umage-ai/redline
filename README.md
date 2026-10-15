@@ -25,13 +25,18 @@ It works with Vite, SvelteKit, Astro and React, and was built on real apps in ea
 | Key | Mode | What you do | What's saved |
 |---|---|---|---|
 | `C` | **Comment** | Click an element and type. `Alt`+click picks its parent, `Shift`+click comments on the whole page. Use **↑ Parent** to widen the target. | The instruction plus element context and a cropped screenshot |
-| `T` | **Text** | Click any text and edit it in place. `Enter` keeps the edit. | A `diff` block (`-` old / `+` new) plus an optional note |
+| `T` | **Text** | Click any text and edit it in place. `Enter` (or clicking outside) keeps the edit. | A `diff` block (`-` old / `+` new) plus an optional note |
 | `S` | **Sketch** | Draw with box `1`, arrow `2`, pen `3` and text `4`. `Ctrl+Z` undoes, `Enter` finishes. | The SVG plus a viewport screenshot with the sketch drawn on top |
 | `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for Claude**. | |
 | `Esc` | | Steps back one level: draft → mode → panel → closed. | |
 
 Clicks never reach the app while you're picking. Notes show as numbered pins that follow their
 element, and hovering a pin shows the note and the agent's reply.
+
+**Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then
+tap the mode buttons. On touch screens the toolbars drop the key hints and grow their targets, a tap
+picks an element while a swipe still scrolls, the popover stays above the on-screen keyboard, and the
+notes panel goes full width. Use **↑ Parent** and **Page** in place of `Alt`/`Shift`+click.
 
 | Text: edit in place, saved as a diff | Sketch: box, arrow, pen and labels |
 |---|---|

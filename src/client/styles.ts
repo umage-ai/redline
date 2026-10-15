@@ -61,7 +61,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .tip .re { margin-top: 6px; padding-left: 8px; border-left: 2px solid var(--ok); color: var(--fg-2); }
 
 /* popover */
-.pop { position: fixed; width: 360px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
+.pop { position: fixed; width: min(360px, calc(100vw - 16px)); border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
   box-shadow: 0 16px 48px rgba(0,0,0,.45); pointer-events: auto; overflow: hidden; }
 .pop header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); }
 .pop header .what { flex: 1; min-width: 0; font: 600 11.5px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -148,4 +148,40 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
 .busy { position: fixed; inset: 0; cursor: progress; pointer-events: auto; }
+
+/* touch: bigger targets, no keyboard hints, actions always visible */
+@media (pointer: coarse) {
+  .launcher { width: 44px; height: 44px; }
+  .launcher svg { width: 22px; height: 22px; }
+  .bar kbd, .tools kbd { display: none; }
+  .bar button, .tools button { min-height: 40px; padding: 6px 12px; }
+  .hint { bottom: calc(72px + var(--lift, 0px)); }
+  .pin { width: 28px; height: 28px; margin-top: -28px; border-radius: 14px 14px 14px 2px; font-size: 12px; }
+  .pop header button { padding: 6px 10px; }
+  .pop textarea, .card textarea { font-size: 16px; }
+  .btn { padding: 9px 14px; }
+  .card .acts { opacity: 1; }
+  .card .acts button { padding: 6px 9px; font-size: 14px; }
+  .seg button { padding: 7px 10px; }
+  .pop footer input, .filters input, .panel > footer input { width: 18px; height: 18px; }
+}
+@media (hover: none) { .card .acts { opacity: 1; } }
+
+/* phones: fit everything inside the viewport */
+@media (max-width: 560px) {
+  .launcher { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
+  .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
+  .bar .brand span, .bar .brand + .sep { display: none; }
+  .bar .brand { padding: 0 6px; }
+  .bar button { padding: 6px 9px; }
+  .hint, .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
+  .tools { top: max(8px, env(safe-area-inset-top)); flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100vw - 16px); }
+  .tools button { padding: 6px 9px; }
+  .pop { width: calc(100vw - 16px); }
+  .pop textarea { max-height: 30vh; }
+  .panel { width: 100vw; border-left: 0; }
+  .filters { flex-wrap: wrap; }
+  .tip { max-width: calc(100vw - 16px); }
+  .rl-sketch-input { max-width: calc(100vw - 8px); }
+}
 `;

@@ -56,31 +56,40 @@ export class SketchLayer {
   private live: Shape | null = null;
   private input: HTMLInputElement | null = null;
 
-  constructor(private root: ShadowRoot, private onChange: () => void) {
+  /** `before`: mount the drawing surface under the overlay's toolbars, or it eats their taps (L16). */
+  constructor(private root: HTMLElement, private onChange: () => void, before: Node | null = null) {
     this.el = document.createElementNS(NS, 'svg');
     this.el.setAttribute('class', 'rl-sketch');
     this.el.addEventListener('pointerdown', this.down);
     this.el.addEventListener('wheel', e => e.preventDefault(), { passive: false });
-    root.appendChild(this.el);
+    root.insertBefore(this.el, before);
     this.render();
   }
 
   private down = (e: PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !e.isPrimary || this.live) return;
     e.preventDefault();
     const x = e.clientX, y = e.clientY;
-    if (this.tool === 'text') { this.textAt(x, y); return; }
+    // On touch, focusing an input only opens the keyboard from pointerup (user activation).
+    if (this.tool === 'text') {
+      if (e.pointerType === 'mouse') this.textAt(x, y);
+      else this.el.addEventListener('pointerup', () => this.textAt(x, y), { once: true });
+      return;
+    }
     this.live = this.tool === 'pen' ? { t: 'pen', pts: [[x, y]] } : { t: this.tool, x1: x, y1: y, x2: x, y2: y };
     this.el.setPointerCapture(e.pointerId);
     const move = (m: PointerEvent) => {
+      if (m.pointerId !== e.pointerId) return;
       const s = this.live!;
       if (s.t === 'pen') s.pts.push([m.clientX, m.clientY]);
       else if (s.t !== 'text') { s.x2 = m.clientX; s.y2 = m.clientY; }
       this.render();
     };
-    const up = () => {
+    const up = (u: PointerEvent) => {
+      if (u.pointerId !== e.pointerId) return;
       this.el.removeEventListener('pointermove', move);
       this.el.removeEventListener('pointerup', up);
+      this.el.removeEventListener('pointercancel', up);
       const s = this.live!;
       this.live = null;
       const b = bboxOf([s]);
@@ -89,13 +98,14 @@ export class SketchLayer {
     };
     this.el.addEventListener('pointermove', move);
     this.el.addEventListener('pointerup', up);
+    this.el.addEventListener('pointercancel', up);
   };
 
   private textAt(x: number, y: number) {
     this.input?.remove();
     const inp = document.createElement('input');
     inp.className = 'rl-sketch-input';
-    inp.style.left = `${x}px`; inp.style.top = `${y - 16}px`;
+    inp.style.top = `${y - 16}px`;
     inp.placeholder = 'Label…';
     // Removing a focused input fires `blur` synchronously, so Enter/Escape would run this twice.
     let closed = false;
@@ -113,6 +123,7 @@ export class SketchLayer {
     });
     inp.addEventListener('blur', commit);
     this.root.appendChild(inp);
+    inp.style.left = `${Math.max(4, Math.min(x, innerWidth - inp.offsetWidth - 4))}px`;   // keep it on a narrow screen
     this.input = inp;
     setTimeout(() => inp.focus());
   }

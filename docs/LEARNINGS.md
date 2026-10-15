@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-10-13 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-10-15 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -66,3 +66,13 @@ Prune entries whose cause is gone from the code.
 - **Cause:** the popover focuses its textarea in a `setTimeout`. Typing earlier hits the page: `S` of "Switch" started a new sketch, `Enter` saved nothing. Showed up as CI-only flakiness on the slower Linux runner.
 - **Fix:** tests and scripts wait for the textarea to be focused before typing (`comment` helper, text-mode test, `screenshots.mjs`).
 - **Guard:** `overlay.spec.ts` text-mode and whole-page tests (every test waits for focus before typing).
+
+## L15 — On a phone the page can't be scrolled in comment/text mode
+- **Cause:** the capture listener called `preventDefault()` on `touchstart`, which cancels scrolling.
+- **Fix:** `touchstart`/`touchmove` are only hidden from the app (passive, `stopImmediatePropagation`). A scroll fires `pointercancel`, so only a tap reaches the `pointerup` that picks.
+- **Guard:** `mobile.spec.ts` "a finger can still scroll the page while picking". Note: CDP `Input.synthesizeScrollGesture` didn't scroll the page at all here; the test uses raw `Input.dispatchTouchEvent`.
+
+## L16 — Sketch toolbar buttons did nothing when clicked or tapped
+- **Cause:** `SketchLayer` appended its full-screen `<svg>` to the shadow root after `.rl`, so it painted over `.tools`. Desktop tests only used the `1`–`4`/`Enter` keys.
+- **Fix:** the svg is inserted into `.rl` before the toolbar. Also: label inputs are created on `pointerup` for touch (focus opens the keyboard only with user activation).
+- **Guard:** `mobile.spec.ts` "sketch on touch…". Test quirk: after a raw CDP touch drag, Chrome drops the `click` of the next synthetic tap, so that test draws last.

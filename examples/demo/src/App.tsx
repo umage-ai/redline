@@ -79,25 +79,27 @@ function RoutesTable() {
         <h2>Active routes</h2>
         <input placeholder="Search routes…" />
       </div>
-      <table>
-        <thead>
-          <tr><th>Route</th><th>Driver</th><th>Zone</th><th>Progress</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {routes.map(r => (
-            <tr key={r.id}>
-              <td className="mono">{r.id}</td>
-              <td>{r.driver}</td>
-              <td>{r.zone}</td>
-              <td>
-                <div className="progress"><span style={{ width: `${(r.done / r.stops) * 100}%` }} /></div>
-                <small>{r.done}/{r.stops} stops</small>
-              </td>
-              <td><span className={`badge ${r.status.toLowerCase().replace(' ', '-')}`}>{r.status}</span></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Route</th><th>Driver</th><th>Zone</th><th>Progress</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {routes.map(r => (
+              <tr key={r.id}>
+                <td className="mono">{r.id}</td>
+                <td>{r.driver}</td>
+                <td>{r.zone}</td>
+                <td>
+                  <div className="progress"><span style={{ width: `${(r.done / r.stops) * 100}%` }} /></div>
+                  <small>{r.done}/{r.stops} stops</small>
+                </td>
+                <td><span className={`badge ${r.status.toLowerCase().replace(' ', '-')}`}>{r.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
