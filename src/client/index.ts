@@ -73,7 +73,8 @@ function blockText(el: Element): string {
 function nthOf(el: Element, from: string): { index: number; count: number } | undefined {
   const n = (s: string) => s.replace(/[\s ]+/g, ' ').trim();
   const want = n(from);
-  const same = Array.from(document.getElementsByTagName(el.localName)).filter(x => x === el || n(blockText(x)) === want);
+  // textContent too: innerText is '' for hidden elements (Reveal hides every other slide)
+  const same = Array.from(document.getElementsByTagName(el.localName)).filter(x => x === el || n(blockText(x)) === want || n(x.textContent ?? '') === want);
   return same.length > 1 ? { index: same.indexOf(el), count: same.length } : undefined;
 }
 

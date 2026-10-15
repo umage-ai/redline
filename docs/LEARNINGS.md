@@ -107,3 +107,8 @@ Prune entries whose cause is gone from the code.
 - **Cause:** a shrink-to-fit fixed box only gets the room right of `left`, so once `flex-wrap` is allowed it wraps at 50% width (nowrap had hidden that).
 - **Fix:** `left: 8px; right: calc(8px + var(--panel-w)); width: fit-content; margin: 0 auto` centres it with the full room available.
 - **Guard:** `extend.spec.ts` ("toolbar moves clear of the panel": centred when closed, wraps beside the panel at 760 px).
+
+## L25 — Same-text edit refused on a Reveal deck ("2 <p> elements have this text") though the DOM has 3
+- **Cause:** `nthOf` compared `innerText`, which is `''` for `visibility:hidden` elements, and Reveal hides every slide but the current one, so the hidden copies weren't counted and `nth` was never sent.
+- **Fix:** also match on normalised `textContent` (`src/client/index.ts` `nthOf`).
+- **Guard:** `extend.spec.ts` ("same-text elements (one hidden, like a Reveal slide)").

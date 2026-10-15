@@ -133,7 +133,7 @@ test('if the write fails after the check, the edit falls back to a text note for
   } finally { await file.restore(); }
 });
 
-test('static .html: one of several same-text elements is written by position, keeping &mdash;', async ({ page }) => {
+test('static .html: one of several same-text elements (one hidden, like a Reveal slide) is written by position, keeping &mdash;', async ({ page }) => {
   const f = FIXTURES.vanilla;
   await resetNotes(f);
   const file = await editable(f, 'edit.html');
@@ -146,7 +146,7 @@ test('static .html: one of several same-text elements is written by position, ke
     const apply = ui(page, '.pop .btn.apply');
     await expect(apply).toBeEnabled();
     await apply.click();
-    await expect.poll(file.read).toContain('<p>Yes &mdash; ok</p><p>No &mdash; ok</p><p>Yes &mdash; ok</p>');
+    await expect.poll(file.read).toContain('<p style="visibility:hidden">Yes &mdash; ok</p><p>No &mdash; ok</p><p>Yes &mdash; ok</p>');
   } finally { await file.restore(); }
 });
 
