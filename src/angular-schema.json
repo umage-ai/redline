@@ -175,6 +175,11 @@
         "extensions": {
           "type": "array",
           "description": "Overlay extension files or { url }."
+        },
+        "pageKey": {
+          "type": "string",
+          "enum": ["route", "path"],
+          "description": "What groups notes into pages: route (path + hash route, default) or path."
         }
       },
       "additionalProperties": false

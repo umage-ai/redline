@@ -199,3 +199,10 @@ test('direct edit: Angular templates (templateUrl .html and inline in the compon
     assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/util.ts', 1, 'h2', 'Card', 'y') })).reason, /no writer/);
   } finally { await s.close(); }
 });
+
+test('Angular builder schema accepts every JSON-safe option (pageKey was missing after the merge)', async () => {
+  const schema = JSON.parse(await fs.readFile(new URL('../../src/angular-schema.json', import.meta.url), 'utf8'));
+  const keys = Object.keys(schema.properties.redline.properties).sort();
+  assert.deepEqual(keys, ['app', 'dir', 'directEdit', 'extensions', 'hotkey', 'launcher', 'pageKey', 'root', 'templateSourceLocations']);
+  assert.equal(schema.properties.redline.additionalProperties, false);   // so a missing key is an ng serve error, not a silent drop
+});
