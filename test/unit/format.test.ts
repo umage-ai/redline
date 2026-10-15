@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pageSlug, parsePage, serializePage } from '../../src/server/format.ts';
 import { createStore } from '../../src/server/store.ts';
 import { stampJsx } from '../../src/server/jsx-source.ts';
+import { loadVueParser, stampVue } from '../../src/server/vue-source.ts';
 import { normaliseSource } from '../../src/server/handler.ts';
 import type { Note } from '../../src/shared/types.ts';
 
@@ -89,10 +90,40 @@ test('source paths are repo-relative even when root is reached through a link', 
 test('jsx stamping touches only html tags', () => {
   const src = `export const A = () => <div className="x"><Button/><mesh/><span data-x>{a > b ? <p>hi</p> : null}</span></div>;`;
   const out = stampJsx(src, path.resolve('src/A.tsx'), path.resolve('.'))!;
-  assert.match(out.code, /<div data-redline-src="src\/A\.tsx:1:24" className/);
-  assert.match(out.code, /<span data-redline-src="src\/A\.tsx:1:\d+" data-x>/);
+  assert.match(out.code, /<div data-redline-src="src\/A\.tsx:1:24 A" className/);
+  assert.match(out.code, /<span data-redline-src="src\/A\.tsx:1:\d+ A" data-x>/);
   assert.match(out.code, /<p data-redline-src=/);
   assert.match(out.code, /<Button\/>/);
   assert.match(out.code, /<mesh\/>/);
   assert.equal(stampJsx('const x = 1 < 2;', 'a.tsx', '.'), null);
+});
+
+test('jsx stamps name the component the element is written in (Solid/Preact chain)', () => {
+  const src = [
+    'function Card(p) { const row = () => <li>x</li>; return <section>{p.children}</section>; }',
+    'export const App = memo(() => <main><Card><b>hi</b></Card></main>);',
+    'export default function () { return <p>anon</p>; }',
+    'function helper() { return <i>h</i>; }',
+  ].join('\n');
+  const out = stampJsx(src, path.resolve('src/A.jsx'), path.resolve('.'))!.code;
+  assert.match(out, /<li data-redline-src="src\/A\.jsx:1:\d+ Card">/);
+  assert.match(out, /<section data-redline-src="src\/A\.jsx:1:\d+ Card">/);
+  assert.match(out, /<main data-redline-src="src\/A\.jsx:2:\d+ App">/);
+  assert.match(out, /<b data-redline-src="src\/A\.jsx:2:\d+ App">/);
+  assert.match(out, /<p data-redline-src="src\/A\.jsx:3:\d+">/);
+  assert.match(out, /<i data-redline-src="src\/A\.jsx:4:\d+">/);
+});
+
+test('vue stamping: plain HTML elements in the template get file:line:col; components, slots, script untouched', () => {
+  const parse = loadVueParser(process.cwd());
+  assert.ok(parse, 'vue/compiler-sfc resolves (vue is a devDependency)');
+  const src = '<script setup>\nconst a = "<p>not me</p>"\n</script>\n\n<template>\n  <section class="x">\n    <h2 v-if="a < 2">Hi {{ a }}</h2>\n    <Card><b>x</b></Card>\n    <slot />\n  </section>\n</template>\n';
+  const out = stampVue(src, path.resolve('src/A.vue'), path.resolve('.'), parse)!.code;
+  assert.match(out, /<section data-redline-src="src\/A\.vue:6:3" class="x">/);
+  assert.match(out, /<h2 data-redline-src="src\/A\.vue:7:5" v-if=/);
+  assert.match(out, /<b data-redline-src="src\/A\.vue:8:11">/);
+  assert.match(out, /<Card><b/);
+  assert.match(out, /<slot \/>/);
+  assert.match(out, /const a = "<p>not me<\/p>"/);
+  assert.equal(stampVue('<template lang="pug">\n  p hi\n</template>\n', 'a.vue', '.', parse), null);
 });

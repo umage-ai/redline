@@ -118,3 +118,12 @@ test('editUnique: several matches are told apart by nth only when the file has a
   no(editUnique(html, 'span', plain('Yes', 'No'), false, { index: 3, count: 3 }), /3 <span> elements/);
   no(editUnique(html, 'span', plain('Yes', 'No')), /3 <span> elements/);
 });
+
+test('Vue / Angular directives on inline markup are refused: what shows depends on state', () => {
+  no(editAt('<p>Hi <b v-if="on">there</b></p>', { tag: 'p', line: 1 }, plain('Hi there', 'x'), true), /directive/);
+  no(editAt('<p>Hi <span v-html="h"></span></p>', { tag: 'p', line: 1 }, plain('Hi', 'x'), true), /directive/);
+  no(editAt('<p>Hi <b *ngIf="on">there</b></p>', { tag: 'p', line: 1 }, plain('Hi there', 'x'), true), /directive/);
+  no(editAt('<p>Hi <span [innerHTML]="h"></span></p>', { tag: 'p', line: 1 }, plain('Hi', 'x'), true), /directive/);
+  // event and attribute bindings on inline markup are kept byte for byte
+  assert.ok(tokenize('Go <a :href="u" @click="go">home</a> or <a [routerLink]="r" (click)="x()">back</a>', true).ok);
+});

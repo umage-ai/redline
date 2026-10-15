@@ -19,7 +19,7 @@ Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works th
 the bundled `redline` skill. It ticks each note off and
 replies inline, and the replies show up live in the overlay.
 
-It works with Vite, SvelteKit, Astro and React, and was built on real apps in each of them. Nothing ships to production: the plugin only runs under `vite dev` / `astro dev`.
+It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, and with Angular (CLI 17+). Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`).
 
 ## Modes
 
@@ -31,17 +31,14 @@ It works with Vite, SvelteKit, Astro and React, and was built on real apps in ea
 | `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for your agent**. | |
 | `Esc` | | Steps back one level: draft → mode → panel → closed. | |
 
-Saving a note returns to idle, so the app is usable again; press `C` (or tap **Comment**) for the next one.
-Clicks never reach the app while you're picking, and the app never sees you using the overlay,
-so an open dropdown, popover or combobox stays open: open it, then press `C` (or click **Comment**)
-and click the item. The demo (`npm run demo`) has three to try: the **Export** menu, the **⋯** row
-menus and the **Filter by driver** autocomplete. Notes show as numbered pins that follow their
-element, and hovering a pin shows the note and the agent's reply.
+Saving a note returns to idle; press `C` (or tap **Comment**) for the next one. Clicks never reach the app while
+you're picking, and the app never sees you using the overlay, so an open dropdown, popover or combobox stays open:
+open it, press `C` and click the item (try the **Export** menu, **⋯** row menus and driver filter in `npm run demo`).
+Notes show as numbered pins that follow their element; hovering a pin shows the note and the agent's reply.
 
-**Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then
-tap the mode buttons. On touch screens the toolbars drop the key hints and grow their targets, a tap
-picks an element while a swipe still scrolls, the popover stays above the on-screen keyboard, and the
-notes panel goes full width. Use **↑ Parent** and **Page** in place of `Alt`/`Shift`+click.
+**Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then the mode buttons.
+Toolbars grow their targets, a tap picks an element while a swipe still scrolls, the popover stays above the keyboard
+and the panel goes full width. Use **↑ Parent** and **Page** in place of `Alt`/`Shift`+click.
 
 | Text: edit in place, saved as a diff | Sketch: box, arrow, pen and labels |
 |---|---|
@@ -59,15 +56,13 @@ npm install -D @umage.ai/redline
 npx redline init        # agent guide + AGENTS.md section, .redline/ in .gitignore (see Coding agents)
 ```
 
-**Vite / React** (`vite.config.ts`). Put Redline first, before the framework plugin:
+**Vite** (React, Vue, Svelte/SvelteKit, Solid, Preact; `vite.config.ts`). Put Redline first, before the framework plugin:
 
 ```ts
 import redline from '@umage.ai/redline/vite'
 
-export default defineConfig({ plugins: [redline(), react()] })
+export default defineConfig({ plugins: [redline(), react()] })   // or vue(), sveltekit(), solid(), preact()
 ```
-
-**SvelteKit**: the same, placed before `sveltekit()`.
 
 **Astro** (`astro.config.mjs`). It only activates under `astro dev`:
 
@@ -77,22 +72,24 @@ import redline from '@umage.ai/redline/astro'
 export default defineConfig({ integrations: [redline()] })
 ```
 
+**Angular** (CLI 17+, `angular.json`): swap the `serve` builder; the options are `@angular/build:dev-server`'s plus `redline`.
+In dev it turns on Angular's template source locations, so notes point at the template line. `ng build` is untouched.
+
+```json
+"serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
+```
+
 **Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
+**Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import its `dist/vite.js` directly.
 
-**Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import
-`<checkout>/dist/vite.js` directly from the app's config.
+Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, jsxSource: true, vueSource: true })`.
+`root` is where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false`
+hides the round button (hotkey only). `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`).
+`pageKey: 'path'` makes hash routes (a deck's `#/3`) share one notes file.
 
-Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, jsxSource: true })`.
-- `root` is where notes go and what source paths are relative to. It defaults to the nearest folder with `.git`.
-- Set `launcher: false` to hide the small round button and rely on the hotkey only.
-- `app` names the app in a monorepo; it defaults to the dev server's folder relative to `root`, e.g. `apps/web`. `pageKey: 'path'` makes hash routes (a deck's `#/3`) share one notes file.
-
-**Monorepos** work without extra setup. Each app adds the plugin to its own dev server as above. Notes
-from every app go to one `.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`),
-so two apps' `/` pages don't collide, and each app only pins its own notes (the panel's **All** tab
-lists the others). Source paths are repo-relative (`apps/web/src/…`, `packages/ui/src/…`). Run
-`npx redline init` anywhere in the repo: it sets up the repo root (`--here` installs in the current
-folder instead, for when `root` points there).
+**Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one
+`.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's
+**All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).
 
 ### Extending
 
@@ -100,7 +97,7 @@ All optional and dev-only; without them Redline behaves as described above. Type
 `SourceWriter`, …) come from `@umage.ai/redline/server`.
 
 - **`directEdit: true`**: the text popover gets **Apply to file** when the edited text is static in source (Astro,
-  Svelte, JSX, Vue, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it. Entities stay as the file wrote them (`&mdash;`); repeated text on a static page is told apart by position.
+  Svelte, JSX, Vue, Angular templates, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it. Entities stay as the file wrote them (`&mdash;`); repeated text on a static page is told apart by position.
   Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
   save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
 - **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`), or `({ root, dir, app }) => store`,
@@ -166,6 +163,9 @@ which is why replies appear without a reload.
 | Svelte 5 / SvelteKit | `__svelte_meta` (built into Svelte dev builds) | `__svelte_meta.parent` chain |
 | Astro | `data-astro-source-file/-loc` (snapshotted at parse time, because Astro's dev toolbar strips them) | `.astro` files up the tree |
 | React 19 (Vite) | The plugin stamps `data-redline-src="file:line:col"` on HTML elements in `.jsx`/`.tsx` during dev | Fiber owner chain, with router and provider plumbing filtered out |
+| Solid, Preact (Vite) | The same JSX stamp | The components the stamped elements are written in |
+| Vue 3 (Vite) | The plugin stamps HTML elements in `.vue` templates during dev | `__vueParentComponent` chain |
+| Angular 17+ | `data-ng-source-location` (Angular's `enableTemplateSourceLocations`, turned on by the builder in dev) | `ng.getOwningComponent`, then the host components around it |
 | Anything else | n/a | n/a. The selector, test id and text still identify the element. |
 
 ## Screenshots
@@ -181,7 +181,7 @@ captures the real tab pixels, and Chrome asks once per page load.
 ```bash
 npm run dev         # rebuild dist/ on change (reload the app for client changes, restart it for server changes)
 npm test            # unit tests (node:test) + docs check
-npm run test:e2e    # Playwright against fixture apps: vanilla, React, SvelteKit, Astro
+npm run test:e2e    # Playwright against fixture apps: vanilla, React, SvelteKit, Astro, Angular, Vue, Solid, Preact
 npm run check       # typecheck + unit + docs + e2e
 npm run test:package   # install the packed tarball into fresh apps per framework and test it end to end
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app

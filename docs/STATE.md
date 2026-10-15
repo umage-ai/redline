@@ -14,7 +14,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 |---|---|---|
 | Markdown format round-trip, agent edits kept, slugs | ✅ | `test/unit/format.test.ts` |
 | Store: assets, INDEX.md, update/remove, concurrent agent edits | ✅ | unit |
-| JSX source stamping (HTML tags only) | ✅ | unit |
+| JSX source stamping (HTML tags only, with the enclosing component's name); Vue SFC template stamping | ✅ | `format.test.ts` |
 | Script injection, comment mode, app never sees clicks | ✅ | `overlay.spec.ts` |
 | Disabled controls pickable; autofocus doesn't eat mode keys | ✅ | `overlay.spec.ts` |
 | Monorepos: per-app notes in one root `.redline/`, `init` from any folder (D17) | ✅ | `test/unit/monorepo.test.ts`, `overlay.spec.ts` |
@@ -23,7 +23,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
 | Pluggable note store (`store`) and server `hooks`; markdown store is the default (D19) | ✅ | `test/unit/extend.test.ts` |
-| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20); full HTML entity set, source entity spelling kept (D24); same-text elements on static .html picked by position (D25) | ✅ static .html, React, SvelteKit, Astro; Vue unit only | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
+| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text and directives; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20); full HTML entity set, source entity spelling kept (D24); same-text elements on static .html picked by position (D25) | ✅ static .html, React, SvelteKit, Astro, Vue, Angular (templateUrl; inline templates unit only), Solid, Preact | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
 | `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22) | ✅ | `mcp.test.ts` |
 | Overlay extensions (`extensions`, `window.redlineExtensions`): buttons + keys, panel sections, events (D21); API v2: `removeButton`, `panelState` + `panel` event, `setPageKey` + `page` event (D26) | ✅ | `extend.test.ts`, `extend.spec.ts` |
 | Page key option `pageKey: 'route' \| 'path'` (hash routes as pages, or not) (D26) | ✅ | `page.test.ts`, `extend.test.ts`, `extend.spec.ts` |
@@ -31,7 +31,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
 | Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
-| Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6 | ✅ | `frameworks.spec.ts` |
+| Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
+| Angular CLI: `@umage.ai/redline:dev-server` builder wraps `ng serve` (middleware + dev-only template source locations); `ng build` untouched | ✅ Angular 22, real `ng serve` | `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
 | Sketch text labels (Enter commits once, Escape drops) | ✅ | `overlay.spec.ts` |
 | Sketch colours: one swatch folds out a palette of six (halos), per shape, `C` cycles, remembered; kept in svg + png | ✅ | `overlay.spec.ts`, `mobile.spec.ts` |
@@ -43,12 +44,14 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 ## Known gaps
 
 - DOM screenshots: WebGL, cross-origin map tiles and video can come out blank; sticky headers are missing when scrolled. Workaround: tab capture.
-- Text mode writes source only with `directEdit` and only static content (D20): text plus inline markup. i18n strings and CMS content stay notes until a writer for them exists. Links can't be added or retargeted in place. Vue has no fixture app.
+- Text mode writes source only with `directEdit` and only static content (D20): text plus inline markup. i18n strings and CMS content stay notes until a writer for them exists. Links can't be added or retargeted in place.
 - A custom store reaches agents only through `redline mcp` while a dev server runs (D22); SKILL.md describes the markdown files.
 - Notes are keyed by pathname, so `/org/a/agents/1` and `/org/b/agents/1` are separate pages. There's no route-pattern grouping yet.
 - CSS-only `:hover` menus still close when the pointer moves to the toolbar. Workaround: open the menu, then press `C` and click.
 - Pins re-resolve by selector/testid/xpath/text. Heavily dynamic lists can re-pin onto the wrong row.
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
+- Not supported yet (D23): Nuxt and Next.js (HTML isn't served through a Vite/connect stack we hook), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
+- `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.
 
 ## Next up
 

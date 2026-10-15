@@ -103,6 +103,16 @@ Prune entries whose cause is gone from the code.
 - **Fix:** the edit e2e pages are permanent fixture files (`test/fixtures/{vanilla/edit.html,astro/src/pages/edit.astro}`) that the test resets before and after, instead of creating and deleting them.
 - **Guard:** `extend.spec.ts` (direct edit cases).
 
+## L22 — Angular builder: "Cannot find tsconfig", "Unknown argument: port", builder not loading
+- **Cause:** (1) Angular purges `.angular/cache` when the dev server starts, so a tsconfig generated there vanished before the compile. (2) `ng serve --port` flags are parsed against the *builder's* schema; ours listed only `redline`. (3) Architect loads builders with `require()`, so an ESM builder with top-level await fails (`require(esm)` refuses TLA).
+- **Fix:** the generated tsconfig lives in `node_modules/.cache/redline/`; `src/angular-schema.json` copies `@angular/build`'s dev-server schema; `src/angular.ts` resolves Angular packages synchronously with `createRequire` from the workspace.
+- **Guard:** the Angular fixture is started with `--port` (`test/e2e/fixtures.ts`), and `frameworks.spec.ts` checks the template line.
+
+## L23 — Angular's template locations are 0-based; inline templates report the .ts file
+- **Cause:** `data-ng-source-location="src/app/card.ts@o:190,l:6,c:4"`: `l`/`c` are 0-based (ParseLocation), and for an inline template the path and line are the component file's.
+- **Fix:** the overlay adds 1 to both; the markup writer edits inline templates in `.ts` files (only with `@Component(`; refuses `` ` ``, `\` and `${` in the new text).
+- **Guard:** `frameworks.spec.ts` (inline template line and column), `extend.test.ts` (Angular templates).
+
 ## L24 — A fixed bar centred with `left: 50%; translateX(-50%)` wraps at half the viewport
 - **Cause:** a shrink-to-fit fixed box only gets the room right of `left`, so once `flex-wrap` is allowed it wraps at 50% width (nowrap had hidden that).
 - **Fix:** `left: 8px; right: calc(8px + var(--panel-w)); width: fit-content; margin: 0 auto` centres it with the full room available.
