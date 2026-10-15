@@ -61,7 +61,8 @@ registers two connect middlewares from `src/server/handler.ts`, ahead of the fra
 write. The markdown is the source of truth: agents edit it by hand (`[x]`, `> ` replies), and the overlay polls
 `/notes` every ~2 s. `src/server/format.ts` owns the format: heading `### [ ]`, `<!-- redline {json} -->` anchor,
 body, diff block for text notes, generated image lines, `> ` reply. Files: `.redline/INDEX.md`, `pages/<slug>.md`,
-`assets/`. `root` defaults to the nearest `.git` folder.
+`assets/`. `root` defaults to the nearest `.git` folder (`src/server/root.ts`); in a monorepo each dev server tags notes with its
+`app` folder and page files get an app prefix (D17).
 
 **Client** (`src/client/`, bundled to one ESM file, shadow root `<redline-root>` on `<html>`):
 - `index.ts`: state, modes (comment/text/sketch), event capture, popover, pins, panel, polling.
@@ -75,7 +76,7 @@ Svelte through `__svelte_meta`; Astro through `data-astro-source-*` (from the sn
 
 **Consumers** install `@umage.ai/redline` as a devDependency and import `@umage.ai/redline/{vite,astro,server}` (D4).
 Exports map to the flat `dist/*.js` plus `dist/types/` (tsc declarations). `dist/cli.js init <repo>`
-copies the skill, gitignores `.redline/` and adds a CLAUDE.md section.
+(`src/init.ts`) installs the skill for any agent (Agent Skills + AGENTS.md, plus Claude/Gemini/Copilot extras, D16) and gitignores `.redline/`.
 
 ## Invariants (break these and consumers or agents break)
 

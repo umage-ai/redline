@@ -15,7 +15,8 @@ dev server as markdown under `.redline/` with everything an agent needs to find 
 - recent console errors
 - a screenshot with the target outlined
 
-An agent works through the notes with the bundled `redline` skill. It ticks each note off and
+Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with
+the bundled `redline` skill. It ticks each note off and
 replies inline, and the replies show up live in the overlay.
 
 It works with Vite, SvelteKit, Astro and React, and was built on real apps in each of them. Nothing ships to production: the plugin only runs under `vite dev` / `astro dev`.
@@ -27,7 +28,7 @@ It works with Vite, SvelteKit, Astro and React, and was built on real apps in ea
 | `C` | **Comment** | Click an element and type. `Alt`+click picks its parent, `Shift`+click comments on the whole page. Use **↑ Parent** to widen the target. | The instruction plus element context and a cropped screenshot |
 | `T` | **Text** | Click any text and edit it in place. `Enter` (or clicking outside) keeps the edit. | A `diff` block (`-` old / `+` new) plus an optional note |
 | `S` | **Sketch** | Draw with box `1`, arrow `2`, pen `3` and text `4`. `Ctrl+Z` undoes, `Enter` finishes. | The SVG plus a viewport screenshot with the sketch drawn on top |
-| `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for Claude**. | |
+| `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for your agent**. | |
 | `Esc` | | Steps back one level: draft → mode → panel → closed. | |
 
 Saving a note returns to idle, so the app is usable again; press `C` (or tap **Comment**) for the next one.
@@ -55,7 +56,7 @@ regenerate the images with `npm run screenshots`.</sub>
 
 ```bash
 npm install -D @umage.ai/redline
-npx redline init        # skill in .claude/skills/redline, .redline/ in .gitignore, a CLAUDE.md note
+npx redline init        # agent guide + AGENTS.md section, .redline/ in .gitignore (see Coding agents)
 ```
 
 **Vite / React** (`vite.config.ts`). Put Redline first, before the framework plugin:
@@ -84,6 +85,35 @@ export default defineConfig({ integrations: [redline()] })
 Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, jsxSource: true })`.
 - `root` is where notes go and what source paths are relative to. It defaults to the nearest folder with `.git`.
 - Set `launcher: false` to hide the small round button and rely on the hotkey only.
+- `app` names the app in a monorepo; it defaults to the dev server's folder relative to `root`, e.g. `apps/web`.
+
+**Monorepos** work without extra setup. Each app adds the plugin to its own dev server as above. Notes
+from every app go to one `.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`),
+so two apps' `/` pages don't collide, and each app only pins its own notes (the panel's **All** tab
+lists the others). Source paths are repo-relative (`apps/web/src/…`, `packages/ui/src/…`). Run
+`npx redline init` anywhere in the repo: it sets up the repo root (`--here` installs in the current
+folder instead, for when `root` points there).
+
+## Coding agents
+
+Redline isn't tied to one agent. The notes are plain markdown, and `npx redline init` installs the
+guide where agents look for it:
+
+| Written | Read by |
+|---|---|
+| `.agents/skills/redline/SKILL.md` (always) | Agent Skills: Codex, Cursor, GitHub Copilot / VS Code, OpenCode, … |
+| a Redline section in `AGENTS.md` (always; created if missing) | Codex, Cursor, Copilot, Windsurf, Zed, Amp, Jules, Devin, Factory, … |
+| `.claude/skills/redline/SKILL.md` + a `CLAUDE.md` section | Claude Code (the skill also shows up as `/redline`) |
+| a `GEMINI.md` section + `.gemini/commands/redline.toml` | Gemini CLI (`/redline`) |
+| `.github/prompts/redline.prompt.md` | Copilot Chat in VS Code (`/redline`) |
+
+The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md`
+or `.gemini/`, `.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini`
+(`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade.
+
+**Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline
+notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
+`init`, the prompt spells out the note format itself, so any agent can work from it.
 
 ## What gets written
 

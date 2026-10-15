@@ -18,6 +18,10 @@ notes on the running UI. Each note is stored as markdown that you read and close
   assets/<id>.svg              raw sketch, viewport coordinates
 ```
 
+Monorepos: every app's notes share the root `.redline/`. Page files are prefixed with the app
+(`pages/apps-web--settings.md`), INDEX.md has an App column, each anchor has `"app":"apps/web"`
+(the dev server's folder), and `source.file` is relative to the repo root.
+
 ## Anatomy of a note
 
 ```markdown
@@ -56,9 +60,9 @@ when the note was written; they may or may not be related.
 ## Workflow
 
 1. Read `.redline/INDEX.md`, then the page files with open notes. Look at each note's
-   screenshot (Read the PNG) — it shows exactly what the reviewer pointed at.
+   screenshot (open the PNG) — it shows exactly what the reviewer pointed at.
 2. Make the change. Keep it to what the note asks; follow the repo's own conventions
-   (CLAUDE.md, design guidelines, component library).
+   (AGENTS.md / CLAUDE.md, design guidelines, component library).
 3. Close the note in the markdown:
    - tick it: `### [ ]` → `### [x]`
    - add a one-line `> ` reply under it saying what changed and where, e.g.

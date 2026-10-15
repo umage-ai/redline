@@ -12,7 +12,7 @@ import { CSS } from './styles.ts';
 
 type StoredNote = Note & { file: string };
 type Mode = 'idle' | 'comment' | 'text' | 'sketch';
-interface Config { hotkey: string; launcher: boolean; dir: string }
+interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string }
 interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
@@ -213,17 +213,23 @@ async function boot() {
     } catch { /* dev server restarting */ }
   }
 
-  const pageNotes = (p = page) => notes.filter(n => n.page === p);
-  const numberOf = (n: Note) => pageNotes(n.page).indexOf(n as StoredNote) + 1;
+  // Monorepos: every app's notes come back from /notes; this app only pins and numbers its own.
+  const app = config.app ?? '';
+  const pageNotes = (p = page, a = app) => notes.filter(n => n.page === p && (n.app ?? '') === a);
+  const numberOf = (n: Note) => pageNotes(n.page, n.app ?? '').indexOf(n as StoredNote) + 1;
   const openCount = () => notes.filter(n => !n.done).length;
 
   /* ---------- open / mode ---------- */
+  // An autofocused field would swallow the single-key shortcuts (C, T, S, N). Only text fields
+  // are blurred (a focused menu item keeps focus), and quietly, so an open combobox stays open.
+  function releaseTextFocus() {
+    const a = document.activeElement;
+    if (a instanceof HTMLElement && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) quietly(() => a.blur());
+  }
+
   function setOpen(v: boolean) {
     state.open = v;
-    // An autofocused field would swallow the single-key shortcuts (C, T, S, N). Only text fields
-    // are blurred (a focused menu item keeps focus), and quietly, so an open combobox stays open.
-    const a = document.activeElement;
-    if (v && a instanceof HTMLElement && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) quietly(() => a.blur());
+    if (v) releaseTextFocus();
     if (!v) { cancelDraft(); state.mode = 'idle'; state.panel = false; hideHl(); }
     persist(); renderAll();
   }
@@ -703,19 +709,27 @@ async function boot() {
       if (!here.length) listEl.append(h('div', { class: 'empty' }, pageNotes().length ? 'All notes on this page are done.' : 'No notes on this page yet. Press C to comment.'));
       for (const n of here) listEl.append(card(n, true));
     } else {
-      const pages = [...new Set(notes.filter(visible).map(n => n.page))].sort((a, b) => (a === page ? -1 : b === page ? 1 : a.localeCompare(b)));
-      if (!pages.length) listEl.append(h('div', { class: 'empty' }, 'No notes yet.'));
-      for (const p of pages) {
-        listEl.append(h('div', { class: 'group' }, p === page ? `${p}  (this page)` : p));
-        for (const n of notes.filter(x => x.page === p && visible(x))) listEl.append(card(n, p === page));
+      // Grouped by app + page; in a monorepo other apps' notes are listed too (they open in their own app).
+      const key = (n: Note) => `${n.app ?? ''}\u0000${n.page}`, mine = `${app}\u0000${page}`;
+      const groups = [...new Set(notes.filter(visible).map(key))].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : a.localeCompare(b)));
+      if (!groups.length) listEl.append(h('div', { class: 'empty' }, 'No notes yet.'));
+      for (const g of groups) {
+        const [gApp, gPage] = g.split('\u0000');
+        const label = (gApp && gApp !== app ? `${gApp} · ` : '') + gPage;
+        listEl.append(h('div', { class: 'group' }, g === mine ? `${label}  (this page)` : label));
+        for (const n of notes.filter(x => key(x) === g && visible(x))) listEl.append(card(n, g === mine));
       }
     }
     const tab = ls.get('tabcapture', '0') === '1';
     const file = pageNotes()[0]?.file;
     const open = state.scope === 'page' ? pageNotes().filter(n => !n.done).length : openCount();
+    // Works in any agent: names the installed guide, or spells out the contract when there is none (D16).
+    const how = config.guide
+      ? `Follow ${config.guide} (the redline skill).`
+      : 'For each open "### [ ]" note: make the change, tick it "### [x]" and add a one-line "> " reply saying what changed (or a question, leaving it open). Never edit the <!-- redline … --> lines.';
     const prompt = state.scope === 'page' && file
-      ? `Apply the open Redline notes in ${file} (${open} open) — use the redline skill.`
-      : `Work through the open Redline UI feedback in ${config.dir}/INDEX.md (${openCount()} open) — use the redline skill.`;
+      ? `Apply the open Redline notes in ${file} (${open} open). ${how}`
+      : `Apply the open Redline UI feedback in ${config.dir}/INDEX.md (${openCount()} open). ${how}`;
     panel.replaceChildren(
       h('header', {}, h('h2', {}, 'Notes'), h('button', { title: 'Close panel (N)', onclick: () => togglePanel(false) }, '✕')),
       h('div', { class: 'filters' },
@@ -730,9 +744,9 @@ async function boot() {
         h('div', { class: 'file' }, file && state.scope === 'page' ? file : `${config.dir}/INDEX.md`),
         h('div', { class: 'row' },
           h('button', { class: 'btn primary', disabled: !open, onclick: async () => {
-            try { await navigator.clipboard.writeText(prompt); toast('Prompt copied — paste it into Claude'); }
+            try { await navigator.clipboard.writeText(prompt); toast('Prompt copied — paste it into your coding agent'); }
             catch { toast(prompt, false, 8000); }
-          } }, 'Copy prompt for Claude'),
+          } }, 'Copy prompt for your agent'),
         ),
         // Mobile browsers have no getDisplayMedia.
         typeof navigator.mediaDevices?.getDisplayMedia === 'function' && h('label', { title: 'Capture the real pixels of this tab (needed for WebGL/maps/video). Chrome asks for permission once per page load.' },
@@ -798,6 +812,7 @@ async function boot() {
 
   await poll(true);
   renderAll();
+  if (state.open) releaseTextFocus();   // reopened after a reload: the page's autofocus ran meanwhile
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void boot());

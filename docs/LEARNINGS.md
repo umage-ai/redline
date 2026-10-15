@@ -81,3 +81,8 @@ Prune entries whose cause is gone from the code.
 - Re-dispatching a copy of `click` runs activation behaviour again, so a checkbox toggled twice. `click` is only cut at the host bubble phase, never copied.
 - The "focus went to body right after pressing the overlay" rule first swallowed the overlay's *own* editor blur, so tapping outside a text edit stopped finishing it. It now skips events from the overlay.
 - **Guard:** `overlay.spec.ts` "an open dropdown stays open…" (checkbox step) and `mobile.spec.ts` "text mode: tapping outside…".
+
+## L18 — After a reload with the overlay open, mode keys typed into the page
+- **Cause:** the open state is restored from sessionStorage without going through `setOpen`, so an autofocused input kept focus and swallowed `N`/`C`.
+- **Fix:** `releaseTextFocus()` also runs at the end of boot when the overlay comes back open.
+- **Guard:** `overlay.spec.ts` "the copied prompt works for any agent…" (reloads, then presses `N`).

@@ -21,7 +21,13 @@
     "design-review",
     "overlay",
     "ai-agent",
-    "claude"
+    "claude",
+    "codex",
+    "cursor",
+    "copilot",
+    "gemini",
+    "agents-md",
+    "agent-skills"
   ],
   "publishConfig": {
     "access": "public"

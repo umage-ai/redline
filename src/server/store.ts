@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { Note, NewNoteRequest } from '../shared/types.ts';
-import { pageSlug, parsePage, serializeIndex, serializePage } from './format.ts';
+import { pageFile, parsePage, serializeIndex, serializePage } from './format.ts';
 
 export interface StoreOptions {
   root: string;     // project root
@@ -60,7 +60,7 @@ export function createStore(opts: StoreOptions) {
     for (const file of await pageFiles()) {
       const notes = await readFile(file);
       if (!notes.length) continue;
-      rows.push({ page: notes[0].page, file: `pages/${file}`, open: notes.filter(n => !n.done).length, done: notes.filter(n => n.done).length });
+      rows.push({ page: notes[0].page, app: notes[0].app, file: `pages/${file}`, open: notes.filter(n => !n.done).length, done: notes.filter(n => n.done).length });
     }
     await fs.mkdir(base, { recursive: true });
     await fs.writeFile(path.join(base, 'INDEX.md'), serializeIndex(rows));
@@ -116,7 +116,7 @@ export function createStore(opts: StoreOptions) {
           await fs.writeFile(path.join(assetsDir, `${id}.svg`), req.sketch);
           note.sketch = `../assets/${id}.svg`;
         }
-        const file = pageSlug(note.page) + '.md';
+        const file = pageFile(note.page, note.app);
         const notes = await readFile(file);
         notes.push(note);
         await writeFile(file, notes);

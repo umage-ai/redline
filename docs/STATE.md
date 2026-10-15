@@ -17,6 +17,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | JSX source stamping (HTML tags only) | ✅ | unit |
 | Script injection, comment mode, app never sees clicks | ✅ | `overlay.spec.ts` |
 | Disabled controls pickable; autofocus doesn't eat mode keys | ✅ | `overlay.spec.ts` |
+| Monorepos: per-app notes in one root `.redline/`, `init` from any folder (D17) | ✅ | `test/unit/monorepo.test.ts`, `overlay.spec.ts` |
+| Any agent: `init` writes Agent Skills + AGENTS.md (+ Claude/Gemini/Copilot extras); neutral copied prompt (D16) | ✅ | `test/unit/init.test.ts`, `overlay.spec.ts`, `npm run test:package` |
 | Open dropdowns/popovers survive the overlay: toolbar, picking, typing, Escape, hotkey (D14) | ✅ fixture menu; try in `examples/demo` (Export, ⋯, driver filter) | `overlay.spec.ts`; not yet tried against real Radix/Headless UI/MUI |
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |

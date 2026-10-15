@@ -195,3 +195,48 @@ test('opening the overlay with the hotkey keeps a focused menu open', async ({ p
   await expect(page.getByTestId('menu')).toBeVisible();
   await expect(page.getByTestId('menu-rename')).toBeFocused();
 });
+
+test('the copied prompt works for any agent: names the installed guide, or spells out the contract (D16)', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const guide = path.join(f.dir, '.agents/skills/redline/SKILL.md');
+  await fs.rm(path.join(f.dir, '.agents'), { recursive: true, force: true });
+  const copied = async () => {
+    await page.keyboard.press('n');
+    await ui(page, '.panel footer .btn.primary').click();
+    await expect(ui(page, '.toast')).toContainText('coding agent');
+    await page.keyboard.press('n');
+    return page.evaluate(() => navigator.clipboard.readText());
+  };
+  try {
+    await openOverlay(page, f);
+    await comment(page, page.getByTestId('agent-save'), 'Bigger.');
+    await expect(ui(page, '.panel footer .btn.primary')).toBeHidden();
+    expect(await copied()).toMatch(/^Apply the open Redline notes in .*index\.md \(1 open\)\. For each open "### \[ \]" note: .*tick it "### \[x\]"/);
+
+    await fs.mkdir(path.dirname(guide), { recursive: true });
+    await fs.writeFile(guide, '# guide\n');
+    await page.reload({ waitUntil: 'networkidle' });        // config (with the guide) is read at load
+    await expect(ui(page, '.bar')).toBeVisible();           // the open state survives the reload
+    expect(await copied()).toMatch(/\(1 open\)\. Follow \.agents\/skills\/redline\/SKILL\.md \(the redline skill\)\.$/);
+  } finally {
+    await fs.rm(path.join(f.dir, '.agents'), { recursive: true, force: true });
+  }
+});
+
+test('monorepo: an app pins and numbers only its own notes; All lists the other apps too (D17)', async ({ page }) => {
+  const note = (id: string, app: string, testid: string) => ({
+    id, app, type: 'comment', page: '/', url: f.url + '/', at: '2026-10-15 10:00', body: `${app} note`, reply: '', done: false,
+    target: { testid, selector: `[data-testid="${testid}"]` }, file: `.redline/pages/${app.replace('/', '-')}--index.md`,
+  });
+  await page.route('**/__redline/config', r => r.fulfill({ json: { hotkey: 'alt+shift+r', launcher: true, dir: '.redline', app: 'apps/web', guide: null } }));
+  await page.route('**/__redline/notes', r => r.fulfill({ json: { version: 'v1', root: '.redline',
+    notes: [note('aaaa1', 'apps/admin', 'agent-save'), note('bbbb2', 'apps/web', 'agent-delete')] } }));
+  await openOverlay(page, f);
+  await expect(ui(page, '.pin')).toHaveCount(1);
+  await expect(ui(page, '.pin')).toHaveText('1');
+  await page.keyboard.press('n');
+  await expect(ui(page, '.card')).toHaveCount(1);
+  await expect(ui(page, '.card .body')).toHaveText('apps/web note');
+  await ui(page, '.seg button').filter({ hasText: 'All' }).click();
+  await expect(ui(page, '.group')).toHaveText(['/  (this page)', 'apps/admin · /']);
+});
