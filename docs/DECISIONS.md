@@ -80,3 +80,8 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** root stays the nearest `.git`. Each handler derives `app` = its dev server folder relative to root (`apps/web`; option `app` overrides). The server stamps it on new notes, page files get an app prefix (`apps-web--index.md`), INDEX.md gains an App column, and the overlay pins/numbers only its own app's notes. `init` installs at the repo root unless `--here`.
 - **Why:** agents usually run at the repo root and need one inbox; repo-relative source paths also cover shared packages. A `.redline/` per app would split the inbox and need per-app guides. Single-app repos keep `app: ""` and their old file names.
 - **Revisit if:** two dev servers serve the same app folder (e.g. Storybook + app) and should be told apart; set `app` explicitly meanwhile.
+
+## D18 — No hint line above the toolbar; extras in tooltips (2026-10-15)
+- **Decision:** the per-mode hint above the bottom bar is gone. Buttons show their keys; the non-obvious bits (Alt+click = parent, Shift+click = whole page, Ctrl+Z, Esc) are in the button tooltips, and the popover's **↑ Parent** / **Page** buttons cover touch.
+- **Why:** it mostly repeated the visible key labels and sat over the page. Less chrome over the app being reviewed.
+- **Revisit if:** new users miss the modifiers; then a one-time first-run tip, not a permanent line.

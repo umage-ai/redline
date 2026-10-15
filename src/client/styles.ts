@@ -37,9 +37,6 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .bar button.on kbd { background: rgba(255,255,255,.2); color: #fff; }
 .bar .count { background: var(--bg-3); color: var(--fg); border-radius: 9px; padding: 0 6px; font-size: 11px; font-weight: 650; }
 .bar button.on .count { background: rgba(255,255,255,.25); }
-.hint { position: fixed; left: 50%; bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 5px 12px; border-radius: 8px;
-  background: rgba(19,19,22,.92); color: var(--fg-2); font-size: 12px; pointer-events: none; white-space: nowrap; }
-.hint b { color: var(--fg); font-weight: 600; }
 
 /* hover highlight */
 .hl { position: fixed; pointer-events: none; border: 2px solid var(--ink); border-radius: 3px; background: rgba(255,45,85,.07);
@@ -152,7 +149,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .zoom img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 
 /* toast */
-.toast { position: fixed; left: 50%; bottom: calc(104px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
+.toast { position: fixed; left: 50%; bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
 .busy { position: fixed; inset: 0; cursor: progress; pointer-events: auto; }
@@ -165,7 +162,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar button, .tools button { min-height: 40px; padding: 6px 12px; }
   .tools button.sw { width: 30px; height: 30px; min-height: 0; padding: 0; }
   .tools .palette { gap: 10px; padding: 10px 12px; }
-  .hint { bottom: calc(72px + var(--lift, 0px)); }
+  .toast { bottom: calc(76px + var(--lift, 0px)); }
   .pin { width: 28px; height: 28px; margin-top: -28px; border-radius: 14px 14px 14px 2px; font-size: 12px; }
   .pop header button { padding: 6px 10px; }
   .pop textarea, .card textarea { font-size: 16px; }
@@ -184,7 +181,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar .brand span, .bar .brand + .sep { display: none; }
   .bar .brand { padding: 0 6px; }
   .bar button { padding: 6px 9px; }
-  .hint, .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
+  .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
   .tools { top: max(8px, env(safe-area-inset-top)); }
   .tools button { padding: 6px 9px; }
   .pop { width: calc(100vw - 16px); }

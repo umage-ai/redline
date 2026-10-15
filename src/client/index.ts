@@ -82,8 +82,6 @@ function matchHotkey(e: KeyboardEvent, spec: string): boolean {
   return e.code === (key.length === 1 ? (/[0-9]/.test(key) ? 'Digit' : 'Key') + key.toUpperCase() : key) || e.key.toLowerCase() === key;
 }
 
-/** Touch-first device: no hover, no keyboard shortcuts to advertise. */
-const coarse = () => matchMedia('(pointer: coarse)').matches;
 
 const isTyping = (e: Event) => e.composedPath().some(n => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
 
@@ -179,11 +177,10 @@ async function boot() {
   const pins = h('div');
   const tip = h('div', { class: 'tip', style: 'display:none' });
   const bar = h('div', { class: 'bar' });
-  const hint = h('div', { class: 'hint' });
   const panel = h('div', { class: 'panel' });
   const popLayer = h('div');
   const toastEl = h('div', { class: 'toast', style: 'display:none' });
-  ui.append(hl, hlLabel, pins, launcher, bar, hint, panel, popLayer, tip, toastEl);
+  ui.append(hl, hlLabel, pins, launcher, bar, panel, popLayer, tip, toastEl);
 
   let toastTimer = 0;
   function toast(msg: string, err = false, ms = 2600) {
@@ -255,34 +252,23 @@ async function boot() {
 
   function renderBar() {
     bar.style.display = state.open && state.mode !== 'sketch' ? '' : 'none';
-    hint.style.display = state.open && !draft ? '' : 'none';
     if (!state.open) return;
-    const btn = (m: Mode, label: string, key: string) =>
-      h('button', { class: state.mode === m ? 'on' : '', title: `${label} (${key})`, onclick: () => setMode(m) }, label, h('kbd', {}, key));
+    // No hint line: the buttons show their keys, and the extras live in the tooltips (D18).
+    const btn = (m: Mode, label: string, key: string, how: string) =>
+      h('button', { class: state.mode === m ? 'on' : '', title: `${label} (${key}): ${how}`, onclick: () => setMode(m) }, label, h('kbd', {}, key));
     const open = openCount();
     bar.replaceChildren(
       h('div', { class: 'brand', html: ICON + '<span>Redline</span>' }),
       h('div', { class: 'sep' }),
-      btn('comment', 'Comment', 'C'), btn('text', 'Text', 'T'), btn('sketch', 'Sketch', 'S'),
+      btn('comment', 'Comment', 'C', 'click an element. Alt+click picks its parent, Shift+click the whole page.'),
+      btn('text', 'Text', 'T', 'click any text and rewrite it in place; Enter keeps it.'),
+      btn('sketch', 'Sketch', 'S', 'draw boxes, arrows, lines and labels. Ctrl+Z undoes, Enter finishes.'),
       h('div', { class: 'sep' }),
       h('button', { class: state.panel ? 'on' : '', title: 'Notes (N)', onclick: () => togglePanel() }, 'Notes', h('span', { class: 'count' }, String(open))),
       h('button', { title: `Close (${config.hotkey})`, onclick: () => setOpen(false) }, '✕'),
     );
-    const hk = config.hotkey.split('+').map(k => `<kbd>${esc(k[0].toUpperCase() + k.slice(1))}</kbd>`).join('+');
-    hint.innerHTML = (coarse() ? {
-      idle: `Pick a mode: <b>Comment</b>, <b>Text</b> or <b>Sketch</b>`,
-      comment: `<b>Tap</b> an element to comment · <b>↑ Parent</b> / <b>Page</b> widen it`,
-      text: `<b>Tap</b> any text and rewrite it in place`,
-      sketch: `Draw with your finger · pick a colour · <b>Done</b> when finished`,
-    } : {
-      idle: `Pick a mode: <kbd>C</kbd> comment · <kbd>T</kbd> text · <kbd>S</kbd> sketch · <kbd>N</kbd> notes · ${hk} hide`,
-      comment: `<b>Click</b> an element to comment · <kbd>Alt</kbd>+click picks its parent · <kbd>Shift</kbd>+click = whole page · <kbd>Esc</kbd> stop`,
-      text: `<b>Click</b> any text and rewrite it in place · <kbd>Enter</kbd> keep · <kbd>Esc</kbd> stop`,
-      sketch: `Drag to draw · <kbd>1</kbd> box <kbd>2</kbd> arrow <kbd>3</kbd> pen <kbd>4</kbd> text · <kbd>C</kbd> colour · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Enter</kbd> done · <kbd>Esc</kbd> cancel`,
-    })[state.mode];
     // Astro's dev toolbar also lives bottom-centre; sit above it.
     ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
-    hint.style.bottom = state.mode === 'sketch' ? 'calc(16px + var(--lift))' : '';
   }
 
   /* ---------- hover highlight ---------- */
@@ -558,9 +544,9 @@ async function boot() {
         paletteOpen && h('span', { class: 'palette', role: 'radiogroup', 'aria-label': 'Colour' }, ...COLORS.map(x =>
           h('button', { class: 'sw' + (sk.color === x.c ? ' on' : ''), role: 'radio', 'aria-checked': String(sk.color === x.c),
             title: x.name, 'aria-label': x.name, style: `--c:${x.c}`, onclick: () => setColor(x.c) })))),
-      h('button', { onclick: () => sk.undo(), disabled: !sk.shapes.length }, '↶ Undo'),
+      h('button', { title: 'Undo (Ctrl+Z)', onclick: () => sk.undo(), disabled: !sk.shapes.length }, '↶ Undo'),
       h('button', { onclick: () => sk.clear(), disabled: !sk.shapes.length }, 'Clear'),
-      h('button', { onclick: () => endSketch(false) }, 'Cancel'),
+      h('button', { title: 'Cancel (Esc)', onclick: () => endSketch(false) }, 'Cancel'),
       h('button', { class: 'done', onclick: () => endSketch(true) }, 'Done', h('kbd', {}, '↵')),
     );
     // Keep the folded-out palette on screen (on a phone the swatch can sit near an edge).

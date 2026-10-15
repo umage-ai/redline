@@ -20,13 +20,11 @@ async function fitsViewport(l: Locator) {
   expect(b.x + b.width).toBeLessThanOrEqual(W);
 }
 
-test('toolbar, hint and popover fit a phone; tap to comment, the app never sees the tap', async ({ page }) => {
+test('toolbar and popover fit a phone; tap to comment, the app never sees the tap', async ({ page }) => {
   await openByTap(page);
   await fitsViewport(ui(page, '.bar'));
   await expect(ui(page, '.bar kbd').first()).toBeHidden();
   await ui(page, '.bar button', ).filter({ hasText: 'Comment' }).tap();
-  await expect(ui(page, '.hint')).toContainText('Tap an element');
-  await fitsViewport(ui(page, '.hint'));
 
   await page.getByTestId('agent-save').tap();
   await expect(ui(page, '.pop textarea')).toBeFocused();
