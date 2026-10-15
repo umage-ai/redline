@@ -524,10 +524,14 @@ async function boot() {
 
   /* ---------- sketch mode ---------- */
   let tools: HTMLElement | null = null;
+  let paletteOpen = false;   // the colour swatch folds out the palette
+  function setPalette(open: boolean) { if (paletteOpen !== open) { paletteOpen = open; renderTools(); } }
   function startSketch() {
     const layer = new SketchLayer(ui, () => renderTools(), bar);
     const saved = ls.get('sketchColor', COLORS[0].c);
     layer.color = COLORS.some(x => x.c === saved) ? saved : COLORS[0].c;
+    layer.el.addEventListener('pointerdown', () => setPalette(false));   // drawing folds it away
+    paletteOpen = false;
     draft = { type: 'sketch', sketch: layer, x: 0, y: 0 };
     tools = h('div', { class: 'tools' });
     ui.append(tools);
@@ -537,23 +541,37 @@ async function boot() {
     if (!draft?.sketch) return;
     draft.sketch.color = c;
     ls.set('sketchColor', c);   // the next sketch starts with it too
+    paletteOpen = false;
     renderTools();
   }
   function renderTools() {
     if (!tools || !draft?.sketch) return;
     const sk = draft.sketch;
+    const cur = COLORS.find(x => x.c === sk.color) ?? COLORS[0];
     const t = (tool: Tool, label: string, key: string) =>
       h('button', { class: sk.tool === tool ? 'on' : '', onclick: () => { sk.tool = tool; renderTools(); } }, label, h('kbd', {}, key));
     tools.replaceChildren(
       t('rect', '▭ Box', '1'), t('arrow', '→ Arrow', '2'), t('pen', '✎ Pen', '3'), t('text', 'T Text', '4'),
-      h('span', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Colour (C)' }, ...COLORS.map(x =>
-        h('button', { class: 'sw' + (sk.color === x.c ? ' on' : ''), role: 'radio', 'aria-checked': String(sk.color === x.c),
-          title: `${x.name} (C cycles)`, 'aria-label': x.name, style: `--c:${x.c}`, onclick: () => setColor(x.c) }))),
+      h('span', { class: 'colors' },
+        h('button', { class: 'sw current', 'aria-haspopup': 'true', 'aria-expanded': String(paletteOpen), style: `--c:${sk.color}`,
+          title: `Colour: ${cur.name} (C cycles)`, 'aria-label': `Colour: ${cur.name}`, onclick: () => setPalette(!paletteOpen) }),
+        paletteOpen && h('span', { class: 'palette', role: 'radiogroup', 'aria-label': 'Colour' }, ...COLORS.map(x =>
+          h('button', { class: 'sw' + (sk.color === x.c ? ' on' : ''), role: 'radio', 'aria-checked': String(sk.color === x.c),
+            title: x.name, 'aria-label': x.name, style: `--c:${x.c}`, onclick: () => setColor(x.c) })))),
       h('button', { onclick: () => sk.undo(), disabled: !sk.shapes.length }, '↶ Undo'),
       h('button', { onclick: () => sk.clear(), disabled: !sk.shapes.length }, 'Clear'),
       h('button', { onclick: () => endSketch(false) }, 'Cancel'),
       h('button', { class: 'done', onclick: () => endSketch(true) }, 'Done', h('kbd', {}, '↵')),
     );
+    // Keep the folded-out palette on screen (on a phone the swatch can sit near an edge).
+    const pal = tools.querySelector<HTMLElement>('.palette');
+    if (pal) {
+      // From layout sizes, not getBoundingClientRect: the fold-out animation starts scaled down.
+      const host = pal.parentElement!.getBoundingClientRect(), w = pal.offsetWidth;
+      const left = host.left + host.width / 2 - w / 2;
+      const dx = left < 8 ? 8 - left : left + w > innerWidth - 8 ? innerWidth - 8 - (left + w) : 0;
+      if (dx) pal.style.marginLeft = `${dx}px`;
+    }
   }
   function endSketch(keep: boolean) {
     const d = draft;
@@ -785,7 +803,7 @@ async function boot() {
       else if (e.key === 'c' || e.key === 'C') setColor(COLORS[(COLORS.findIndex(x => x.c === sk.color) + (e.shiftKey ? COLORS.length - 1 : 1)) % COLORS.length].c);
       else if (e.key === 'z' && e.ctrlKey) sk.undo();
       else if (e.key === 'Enter') endSketch(true);
-      else if (e.key === 'Escape') endSketch(false);
+      else if (e.key === 'Escape') { if (paletteOpen) setPalette(false); else endSketch(false); }
       else return;
       e.preventDefault(); e.stopImmediatePropagation();
       return;

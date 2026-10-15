@@ -92,10 +92,14 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .tools button:hover { background: var(--bg-3); color: var(--fg); }
 .tools button.on { background: var(--bg-3); color: var(--fg); box-shadow: inset 0 0 0 1px var(--ink); }
 .tools button.done { background: var(--ink); color: #fff; }
-.tools .swatches { display: flex; align-items: center; gap: 5px; padding: 0 8px; margin: 0 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-.tools button.sw { width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+/* colour: one swatch; the palette folds out under it */
+.tools .colors { position: relative; display: flex; align-items: center; padding: 0 8px; margin: 0 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.tools button.sw { width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); transition: transform .1s; }
 .tools button.sw:hover { background: var(--c); transform: scale(1.12); }
-.tools button.sw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.tools button.sw.current[aria-expanded="true"], .tools .palette button.sw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.tools .palette { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px 10px;
+  border-radius: 12px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); animation: rl-fold .14s ease-out; }
+@keyframes rl-fold { from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(.92); } }
 
 /* text edit */
 .ed { position: fixed; outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; pointer-events: auto; white-space: pre-wrap;
@@ -160,7 +164,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar kbd, .tools kbd { display: none; }
   .bar button, .tools button { min-height: 40px; padding: 6px 12px; }
   .tools button.sw { width: 30px; height: 30px; min-height: 0; padding: 0; }
-  .tools .swatches { gap: 8px; }
+  .tools .palette { gap: 10px; padding: 10px 12px; }
   .hint { bottom: calc(72px + var(--lift, 0px)); }
   .pin { width: 28px; height: 28px; margin-top: -28px; border-radius: 14px 14px 14px 2px; font-size: 12px; }
   .pop header button { padding: 6px 10px; }

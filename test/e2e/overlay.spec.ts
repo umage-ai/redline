@@ -241,18 +241,29 @@ test('monorepo: an app pins and numbers only its own notes; All lists the other 
   await expect(ui(page, '.group')).toHaveText(['/  (this page)', 'apps/admin · /']);
 });
 
-test('sketch colours: swatch or C per shape, saved in the svg, remembered for the next sketch', async ({ page }) => {
+test('sketch colours: the swatch folds out a palette; per shape, C cycles, saved in the svg, remembered', async ({ page }) => {
   await openOverlay(page, f);
   await page.keyboard.press('s');
   const drag = async (x: number, y: number) => {
     await page.mouse.move(x, y); await page.mouse.down();
     await page.mouse.move(x + 120, y + 60, { steps: 4 }); await page.mouse.up();
   };
-  await ui(page, '.tools .sw[aria-label="Blue"]').click();
-  await expect(ui(page, '.tools .sw.on')).toHaveAttribute('aria-label', 'Blue');
-  await drag(200, 300);
+  const current = ui(page, '.tools .sw.current'), palette = ui(page, '.tools .palette');
+  await expect(palette).toHaveCount(0);                            // folded away until asked for
+  await current.click();
+  await expect(palette.locator('.sw')).toHaveCount(6);
+  await palette.locator('.sw[aria-label="Blue"]').click();
+  await expect(palette).toHaveCount(0);                            // picking folds it back
+  await expect(current).toHaveAttribute('aria-label', 'Colour: Blue');
+  await current.click();
+  await page.keyboard.press('Escape');                             // Escape folds the palette, not the sketch
+  await expect(palette).toHaveCount(0);
+  await expect(ui(page, '.tools')).toBeVisible();
+  await current.click();
+  await drag(200, 300);                                            // drawing folds it too
+  await expect(palette).toHaveCount(0);
   await page.keyboard.press('c');                                  // Blue → Green
-  await expect(ui(page, '.tools .sw.on')).toHaveAttribute('aria-label', 'Green');
+  await expect(current).toHaveAttribute('aria-label', 'Colour: Green');
   await drag(450, 300);
   await expect(ui(page, '.rl-sketch path[stroke-width="3"]')).toHaveCount(2);
   await page.keyboard.press('Enter');
@@ -263,6 +274,6 @@ test('sketch colours: swatch or C per shape, saved in the svg, remembered for th
   expect(svg).toContain('stroke="#2f80ff"');
   expect(svg).toContain('stroke="#22c55e"');
   await page.keyboard.press('s');
-  await expect(ui(page, '.tools .sw.on')).toHaveAttribute('aria-label', 'Green');
+  await expect(current).toHaveAttribute('aria-label', 'Colour: Green');
   await page.keyboard.press('Escape');
 });

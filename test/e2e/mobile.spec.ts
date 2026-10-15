@@ -97,7 +97,9 @@ test('sketch on touch: tools fit, are tappable above the canvas, a tap places a 
   await page.keyboard.type('here');
   await page.keyboard.press('Enter');
   await ui(page, '.tools button').filter({ hasText: 'Box' }).tap();
-  await ui(page, '.tools .sw[aria-label="Amber"]').tap();
+  await ui(page, '.tools .sw.current').tap();
+  await fitsViewport(ui(page, '.tools .palette'));
+  await ui(page, '.tools .palette .sw[aria-label="Amber"]').tap();
   // Raw CDP touches: Playwright has no touch drag. (Chrome then drops the next synthetic tap's click, so draw last.)
   const cdp = await page.context().newCDPSession(page);
   const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number, y: number) =>
