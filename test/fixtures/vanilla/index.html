@@ -33,6 +33,26 @@
         <p>Line 1</p><p>Line 2</p><p>Line 3</p><p>Line 4</p><p>Line 5</p><p>Line 6</p><p>Line 7</p><p>Line 8</p>
       </div>
     </section>
+    <!-- a dropdown that closes the ways real UI kits do; the overlay must not trigger any of them -->
+    <section class="card menu-wrap">
+      <button data-testid="menu-btn">Actions ▾</button>
+      <div data-testid="menu" role="menu" hidden>
+        <button role="menuitem" data-testid="menu-rename">Rename</button>
+        <button role="menuitem" data-testid="menu-archive">Archive</button>
+      </div>
+    </section>
   </main>
+  <script>
+    const wrap = document.querySelector('.menu-wrap'), menu = wrap.querySelector('[role=menu]');
+    const close = why => { if (!menu.hidden) { menu.hidden = true; window.menuClosedBy = why; } };
+    const outside = e => !wrap.contains(e.target);
+    wrap.querySelector('[data-testid=menu-btn]').onclick = () => { menu.hidden = !menu.hidden; if (!menu.hidden) menu.querySelector('button').focus(); };
+    document.addEventListener('pointerdown', e => outside(e) && close('pointerdown (capture, Headless UI)'), true);
+    document.addEventListener('mousedown', e => outside(e) && close('mousedown'));
+    document.addEventListener('click', e => outside(e) && close('click (MUI ClickAwayListener)'));
+    document.addEventListener('focusin', e => outside(e) && close('focusin (Radix)'));
+    document.addEventListener('keydown', e => e.key === 'Escape' && close('Escape (capture, Radix)'), true);
+    menu.addEventListener('focusout', e => { if (!menu.contains(e.relatedTarget)) close('focusout'); });
+  </script>
 </body>
 </html>

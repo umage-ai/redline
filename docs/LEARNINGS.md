@@ -76,3 +76,8 @@ Prune entries whose cause is gone from the code.
 - **Cause:** `SketchLayer` appended its full-screen `<svg>` to the shadow root after `.rl`, so it painted over `.tools`. Desktop tests only used the `1`–`4`/`Enter` keys.
 - **Fix:** the svg is inserted into `.rl` before the toolbar. Also: label inputs are created on `pointerup` for touch (focus opens the keyboard only with user activation).
 - **Guard:** `mobile.spec.ts` "sketch on touch…". Test quirk: after a raw CDP touch drag, Chrome drops the `click` of the next synthetic tap, so that test draws last.
+
+## L17 — Shield gotchas: dispatched clicks re-run activation; own blurs must pass
+- Re-dispatching a copy of `click` runs activation behaviour again, so a checkbox toggled twice. `click` is only cut at the host bubble phase, never copied.
+- The "focus went to body right after pressing the overlay" rule first swallowed the overlay's *own* editor blur, so tapping outside a text edit stopped finishing it. It now skips events from the overlay.
+- **Guard:** `overlay.spec.ts` "an open dropdown stays open…" (checkbox step) and `mobile.spec.ts` "text mode: tapping outside…".

@@ -28,6 +28,7 @@ test('comment: app never sees the click; note has anchors, screenshot, index', a
   expect(note.viewport?.slice(0, 2)).toEqual([1280, 800]);
   expect(await assetExists(f, note.screenshot)).toBe(true);
   await expect(ui(page, '.pin')).toHaveCount(1);
+  await expect(ui(page, '.bar button.on')).toHaveCount(0);   // saving returns to idle (D15)
 
   const md = await readPage(f);
   expect(md).toMatch(/^### \[ \] Comment · `button` “Save draft” · \[data-testid="agent-save"\]$/m);
@@ -86,6 +87,7 @@ test('text mode: rewrite in place → diff note', async ({ page }) => {
   const saved = waitForSave(page);
   await page.keyboard.press('Enter');            // empty note + Enter saves text changes
   const note = await saved;
+  await expect(ui(page, '.bar button.on')).toHaveCount(0);
   expect(note).toMatchObject({ type: 'text', from: 'Configure how your agent responds to incoming webhooks.', to: 'Choose how your agent answers webhooks.' });
   expect(await readPage(f)).toContain('```diff\n- Configure how your agent responds to incoming webhooks.\n+ Choose how your agent answers webhooks.\n```');
 });
@@ -149,4 +151,47 @@ test('agent edits to the markdown show up live; done/delete from the panel', asy
   await del.click();                                      // second click confirms
   await expect.poll(() => fs.stat(file).then(() => true, () => false)).toBe(false);
   expect(await assetExists(f, note.screenshot)).toBe(false);
+});
+
+test('an open dropdown stays open while using the toolbar, picking an item and typing (D14)', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.getByTestId('menu-btn').click();                  // idle: the app gets the click
+  const menu = page.getByTestId('menu');
+  await expect(menu).toBeVisible();
+  await expect(page.getByTestId('menu-rename')).toBeFocused();
+  const closedBy = () => page.evaluate(() => (window as unknown as { menuClosedBy?: string }).menuClosedBy ?? null);
+
+  await ui(page, '.bar .brand').click();                        // a non-focusable bit of the overlay
+  await ui(page, '.bar button').filter({ hasText: 'Comment' }).click();
+  expect(await closedBy()).toBeNull();
+  await mouseAt(page, page.getByTestId('menu-archive'));
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  await page.keyboard.type('Archive needs a confirm step.');
+  await ui(page, '.pop label').click();                         // checkbox: toggled once, not twice
+  await expect(ui(page, '.pop input[type=checkbox]')).not.toBeChecked();
+  await ui(page, '.pop label').click();
+  const saved = waitForSave(page);
+  await ui(page, '.pop .btn.primary').click();
+  expect((await saved).target?.testid).toBe('menu-archive');
+  await expect(menu).toBeVisible();
+  expect(await closedBy()).toBeNull();
+
+  await ui(page, '.bar button').filter({ hasText: 'Comment' }).click();   // saving went back to idle (D15)
+  await mouseAt(page, page.getByTestId('menu-rename'));         // Escape cancels our draft, not the app's menu
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(ui(page, '.pop')).toHaveCount(0);
+  expect(await closedBy()).toBeNull();
+});
+
+test('opening the overlay with the hotkey keeps a focused menu open', async ({ page }) => {
+  await page.goto(f.url, { waitUntil: 'networkidle' });
+  await expect(ui(page, '.launcher')).toBeAttached();
+  await page.getByTestId('menu-btn').click();
+  await expect(page.getByTestId('menu-rename')).toBeFocused();
+  await page.keyboard.press('Alt+Shift+KeyR');
+  await page.keyboard.press('c');
+  await expect(ui(page, '.bar button.on')).toContainText('Comment');
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await expect(page.getByTestId('menu-rename')).toBeFocused();
 });

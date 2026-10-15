@@ -53,6 +53,20 @@ td small { color: #8b93a7; font-size: 11px; }
 .bar { width: 100%; background: linear-gradient(#8b7dff, #6d5dfc); border-radius: 6px 6px 2px 2px; }
 .bar-col small { color: #8b93a7; }
 
+/* menus (src/menus.tsx) */
+.dropdown, .combo { position: relative; }
+.menu { position: absolute; z-index: 10; top: calc(100% + 6px); right: 0; min-width: 200px; margin: 0; padding: 5px; list-style: none;
+  display: flex; flex-direction: column; background: #fff; border: 1px solid #e3e7ef; border-radius: 10px; box-shadow: 0 12px 32px rgba(17,24,39,.16); }
+.menu.floating { position: fixed; right: auto; }
+.menu button, .menu li { text-align: left; border: 0; background: none; padding: 9px 11px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.menu button:hover, .menu button:focus-visible, .menu li:hover, .menu li[aria-selected=true] { background: #f1efff; outline: 0; }
+.menu .danger { color: #b91c1c; }
+.combo .menu { left: 0; right: 0; min-width: 0; }
+.combo input { font: inherit; padding: 6px 10px; border: 1px solid #d5dae4; border-radius: 7px; width: 180px; min-width: 0; }
+.row-acts { width: 1%; text-align: right; }
+button.icon { padding: 2px 9px; border-color: transparent; background: none; font-size: 18px; line-height: 1; color: #5b6476; }
+button.icon:hover { background: #f1f3f8; }
+
 /* tablet: stack the content, keep the sidebar */
 @media (max-width: 1100px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -76,7 +90,12 @@ td small { color: #8b93a7; font-size: 11px; }
   .stat strong { font-size: 20px; }
   .card { padding: 14px; }
   .table-wrap { margin: 0 -14px; padding: 0 14px; }
-  .card-head input { flex: 1; width: auto; max-width: 180px; }
-  table { min-width: 520px; }
+  .combo { flex: 1; max-width: 190px; }
+  .combo input { width: 100%; }
+  .actions .dropdown { flex: 1; display: flex; }
+  .actions .dropdown > button { flex: 1; }
+  .actions .menu { left: 0; right: auto; }
+  .menu button, .menu li { padding: 12px 12px; }
+  table { min-width: 560px; }
   .chart .bars { height: 170px; gap: 8px; }
 }

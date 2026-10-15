@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-10-13 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-10-15 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -60,3 +60,13 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** a published GitHub release `v<version>` runs `.github/workflows/publish.yml`: `npm run check`, `npm run test:package`, then `npm publish` authenticated by OIDC. A manual run defaults to `--dry-run`.
 - **Why:** no long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package.
 - **Revisit if:** releases need to come from somewhere other than this repo's workflow.
+
+## D14 — Shield the app from the overlay's own events (2026-10-15)
+- **Decision:** `shieldApp` in `src/client/index.ts` hides overlay input from the app: bubble listeners are cut at the host, document capture listeners at `window` (our pointerdown/pointerup/keydown are re-dispatched as non-composed copies inside the shadow root), and app blur/focusout/pointerout towards the overlay are hidden. Opening the overlay only blurs text fields, quietly.
+- **Why:** dropdowns, popovers and comboboxes close on any outside press, focus move or Escape, so reviewers couldn't comment on them. Alternatives: an iframe toolbar (window blur still closes Headless UI menus) or a "comment in 3 s" timer (clumsy; still a fallback for CSS `:hover` menus, which no event shield can keep open).
+- **Revisit if:** an app listens on `window` in the capture phase before Redline loads, or a kit dismisses on `click` in the capture phase without a preceding pointerdown.
+
+## D15 — Saving a note returns to idle (2026-10-15)
+- **Decision:** after a comment or text note is saved, the mode goes back to idle (sketch already did). Cancelling a draft keeps the mode, since that usually means re-picking.
+- **Why:** staying in comment mode surprised reviewers: the next tap made another note instead of using the app, which is what you want between notes (open a menu, navigate). `C` or one tap on **Comment** starts the next one.
+- **Revisit if:** people batch many comments in a row and ask for a "keep mode" option.

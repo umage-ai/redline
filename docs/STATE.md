@@ -17,6 +17,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | JSX source stamping (HTML tags only) | ✅ | unit |
 | Script injection, comment mode, app never sees clicks | ✅ | `overlay.spec.ts` |
 | Disabled controls pickable; autofocus doesn't eat mode keys | ✅ | `overlay.spec.ts` |
+| Open dropdowns/popovers survive the overlay: toolbar, picking, typing, Escape, hotkey (D14) | ✅ fixture menu; try in `examples/demo` (Export, ⋯, driver filter) | `overlay.spec.ts`; not yet tried against real Radix/Headless UI/MUI |
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
@@ -34,6 +35,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 - DOM screenshots: WebGL, cross-origin map tiles and video can come out blank; sticky headers are missing when scrolled. Workaround: tab capture.
 - Text mode records the change only; it never writes source (by design, D6).
 - Notes are keyed by pathname, so `/org/a/agents/1` and `/org/b/agents/1` are separate pages. There's no route-pattern grouping yet.
+- CSS-only `:hover` menus still close when the pointer moves to the toolbar. Workaround: open the menu, then press `C` and click.
 - Pins re-resolve by selector/testid/xpath/text. Heavily dynamic lists can re-pin onto the wrong row.
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
 

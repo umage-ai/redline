@@ -90,6 +90,59 @@ const isTyping = (e: Event) => e.composedPath().some(n => n instanceof HTMLEleme
 const ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/><path d="M14 20h6"/></svg>`;
 const TYPE_ICON: Record<NoteType, string> = { comment: '💬', text: 'T', sketch: '✎' };
 
+/* ---------- shield: the app never notices the overlay (D14, L17) ---------- */
+// Dropdowns, popovers and comboboxes close on any press, focus move or Escape outside
+// themselves, so using the toolbar would close the very UI being reviewed.
+// - Bubble-phase listeners on document/window: cut at the host.
+// - Capture-phase listeners on document (Headless UI, Radix Escape): cut at window, where we
+//   are registered first. Events our own UI needs are re-dispatched inside the shadow root as
+//   non-composed copies, which never leave it. `click` is never copied: a dispatched click
+//   runs activation behaviour again (a checkbox would toggle twice); bubble-cutting it is enough.
+// - Focus leaving the app for the overlay (blur/focusout/pointerout with relatedTarget = host)
+//   is hidden from the app, as is the blur when opening the overlay or pressing on a
+//   non-focusable part of it.
+let quietBlur = false;
+function quietly(fn: () => void) { quietBlur = true; try { fn(); } finally { quietBlur = false; } }
+
+const BUBBLE_CUT = ['pointerdown', 'pointerup', 'pointermove', 'pointerover', 'pointerout', 'pointercancel', 'mousedown', 'mouseup',
+  'mousemove', 'mouseover', 'mouseout', 'click', 'dblclick', 'auxclick', 'contextmenu', 'touchstart', 'touchmove', 'touchend',
+  'wheel', 'focusin', 'focusout', 'input', 'change', 'keydown', 'keyup', 'keypress', 'beforeinput', 'paste', 'copy', 'cut'];
+const CAPTURE_CUT = ['mousedown', 'mouseup', 'touchstart', 'touchend', 'focusin', 'focusout', 'pointerover', 'pointerout', 'mouseover', 'mouseout', 'keyup', 'keypress'];
+const CAPTURE_COPY = ['pointerdown', 'pointerup', 'keydown'];   // the overlay itself listens to these
+const LEAVING = ['blur', 'focusout', 'pointerout', 'pointerleave', 'mouseout', 'mouseleave'];
+const INIT = ['bubbles', 'cancelable', 'clientX', 'clientY', 'screenX', 'screenY', 'button', 'buttons', 'altKey', 'ctrlKey', 'shiftKey',
+  'metaKey', 'pointerId', 'pointerType', 'isPrimary', 'width', 'height', 'pressure', 'key', 'code', 'location', 'repeat', 'isComposing', 'detail'];
+
+function redispatch(e: Event) {
+  const init: Record<string, unknown> = { composed: false };
+  for (const k of INIT) if (k in e) init[k] = (e as unknown as Record<string, unknown>)[k];
+  const copy = new (e.constructor as typeof Event)(e.type, init);
+  e.composedPath()[0].dispatchEvent(copy);
+  if (copy.defaultPrevented) e.preventDefault();
+}
+
+function shieldApp(host: HTMLElement) {
+  for (const t of BUBBLE_CUT) host.addEventListener(t, e => e.stopPropagation());
+  let pressedAt = 0;
+  const ours = (e: Event) => e.composedPath().includes(host);
+  for (const t of [...CAPTURE_CUT, ...CAPTURE_COPY]) {
+    addEventListener(t, e => {
+      if (!ours(e)) return;
+      if (t === 'pointerdown' || t === 'mousedown') pressedAt = Date.now();
+      e.stopPropagation();   // not Immediate: the overlay's own window listeners still run
+      if (CAPTURE_COPY.includes(t)) redispatch(e);
+    }, true);
+  }
+  for (const t of LEAVING) {
+    addEventListener(t, e => {
+      if (ours(e)) return;   // the overlay's own editors still need their blur
+      const to = (e as FocusEvent | MouseEvent).relatedTarget;
+      // Pressing a non-focusable part of the overlay moves focus to <body> (relatedTarget null).
+      if (to === host || quietBlur || (to === null && t !== 'mouseout' && t !== 'pointerout' && Date.now() - pressedAt < 400)) e.stopPropagation();
+    }, true);
+  }
+}
+
 /* ---------- app ---------- */
 async function boot() {
   if (window.__redline || window.top !== window) return;  // once per page, never inside iframes
@@ -104,8 +157,7 @@ async function boot() {
   shadow.append(h('style', {}, CSS));
   const ui = h('div', { class: 'rl' });
   shadow.append(ui);
-  // Keystrokes typed into the overlay must not reach the app's shortcut handlers.
-  for (const t of ['keydown', 'keyup', 'keypress']) host.addEventListener(t, e => e.stopPropagation());
+  shieldApp(host);
   const mount = () => { if (!host.isConnected) document.documentElement.append(host); };
   mount();
   new MutationObserver(mount).observe(document.documentElement, { childList: true });
@@ -168,8 +220,10 @@ async function boot() {
   /* ---------- open / mode ---------- */
   function setOpen(v: boolean) {
     state.open = v;
-    // An autofocused field would swallow the single-key shortcuts (C, T, S, N).
-    if (v && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
+    // An autofocused field would swallow the single-key shortcuts (C, T, S, N). Only text fields
+    // are blurred (a focused menu item keeps focus), and quietly, so an open combobox stays open.
+    const a = document.activeElement;
+    if (v && a instanceof HTMLElement && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) quietly(() => a.blur());
     if (!v) { cancelDraft(); state.mode = 'idle'; state.panel = false; hideHl(); }
     persist(); renderAll();
   }
@@ -403,7 +457,7 @@ async function boot() {
       draft = null;
       popLayer.replaceChildren();
       toast(`Saved → ${saved.file ?? config.dir}`);
-      if (d.type === 'sketch') { state.mode = 'idle'; persist(); }
+      state.mode = 'idle'; persist();   // one note per pick: the next tap goes to the app again (D15)
       await poll(true);
     } catch (err) {
       toast('Could not save: ' + (err as Error).message, true, 5000);

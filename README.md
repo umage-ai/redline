@@ -30,7 +30,11 @@ It works with Vite, SvelteKit, Astro and React, and was built on real apps in ea
 | `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for Claude**. | |
 | `Esc` | | Steps back one level: draft → mode → panel → closed. | |
 
-Clicks never reach the app while you're picking. Notes show as numbered pins that follow their
+Saving a note returns to idle, so the app is usable again; press `C` (or tap **Comment**) for the next one.
+Clicks never reach the app while you're picking, and the app never sees you using the overlay,
+so an open dropdown, popover or combobox stays open: open it, then press `C` (or click **Comment**)
+and click the item. The demo (`npm run demo`) has three to try: the **Export** menu, the **⋯** row
+menus and the **Filter by driver** autocomplete. Notes show as numbered pins that follow their
 element, and hovering a pin shows the note and the agent's reply.
 
 **Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then
