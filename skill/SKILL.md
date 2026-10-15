@@ -45,15 +45,18 @@ Make this secondary; Publish should be the primary action.
 
 1. **`target.source`** (`file:line`) — the element's location in source, from framework dev
    metadata (Svelte `__svelte_meta`, Astro `data-astro-source-*`, React via the plugin's JSX
-   stamp). Usually exact. For shared UI components it points at the *component's* markup;
+   stamp, Razor/Blazor via the .NET build's stamp). Usually exact. For shared UI components it points at the *component's* markup;
    check `target.components` (innermost first) to find the call site that needs changing.
 2. **`target.testid`** / `target.id` — grep for it.
 3. **Text** — grep for `target.text` (or the `-` line of a text change). Trust the quoted text
    over line numbers; the file may have moved since.
 4. `target.selector`, `target.html`, `target.role`/`name` — for confirming you're on the right element.
 5. Text that lives in content/i18n files (markdown, JSON, CMS): change it there, not in the template.
+   **`target.cms`** (heading `CMS <type> <id> “<name>” › <property>`) means the text is CMS content
+   (e.g. Optimizely): `content` id, `property`, `name`, `type`, `lang`, `edit` link. Change it in the
+   CMS (or reply that an editor should); change the template only if the note is about layout.
 
-Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,
+`author` (online mode) is the signed-in reviewer. Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,
 e.g. a dark-mode-only or mobile-width issue. `errors` lists console errors seen on the page
 when the note was written; they may or may not be related. `at` is when the note was written;
 on an old note, check the UI still looks like the screenshot before changing anything.
@@ -80,7 +83,7 @@ on an old note, check the UI still looks like the screenshot before changing any
 
 If the `redline` MCP tools are available (`list_notes`, `get_note`, `update_note`), use them instead
 of reading and editing the files: they work with any note store, and `get_note` returns the
-screenshot. Same workflow: `list_notes` → `get_note` per open note → change the code →
+screenshot. A deployed site can serve them over HTTP at `/__redline/mcp` (bearer token). Same workflow: `list_notes` → `get_note` per open note → change the code →
 `update_note` with `done: true` and the one-line reply (or only a `reply` with your question).
 
 ## Rules

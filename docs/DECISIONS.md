@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-10-15 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-10-16 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -107,3 +107,38 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** a stdio MCP server in the CLI (`src/mcp.ts`, hand-rolled JSON-RPC, no SDK dependency) with `list_notes`, `get_note` (note as the markdown section + screenshot image) and `update_note` (reply, done). It finds dev servers in `<root>/.redline/servers.json` (each registers on listen and on its first `/__redline` request; dead pids pruned) and uses the first that answers. With none, it uses the markdown store directly; with `--url`, it fails clearly instead. `init --mcp` registers it (`.mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`, `.cursor/mcp.json`), as `node <path to the installed cli.js> mcp` when inside the repo (no `npx`/`cmd /c` issues on Windows).
 - **Why:** with a custom store (D19) the files aren't there for the agent. Going through the dev server's API keeps one source of truth for every store, and is the same API a hosted version would expose. The skill (files) stays the zero-setup path; MCP is opt-in.
 - **Revisit if:** agents need notes while no dev server runs and the store isn't markdown (then stores need a CLI-side factory), or MCP gains a standard way to push note changes (subscriptions).
+
+## D30 — .NET: a C# port of the server, not a proxy to Node (2026-10-16)
+- **Decision:** `dotnet/` holds NuGet packages (`Umage.Redline.AspNetCore`, `.Build`, `.Optimizely`) that reimplement the server side in C#: the `/__redline` API with the same routes and JSON, the markdown store, writers, `servers.json`. The browser bundle is not forked: `dist/client.js` is embedded at build time (the csproj runs `npm run build` if it's missing).
+- **Why:** a .NET team shouldn't need Node at runtime, and Optimizely sites deploy as plain ASP.NET Core. The format is the risky part, so `test/golden` holds fixtures both test suites must reproduce byte for byte (JS `JSON.stringify` escaping, number printing and key order are ported in `Js.cs`).
+- **Revisit if:** the two servers drift in behaviour beyond the format (then share behaviour fixtures for the API too), or a hosted Redline makes per-stack servers unnecessary.
+
+## D31 — .NET injects the overlay as the response streams, before `</head>` (2026-10-16)
+- **Decision:** the middleware runs first in the pipeline (an `IStartupFilter`; `ManualPlacement` + `app.UseRedline()` to move it) and wraps the body in a stream that inserts the script before the first `</head>` (else `</body>`, else at the end), holding back at most a partial tag between writes. Content-Length is dropped in `OnStarting`.
+- **Why:** Blazor's streaming rendering and enhanced navigation flush the page in parts; buffering whole responses (as the Node injector does) would hold them back. The client already re-mounts its root if a DOM patch removes it, and an ES module runs once, so enhanced navigation keeps one overlay.
+- **Revisit if:** an app compresses responses before Redline sees them (they pass through without the overlay today).
+
+## D32 — Razor source lines: compile stamped copies in Debug builds (2026-10-16)
+- **Decision:** an MSBuild task (`Umage.Redline.Build`) runs after the Razor SDK collects its inputs and swaps each `.cshtml`/`.razor` AdditionalFile for a copy in `obj/…/redline-src/` whose HTML elements carry `data-redline-src="path:line:col"` (repo-relative), keeping all item metadata (TargetPath, CssScope). Lines don't move, and `PathMap` maps the copies back so PDBs name the originals. Only lowercase tags from the same allowlist as the JSX stamp; a conservative scanner follows Razor's `@` transitions and C# strings, and leaves a file it can't follow unstamped. Off in Release, design-time builds and `dotnet watch`.
+- **Why:** Razor has no runtime source metadata (no `__svelte_meta`, no fiber `_debugSource`), and a tag helper can't see line numbers. Rewriting copies needs no change to the app's files, works the same for MVC, Razor Pages and Blazor (also WebAssembly, by referencing the build package in the `.Client` project), and the existing client reads the attribute unchanged.
+- **Revisit if:** the Razor compiler gains a source-mapping hook, or hot reload of stamped files is needed (it compiles the originals).
+
+## D33 — Optimizely: name the CMS content in notes, edit drafts, stay out of edit mode (2026-10-16)
+- **Decision:** `AddRedlineOptimizely()` (CMS 12 on .NET 8, CMS 13 on .NET 10) keeps the overlay out of the CMS UI and edit/preview frames, and on overlay pages only stamps `data-redline-cms="<content>|<property>"` from `PropertyFor` (a `display:contents` wrapper), `epi-property` (tag helper) and content area items. Before a note is stored, a hook adds the content's name, type, language and edit link (`target.cms`); the heading then names the CMS property instead of the template line. Text mode on a plain string property saves a draft via `IContentRepository` (`SaveAction.Default` on the common draft, `AccessLevel.Edit`), never publishes.
+- **Why:** on a CMS page most text is content: a `.cshtml` line sends the agent to the wrong place. Edit mode already has Optimizely's own overlay and `data-epi-*`; running inside it would fight over clicks. View mode has no property markup, so we add our own, only where the reviewer sees the overlay.
+- **Revisit if:** rich text (XhtmlString) edits are wanted (needs an HTML-aware writer), or local blocks need full property paths.
+
+## D34 — Online mode: overlay and API only for authorized reviewers (2026-10-16)
+- **Decision:** `o.Online = true` runs Redline in any environment, but only for users who pass `Policy` (or have one of `Roles`; Optimizely defaults to the editor roles). Everyone else gets no script and 404 from `/__redline` (not 401: the endpoint isn't advertised). The middleware authenticates with the default scheme itself, so it can sit before `UseAuthentication`. Mutations need `x-redline: 1` and a same-origin `Origin` (or `Sec-Fetch-Site`); overlay pages get `Cache-Control: no-store, private`. File writers are off; content writers run under the user's rights. Notes record `author`.
+- **Why:** reviewing a staging or production site is the common CMS workflow. A custom header plus origin check stops cross-site requests under cookie auth without changing the client (no antiforgery token plumbing). Never caching overlay pages keeps a CDN from serving the script to visitors.
+- **Revisit if:** sites need CORS (a separate admin origin) or reviewers outside the site's own login.
+
+## D35 — Remote MCP over HTTP with bearer tokens (2026-10-16)
+- **Decision:** `POST /__redline/mcp` serves the `redline mcp` tools over MCP's Streamable HTTP transport, stateless (JSON responses, no sessions or SSE; GET is 405). Callers need `Authorization: Bearer`: site tokens configured as SHA-256 hashes (`o.Mcp.TokenHashes`), or personal tokens a reviewer creates in the overlay panel (an extension served by the package, D21), stored hashed with the notes and acting as that user. In development, loopback calls need no token unless site tokens are set. The reviewer's cookie never authorizes MCP.
+- **Why:** agents can't read a production database's notes from files, and a bearer header is what Claude Code, Cursor and VS Code send for HTTP MCP servers. Hashes mean a database or config leak doesn't leak tokens.
+- **Revisit if:** clients expect OAuth for remote MCP, or the Node handler gets the same endpoint (planned: same tools, same auth).
+
+## D36 — Online notes in SQL over plain ADO.NET, assets in the database (2026-10-16)
+- **Decision:** `SqlNoteStore` keeps notes, screenshots/sketches, personal tokens and a version counter in four `Redline*` tables, created on first use, through `DbConnection` (SQL Server and SQLite dialects). A note row stores the same JSON the markdown anchor holds. Optimizely uses the CMS database by default.
+- **Why:** an Optimizely site already has SQL Server; EF Core would add a dependency and migrations for four tables, and its `EnsureCreated` does nothing in an existing database. Dynamic Data Store is CMS-only and slow to query. Assets are small PNGs and a review tool's volume is low, so a blob provider isn't worth the setup.
+- **Revisit if:** many reviewers or large screenshots make the database the wrong place for assets (move them to the CMS blob provider behind `AssetAsync`).

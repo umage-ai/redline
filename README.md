@@ -19,7 +19,7 @@ Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works th
 the bundled `redline` skill. It ticks each note off and
 replies inline, and the replies show up live in the overlay.
 
-It works with Vite, SvelteKit, Astro and React, and was built on real apps in each of them. Nothing ships to production: the plugin only runs under `vite dev` / `astro dev`.
+It works with Vite, SvelteKit, Astro and React (and ASP.NET Core, Blazor and Optimizely via NuGet), and was built on real apps in each of them. Nothing ships to production: the plugin only runs under `vite dev` / `astro dev`.
 
 ## Modes
 
@@ -49,8 +49,7 @@ notes panel goes full width. Use **↑ Parent** and **Page** in place of `Alt`/`
 
 ![The notes panel with an agent's reply on a done note](docs/images/panel.png)
 
-<sub>Screenshots are from the fictional demo app in [`examples/demo`](examples/demo). Run it with `npm run demo`;
-regenerate the images with `npm run screenshots`.</sub>
+<sub>Screenshots are from the fictional demo app in [`examples/demo`](examples/demo) (`npm run demo`; regenerate with `npm run screenshots`).</sub>
 
 ## Setup in a repo
 
@@ -79,20 +78,19 @@ export default defineConfig({ integrations: [redline()] })
 
 **Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
 
-**Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import
-`<checkout>/dist/vite.js` directly from the app's config.
+**ASP.NET Core, Blazor, Optimizely CMS**: NuGet `Umage.Redline.AspNetCore` / `Umage.Redline.Optimizely`, then `AddRedline()`.
+Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serves editors on a live site. See [dotnet/README.md](dotnet/README.md).
+
+**Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import `<checkout>/dist/vite.js`.
 
 Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, jsxSource: true })`.
 - `root` is where notes go and what source paths are relative to. It defaults to the nearest folder with `.git`.
 - Set `launcher: false` to hide the small round button and rely on the hotkey only.
 - `app` names the app in a monorepo; it defaults to the dev server's folder relative to `root`, e.g. `apps/web`.
 
-**Monorepos** work without extra setup. Each app adds the plugin to its own dev server as above. Notes
-from every app go to one `.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`),
-so two apps' `/` pages don't collide, and each app only pins its own notes (the panel's **All** tab
-lists the others). Source paths are repo-relative (`apps/web/src/…`, `packages/ui/src/…`). Run
-`npx redline init` anywhere in the repo: it sets up the repo root (`--here` installs in the current
-folder instead, for when `root` points there).
+**Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one
+`.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's
+**All** tab lists the others). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).
 
 ### Extending
 
@@ -166,6 +164,7 @@ which is why replies appear without a reload.
 | Svelte 5 / SvelteKit | `__svelte_meta` (built into Svelte dev builds) | `__svelte_meta.parent` chain |
 | Astro | `data-astro-source-file/-loc` (snapshotted at parse time, because Astro's dev toolbar strips them) | `.astro` files up the tree |
 | React 19 (Vite) | The plugin stamps `data-redline-src="file:line:col"` on HTML elements in `.jsx`/`.tsx` during dev | Fiber owner chain, with router and provider plumbing filtered out |
+| Razor, Blazor (.NET) | Debug builds compile `.cshtml`/`.razor` copies stamped with `data-redline-src`; Optimizely adds CMS content + property | Stamped files up the tree |
 | Anything else | n/a | n/a. The selector, test id and text still identify the element. |
 
 ## Screenshots

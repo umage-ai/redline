@@ -24,7 +24,7 @@ export const PAGE_PREAMBLE = `<!--
   redline skill (.agents/skills/redline/SKILL.md, installed by \`npx redline init\`).
   Each note: a "### [ ]" heading naming the element and where it lives in source,
   an anchor comment (JSON: url, selector, xpath, source file:line, component chain,
-  viewport, app folder in a monorepo, …; paths are repo-relative), the instruction, optional screenshot/sketch images, and an optional
+  CMS content and property, viewport, app folder in a monorepo, …; paths are repo-relative), the instruction, optional screenshot/sketch images, and an optional
   "> " reply. Screenshots mark the target with a red box.
   To close a note: tick it ("### [x]") and add a one-line "> " reply saying what
   changed. To ask back: leave it open and put the question in the reply.

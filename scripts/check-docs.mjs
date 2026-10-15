@@ -42,7 +42,8 @@ for (const d of docs) if (!claude.includes(`](${d})`)) errors.push(`CLAUDE.md: d
 
 for (const [file, prefix] of [['docs/DECISIONS.md', 'D'], ['docs/LEARNINGS.md', 'L']]) {
   const nums = [...read(file).matchAll(new RegExp(`^## ${prefix}(\\d+) `, 'gm'))].map(m => +m[1]);
-  nums.forEach((n, i) => { if (n !== i + 1) errors.push(`${file}: entry ${prefix}${n} out of sequence (expected ${prefix}${i + 1})`); });
+  // Ascending and unique; gaps are fine (parallel branches reserve number ranges so merges don't collide).
+  nums.forEach((n, i) => { if (n <= (i ? nums[i - 1] : 0)) errors.push(`${file}: entry ${prefix}${n} out of sequence (after ${prefix}${i ? nums[i - 1] : 0})`); });
 }
 
 if (errors.length) {
