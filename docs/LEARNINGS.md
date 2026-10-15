@@ -91,3 +91,9 @@ Prune entries whose cause is gone from the code.
 - **Cause:** `position: fixed; left: 50%; transform: translateX(-50%)` sizes shrink-to-fit against the space right of `left`, i.e. 50vw. Once the sketch tools (with colour swatches) passed 640 px, the buttons were squeezed and "▭ Box" broke onto two lines.
 - **Fix:** `.tools { width: max-content; max-width: calc(100vw - 16px); flex-wrap: wrap; white-space: nowrap }`: one row when it fits, whole buttons wrap when it doesn't.
 - **Guard:** none automated (layout); `mobile.spec.ts` checks the tools fit 360 px. Re-check by eye after adding toolbar items.
+
+## L20 — First tag release: `npm publish` 403 "OIDC permission denied for this action"
+- **Cause:** npm trusted publishers allow only `npm stage publish` by default (since Sept 2026); a direct `npm publish` needs "Allow npm publish" ticked in the package's Trusted Publisher settings. Dry runs never authenticate, so they didn't show it.
+- **Fix:** ticked (and saved) "Allow npm publish" (D13: fully automatic releases; the alternative is `npm stage publish` + a 2FA approval per release) and re-ran the failed job. The tag didn't need to move.
+- **Also:** after a green publish, npm says "being processed"; the version showed up on the registry ~2 minutes later.
+- **Guard:** the note at the top of `publish.yml`.

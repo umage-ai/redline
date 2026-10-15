@@ -1,5 +1,6 @@
 # Publishes @umage.ai/redline to npm through Trusted Publishing (OIDC): no npm token is stored anywhere.
-# npm side: package settings → Trusted Publisher → GitHub Actions, repo umage-ai/redline, workflow publish.yml.
+# npm side: package settings → Trusted Publisher → GitHub Actions, repo umage-ai/redline, workflow publish.yml,
+# no environment, and "Allow npm publish" ticked (only `npm stage publish` is allowed by default → 403, L20).
 #
 # Release: `npm run release -- patch|minor|major` on main (scripts/release.mjs) bumps the version and pushes a
 # v<version> tag. The tag runs this workflow: checks, npm publish, then a GitHub release with generated notes.
