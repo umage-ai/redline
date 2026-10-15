@@ -9,7 +9,8 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const bump = process.argv[2];
-const sh = (cmd, opts = {}) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...opts }).trim();
+// execSync returns null when stdout is inherited (the push), hence the `?? ''`.
+const sh = (cmd, opts = {}) => (execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...opts }) ?? '').trim();
 const fail = msg => { console.error(`✗ ${msg}`); process.exit(1); };
 
 if (!bump || !/^(patch|minor|major|\d+\.\d+\.\d+(-[\w.]+)?)$/.test(bump))
