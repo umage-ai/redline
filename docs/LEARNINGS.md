@@ -122,3 +122,8 @@ Prune entries whose cause is gone from the code.
 - **Cause:** with minimal hosting, `MapContent()` builds the edit UI's routes before the CMS creates its schema. Separately, `epi-property` only adds edit attributes; it doesn't render the value.
 - **Fix:** the sample uses the `Startup` pattern (`ConfigureCmsDefaults` initializes first); views write `<p epi-property="@Model.X">@Model.X</p>`.
 - **Guard:** `optimizely.spec.ts` (with `REDLINE_E2E_OPTIMIZELY=1`).
+
+## L34 — servers.json from the .NET server had `"at": "…T22.58.31…"`
+- **Cause:** `:` in a .NET custom date format is the culture's time separator; on a Danish machine that is `.`.
+- **Fix:** format with `CultureInfo.InvariantCulture` (`ServerRegistry`); every other stamp already did.
+- **Guard:** `MiddlewareTests.Registers_in_servers_json_for_redline_mcp`. Checked by hand: `node dist/cli.js mcp` lists notes from the Razor sample.

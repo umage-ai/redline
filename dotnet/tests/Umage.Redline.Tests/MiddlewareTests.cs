@@ -109,5 +109,7 @@ public class MiddlewareTests
         for (var i = 0; i < 50 && !File.Exists(path); i++) await Task.Delay(20);
         var list = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsArray();
         Assert.Contains(list, s => s!["url"]!.GetValue<string>() == "http://localhost" && s["pid"]!.GetValue<int>() == Environment.ProcessId);
+        // ISO 8601 whatever the machine's culture (a Danish time separator once wrote "22.58.31").
+        Assert.All(list, s => Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", s!["at"]!.GetValue<string>()));
     }
 }

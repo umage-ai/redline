@@ -43,7 +43,7 @@ public static class ServerRegistry
         {
             url = url.TrimEnd('/');
             var list = Read(root, dir).Where(s => (string?)s["url"] != url).ToList();
-            list.Add(new JsonObject { ["url"] = url, ["app"] = app, ["pid"] = Environment.ProcessId, ["at"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") });
+            list.Add(new JsonObject { ["url"] = url, ["app"] = app, ["pid"] = Environment.ProcessId, ["at"] = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture) });
             Directory.CreateDirectory(Path.Combine(root, dir));
             var json = new JsonArray(list.Cast<JsonNode>().ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(FileOf(root, dir), json.Replace("\r\n", "\n") + "\n");
