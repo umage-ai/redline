@@ -86,12 +86,16 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .rl-sketch { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: auto; cursor: crosshair; touch-action: none; }
 .rl-sketch-input { position: fixed; min-width: 160px; padding: 4px 8px; border-radius: 6px; border: 2px solid var(--ink); outline: 0;
   background: #fff; color: #111; font: 600 16px system-ui, sans-serif; pointer-events: auto; }
-.tools { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); display: flex; gap: 2px; padding: 4px; border-radius: 12px;
+.tools { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; white-space: nowrap; width: max-content; max-width: calc(100vw - 16px); padding: 4px; border-radius: 12px;
   background: var(--bg); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.35); pointer-events: auto; }
 .tools button { padding: 6px 10px; border-radius: 8px; color: var(--fg-2); display: flex; gap: 6px; align-items: center; }
 .tools button:hover { background: var(--bg-3); color: var(--fg); }
 .tools button.on { background: var(--bg-3); color: var(--fg); box-shadow: inset 0 0 0 1px var(--ink); }
 .tools button.done { background: var(--ink); color: #fff; }
+.tools .swatches { display: flex; align-items: center; gap: 5px; padding: 0 8px; margin: 0 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.tools button.sw { width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+.tools button.sw:hover { background: var(--c); transform: scale(1.12); }
+.tools button.sw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
 
 /* text edit */
 .ed { position: fixed; outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; pointer-events: auto; white-space: pre-wrap;
@@ -155,6 +159,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .launcher svg { width: 22px; height: 22px; }
   .bar kbd, .tools kbd { display: none; }
   .bar button, .tools button { min-height: 40px; padding: 6px 12px; }
+  .tools button.sw { width: 30px; height: 30px; min-height: 0; padding: 0; }
+  .tools .swatches { gap: 8px; }
   .hint { bottom: calc(72px + var(--lift, 0px)); }
   .pin { width: 28px; height: 28px; margin-top: -28px; border-radius: 14px 14px 14px 2px; font-size: 12px; }
   .pop header button { padding: 6px 10px; }
@@ -175,7 +181,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar .brand { padding: 0 6px; }
   .bar button { padding: 6px 9px; }
   .hint, .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
-  .tools { top: max(8px, env(safe-area-inset-top)); flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100vw - 16px); }
+  .tools { top: max(8px, env(safe-area-inset-top)); }
   .tools button { padding: 6px 9px; }
   .pop { width: calc(100vw - 16px); }
   .pop textarea { max-height: 30vh; }

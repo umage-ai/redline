@@ -240,3 +240,29 @@ test('monorepo: an app pins and numbers only its own notes; All lists the other 
   await ui(page, '.seg button').filter({ hasText: 'All' }).click();
   await expect(ui(page, '.group')).toHaveText(['/  (this page)', 'apps/admin · /']);
 });
+
+test('sketch colours: swatch or C per shape, saved in the svg, remembered for the next sketch', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('s');
+  const drag = async (x: number, y: number) => {
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + 120, y + 60, { steps: 4 }); await page.mouse.up();
+  };
+  await ui(page, '.tools .sw[aria-label="Blue"]').click();
+  await expect(ui(page, '.tools .sw.on')).toHaveAttribute('aria-label', 'Blue');
+  await drag(200, 300);
+  await page.keyboard.press('c');                                  // Blue → Green
+  await expect(ui(page, '.tools .sw.on')).toHaveAttribute('aria-label', 'Green');
+  await drag(450, 300);
+  await expect(ui(page, '.rl-sketch path[stroke-width="3"]')).toHaveCount(2);
+  await page.keyboard.press('Enter');
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  const saved = waitForSave(page);
+  await page.keyboard.press('Control+Enter');
+  const svg = await fs.readFile(path.join(f.dir, '.redline/pages', (await saved).sketch!), 'utf8');
+  expect(svg).toContain('stroke="#2f80ff"');
+  expect(svg).toContain('stroke="#22c55e"');
+  await page.keyboard.press('s');
+  await expect(ui(page, '.tools .sw.on')).toHaveAttribute('aria-label', 'Green');
+  await page.keyboard.press('Escape');
+});

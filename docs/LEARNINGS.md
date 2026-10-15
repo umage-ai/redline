@@ -86,3 +86,8 @@ Prune entries whose cause is gone from the code.
 - **Cause:** the open state is restored from sessionStorage without going through `setOpen`, so an autofocused input kept focus and swallowed `N`/`C`.
 - **Fix:** `releaseTextFocus()` also runs at the end of boot when the overlay comes back open.
 - **Guard:** `overlay.spec.ts` "the copied prompt works for any agent…" (reloads, then presses `N`).
+
+## L19 — Centred fixed toolbar wrapped its labels at 1280 px
+- **Cause:** `position: fixed; left: 50%; transform: translateX(-50%)` sizes shrink-to-fit against the space right of `left`, i.e. 50vw. Once the sketch tools (with colour swatches) passed 640 px, the buttons were squeezed and "▭ Box" broke onto two lines.
+- **Fix:** `.tools { width: max-content; max-width: calc(100vw - 16px); flex-wrap: wrap; white-space: nowrap }`: one row when it fits, whole buttons wrap when it doesn't.
+- **Guard:** none automated (layout); `mobile.spec.ts` checks the tools fit 360 px. Re-check by eye after adding toolbar items.

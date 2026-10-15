@@ -2,15 +2,26 @@
 // viewport coordinates; the saved SVG has viewBox = viewport size, and the note
 // also records scroll + viewport so the drawing can be placed on the page.
 
-export type Shape =
+export type Shape = (
   | { t: 'rect' | 'arrow'; x1: number; y1: number; x2: number; y2: number }
   | { t: 'pen'; pts: [number, number][] }
-  | { t: 'text'; x: number; y: number; s: string };
+  | { t: 'text'; x: number; y: number; s: string }
+) & { c?: string };   // colour; default INK
 
 export type Tool = 'rect' | 'arrow' | 'pen' | 'text';
 
 const NS = 'http://www.w3.org/2000/svg';
 const INK = '#ff2d55';
+/** Sketch colours. Each has a halo that keeps it readable on light and dark pages. */
+export const COLORS = [
+  { name: 'Red', c: INK, halo: 'rgba(0,0,0,.4)' },
+  { name: 'Amber', c: '#ffb020', halo: 'rgba(0,0,0,.45)' },
+  { name: 'Blue', c: '#2f80ff', halo: 'rgba(255,255,255,.6)' },
+  { name: 'Green', c: '#22c55e', halo: 'rgba(0,0,0,.4)' },
+  { name: 'Black', c: '#111111', halo: 'rgba(255,255,255,.75)' },
+  { name: 'White', c: '#ffffff', halo: 'rgba(0,0,0,.55)' },
+];
+const haloOf = (c: string) => COLORS.find(x => x.c === c)?.halo ?? 'rgba(0,0,0,.4)';
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 function arrowPath(x1: number, y1: number, x2: number, y2: number) {
@@ -21,15 +32,16 @@ function arrowPath(x1: number, y1: number, x2: number, y2: number) {
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
 export function shapeSvg(s: Shape): string {
+  const c = s.c ?? INK, halo = haloOf(c);
   if (s.t === 'text')
-    return `<text x="${r1(s.x)}" y="${r1(s.y)}" font-family="system-ui,sans-serif" font-size="20" font-weight="600" fill="${INK}" stroke="rgba(0,0,0,.55)" stroke-width="4" paint-order="stroke">${esc(s.s)}</text>`;
+    return `<text x="${r1(s.x)}" y="${r1(s.y)}" font-family="system-ui,sans-serif" font-size="20" font-weight="600" fill="${c}" stroke="${halo}" stroke-width="4" paint-order="stroke">${esc(s.s)}</text>`;
   let d: string;
   if (s.t === 'rect') {
     const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
     d = `M${r1(x)} ${r1(y)}h${r1(Math.abs(s.x2 - s.x1))}v${r1(Math.abs(s.y2 - s.y1))}h${r1(-Math.abs(s.x2 - s.x1))}Z`;
   } else if (s.t === 'pen') d = 'M' + s.pts.map(p => `${r1(p[0])} ${r1(p[1])}`).join('L');
   else d = arrowPath(s.x1, s.y1, s.x2, s.y2);
-  return `<path d="${d}" stroke="rgba(0,0,0,.4)" stroke-width="8"/><path d="${d}" stroke="${INK}" stroke-width="3"/>`;
+  return `<path d="${d}" stroke="${halo}" stroke-width="8"/><path d="${d}" stroke="${c}" stroke-width="3"/>`;
 }
 
 export function bboxOf(shapes: Shape[]): [number, number, number, number] | null {
@@ -53,6 +65,7 @@ export class SketchLayer {
   readonly el: SVGSVGElement;
   readonly shapes: Shape[] = [];
   tool: Tool = 'rect';
+  color = INK;
   private live: Shape | null = null;
   private input: HTMLInputElement | null = null;
 
@@ -76,7 +89,7 @@ export class SketchLayer {
       else this.el.addEventListener('pointerup', () => this.textAt(x, y), { once: true });
       return;
     }
-    this.live = this.tool === 'pen' ? { t: 'pen', pts: [[x, y]] } : { t: this.tool, x1: x, y1: y, x2: x, y2: y };
+    this.live = this.tool === 'pen' ? { t: 'pen', pts: [[x, y]], c: this.color } : { t: this.tool, x1: x, y1: y, x2: x, y2: y, c: this.color };
     this.el.setPointerCapture(e.pointerId);
     const move = (m: PointerEvent) => {
       if (m.pointerId !== e.pointerId) return;
@@ -105,6 +118,8 @@ export class SketchLayer {
     this.input?.remove();
     const inp = document.createElement('input');
     inp.className = 'rl-sketch-input';
+    const color = this.color;   // the colour when the label was started
+    inp.style.borderColor = color;
     inp.style.top = `${y - 16}px`;
     inp.placeholder = 'Label…';
     // Removing a focused input fires `blur` synchronously, so Enter/Escape would run this twice.
@@ -112,7 +127,7 @@ export class SketchLayer {
     const close = (keep: boolean) => {
       if (closed) return;
       closed = true;
-      if (keep && inp.value.trim()) { this.shapes.push({ t: 'text', x, y: y + 4, s: inp.value.trim() }); this.onChange(); }
+      if (keep && inp.value.trim()) { this.shapes.push({ t: 'text', x, y: y + 4, s: inp.value.trim(), c: color }); this.onChange(); }
       inp.remove(); this.input = null; this.render();
     };
     const commit = () => close(true);

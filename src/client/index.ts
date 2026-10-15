@@ -7,7 +7,7 @@ import type { Note, NotesResponse, NoteType } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
 import { clip, describe, labelFor, resolve, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
-import { bboxOf, sketchFile, SketchLayer, type Tool } from './sketch.ts';
+import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
 import { CSS } from './styles.ts';
 
 type StoredNote = Note & { file: string };
@@ -273,12 +273,12 @@ async function boot() {
       idle: `Pick a mode: <b>Comment</b>, <b>Text</b> or <b>Sketch</b>`,
       comment: `<b>Tap</b> an element to comment · <b>↑ Parent</b> / <b>Page</b> widen it`,
       text: `<b>Tap</b> any text and rewrite it in place`,
-      sketch: `Draw with your finger · <b>Done</b> when finished`,
+      sketch: `Draw with your finger · pick a colour · <b>Done</b> when finished`,
     } : {
       idle: `Pick a mode: <kbd>C</kbd> comment · <kbd>T</kbd> text · <kbd>S</kbd> sketch · <kbd>N</kbd> notes · ${hk} hide`,
       comment: `<b>Click</b> an element to comment · <kbd>Alt</kbd>+click picks its parent · <kbd>Shift</kbd>+click = whole page · <kbd>Esc</kbd> stop`,
       text: `<b>Click</b> any text and rewrite it in place · <kbd>Enter</kbd> keep · <kbd>Esc</kbd> stop`,
-      sketch: `Drag to draw · <kbd>1</kbd> box <kbd>2</kbd> arrow <kbd>3</kbd> pen <kbd>4</kbd> text · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Enter</kbd> done · <kbd>Esc</kbd> cancel`,
+      sketch: `Drag to draw · <kbd>1</kbd> box <kbd>2</kbd> arrow <kbd>3</kbd> pen <kbd>4</kbd> text · <kbd>C</kbd> colour · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Enter</kbd> done · <kbd>Esc</kbd> cancel`,
     })[state.mode];
     // Astro's dev toolbar also lives bottom-centre; sit above it.
     ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
@@ -526,9 +526,17 @@ async function boot() {
   let tools: HTMLElement | null = null;
   function startSketch() {
     const layer = new SketchLayer(ui, () => renderTools(), bar);
+    const saved = ls.get('sketchColor', COLORS[0].c);
+    layer.color = COLORS.some(x => x.c === saved) ? saved : COLORS[0].c;
     draft = { type: 'sketch', sketch: layer, x: 0, y: 0 };
     tools = h('div', { class: 'tools' });
     ui.append(tools);
+    renderTools();
+  }
+  function setColor(c: string) {
+    if (!draft?.sketch) return;
+    draft.sketch.color = c;
+    ls.set('sketchColor', c);   // the next sketch starts with it too
     renderTools();
   }
   function renderTools() {
@@ -538,6 +546,9 @@ async function boot() {
       h('button', { class: sk.tool === tool ? 'on' : '', onclick: () => { sk.tool = tool; renderTools(); } }, label, h('kbd', {}, key));
     tools.replaceChildren(
       t('rect', '▭ Box', '1'), t('arrow', '→ Arrow', '2'), t('pen', '✎ Pen', '3'), t('text', 'T Text', '4'),
+      h('span', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Colour (C)' }, ...COLORS.map(x =>
+        h('button', { class: 'sw' + (sk.color === x.c ? ' on' : ''), role: 'radio', 'aria-checked': String(sk.color === x.c),
+          title: `${x.name} (C cycles)`, 'aria-label': x.name, style: `--c:${x.c}`, onclick: () => setColor(x.c) }))),
       h('button', { onclick: () => sk.undo(), disabled: !sk.shapes.length }, '↶ Undo'),
       h('button', { onclick: () => sk.clear(), disabled: !sk.shapes.length }, 'Clear'),
       h('button', { onclick: () => endSketch(false) }, 'Cancel'),
@@ -771,6 +782,7 @@ async function boot() {
       const sk = draft.sketch;
       const tool = ({ '1': 'rect', '2': 'arrow', '3': 'pen', '4': 'text' } as Record<string, Tool>)[e.key];
       if (tool) { sk.tool = tool; renderTools(); }
+      else if (e.key === 'c' || e.key === 'C') setColor(COLORS[(COLORS.findIndex(x => x.c === sk.color) + (e.shiftKey ? COLORS.length - 1 : 1)) % COLORS.length].c);
       else if (e.key === 'z' && e.ctrlKey) sk.undo();
       else if (e.key === 'Enter') endSketch(true);
       else if (e.key === 'Escape') endSketch(false);
