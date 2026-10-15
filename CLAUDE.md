@@ -34,7 +34,7 @@ npm test               # unit tests (node:test, runs .ts directly) + docs check
 npm run test:e2e       # build + Playwright against 4 fixture apps (installed Chrome; PW_CHROMIUM=1 for bundled)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
 npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests (slow; runs on prepublishOnly)
-# Release: bump version, push, publish a GitHub release `v<version>` → .github/workflows/publish.yml (D13). Don't `npm publish` locally.
+# Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
 npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
 npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright

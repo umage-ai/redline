@@ -56,8 +56,9 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** a global chord opens and closes the overlay. `C`/`T`/`S`/`N`/`Esc` work only while it's open and focus isn't in a field. The hotkey is configurable (`hotkey` option).
 - **Why:** the slide-review tool used bare letters, which collide with typing and app shortcuts in real web apps. A small launcher button is shown by default (`launcher: false` hides it).
 
-## D13 — Release from GitHub Actions with npm Trusted Publishing (2026-10-13)
-- **Decision:** a published GitHub release `v<version>` runs `.github/workflows/publish.yml`: `npm run check`, `npm run test:package`, then `npm publish` authenticated by OIDC. A manual run defaults to `--dry-run`.
+## D13 — Release from GitHub Actions with npm Trusted Publishing (2026-10-13, amended 2026-10-15)
+- **Decision:** `npm run release -- patch|minor|major` on an up-to-date main (`scripts/release.mjs`) bumps the version, commits "Release vX.Y.Z", tags `vX.Y.Z` and pushes. The tag runs `.github/workflows/publish.yml`: tag = package.json and on main, `npm run check`, `npm run test:package`, `npm publish` authenticated by OIDC, then a GitHub release with generated notes. A manual run defaults to `--dry-run`.
+- **Amended:** releases used to be triggered by publishing a GitHub release by hand; one command on main is less to forget and keeps version, tag and notes in step.
 - **Why:** no long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package.
 - **Revisit if:** releases need to come from somewhere other than this repo's workflow.
 

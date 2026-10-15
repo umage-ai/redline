@@ -168,8 +168,9 @@ npm run test:package   # install the packed tarball into fresh apps per framewor
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app
 ```
 
-Releasing: bump `version` in `package.json`, push, and publish a GitHub release tagged `v<version>`.
-[`publish.yml`](.github/workflows/publish.yml) runs every check and publishes to npm through Trusted Publishing.
+Releasing: on an up-to-date `main`, run `npm run release -- patch` (or `minor`, `major`, `x.y.z`). It bumps the
+version, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) then runs every check,
+publishes to npm through Trusted Publishing and creates the GitHub release with generated notes.
 
 Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions and learnings
 are in [docs/](docs/STATE.md).
