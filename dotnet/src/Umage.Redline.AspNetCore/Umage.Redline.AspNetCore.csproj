@@ -6,7 +6,8 @@
     <PackageId>Umage.Redline.AspNetCore</PackageId>
     <Description>Redline for ASP.NET Core (Razor Pages, MVC, Blazor): a review overlay where a reviewer pins comments, text changes and sketches on the running app; notes are saved as markdown (or to a database online) for an AI agent to apply.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- NU5100: the MSBuild task DLL goes to tasks/ on purpose (nothing to reference). -->
+    <NoWarn>$(NoWarn);CS1591;NU5100</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
