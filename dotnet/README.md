@@ -27,6 +27,8 @@ builder.Services.AddRedline(o => o.DirectEdit = true); // text mode may write st
 Run the app in Development and press **Alt+Shift+R**. Notes land in `<repo>/.redline/` (the nearest
 folder with `.git`); add `.redline/` to `.gitignore` and install the agent guide with
 `npx @umage.ai/redline init`. Settings can also come from configuration (`"Redline": { "Dir": … }`).
+`o.PageKey = RedlinePageKey.Path` groups notes by path only, so a page whose views are hash links
+(a slide deck's `#/3`) keeps one notes file; the default `Route` also splits by `#/…` routes.
 
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:
 `<PackageReference Include="Umage.Redline.Build" Version="…" PrivateAssets="all" />`.
@@ -48,7 +50,10 @@ Blazor WebAssembly components live in the `.Client` project; give it the stamps 
 With `DirectEdit`, text mode writes the change into the `.cshtml`/`.razor` file when the element's
 content there is static: text and inline markup. Anything with `@` (expressions, code, directive
 attributes), tag helpers (`asp-*`) and components is refused, and the edit is saved as a note instead.
-A typed `@` is written as `@@`.
+A typed `@` is written as `@@`. Character references compare decoded (the full HTML set: `&mdash;`,
+`&rarr;`, …), and new text keeps the file's spelling (a file that writes `&mdash;` keeps `&mdash;`).
+Plain `.html` pages in `wwwroot` have no source line: the element with that text is edited, and when
+several show the same text, the one the reviewer picked, provided the file has as many as the page.
 
 ## Optimizely CMS
 

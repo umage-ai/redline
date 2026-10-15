@@ -91,7 +91,8 @@ turns on `enableTemplateSourceLocations` in dev) plus the `ng` debug global. One
 **.NET** (`dotnet/`, D30–D36): a C# port of the server (`Umage.Redline.AspNetCore`: API, stores, writers, streaming
 injector, HTTP MCP), Razor/Blazor source stamps from an MSBuild task (`Umage.Redline.Build`, same `data-redline-src` format,
 no component name) and `Umage.Redline.Optimizely`. The browser bundle is shared. `test/golden` fixtures keep the markdown
-byte-identical in both servers: a format change must pass `golden.test.ts` and `GoldenTests.cs`.
+byte-identical in both servers: a format change must pass `golden.test.ts` and `GoldenTests.cs`; an edit-guard change goes in
+`test/golden/edit/cases.json` (`edit.test.ts`, `EditGoldenTests.cs`). After changing `src/server/entities.ts`, run `node scripts/entities-cs.mjs`.
 
 **Consumers** install `@umage.ai/redline` as a devDependency and import `@umage.ai/redline/{vite,astro,server}` (D4);
 Angular uses the `@umage.ai/redline:dev-server` builder (package.json `builders` → `dist/builders.json`, D23).

@@ -117,22 +117,25 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D24 — Full HTML entity table in the server bundle; plain edits keep the file's entity spelling (2026-10-16)
 - **Decision:** `decodeEntities` (`src/server/edit.ts`) knows all 2125 WHATWG named references, legacy names without `;`, and numeric ones (invalid → U+FFFD), from a packed table generated once into `src/server/entities.ts` (no runtime dependency). Plain and rich edits write a character the way the element's source already spelled it (`—` → `&mdash;`); `/edit?inspect=1` returns that map as `spell`.
 - **Why:** static decks use `&mdash;`/`&middot;`/`&rarr;` everywhere; with six known names their text never matched the page, and writes turned `&mdash;` into raw `—`. The table is ~29 KB per Node bundle (server/vite/astro), server-only and dev-only; the client bundle doesn't include it.
+- **.NET follows:** `scripts/entities-cs.mjs` writes the same table to `Entities.g.cs` (`WebUtility.HtmlDecode` knows only HTML4 names); `EditGoldenTests.cs` fails while the two differ.
 - **Revisit if:** bundle size matters (ship the HTML4 subset), or the HTML standard adds names.
 
 ## D25 — Same-text elements on static pages: pick by position only when the counts agree (2026-10-16)
 - **Decision:** the overlay sends `nth: { index, count }` (position among same-tag elements with the same text, in document order) when there are several. `staticHtmlWriter` uses it only if the file has exactly `count` matching static elements; otherwise it still refuses.
 - **Why:** a selector path would break on any wrapper the runtime adds; equal counts are a cheap proof that source order and DOM order line up. A mismatch (one copy rendered by script) means the index can't be trusted.
+- **.NET follows:** the static-html writer takes `nth` the same way. The cases are shared in `test/golden/edit/cases.json` (both test suites).
 - **Revisit if:** framework writers need it (they use line:col and don't).
 
 ## D26 — Extension API v2, page key option, toolbar beside the panel (2026-10-16)
 - **Decision:** `RedlineApi.version` is 2 (additive): `removeButton(id)`, `panelState()` and a `panel` event `{ open, width }`, `setPageKey(fn)` (fn gets the location and the built-in key; nullish keeps it) and a `page` event. Option `pageKey: 'route'` (default, unchanged: path + `#/…` routes) or `'path'` reaches the client via `/config`. The toolbar centres in the room left of the open panel (`--panel-w`) and wraps there; phones keep one scrolling row, and a full-width panel doesn't move it.
 - **Why:** a host page (a deck) must lay itself out beside the panel and group all slides as one page; a wide bar with extension buttons sat under the panel.
+- **.NET follows:** `RedlineOptions.PageKey` (`Route` | `Path`) in `/config`; HEAD answers on the GET routes there too.
 - **Revisit if:** route-pattern grouping lands (it could become a third `pageKey` mode).
 
 ## D30 — .NET: a C# port of the server, not a proxy to Node (2026-10-16)
 - **Decision:** `dotnet/` holds NuGet packages (`Umage.Redline.AspNetCore`, `.Build`, `.Optimizely`) that reimplement the server side in C#: the `/__redline` API with the same routes and JSON, the markdown store, writers, `servers.json`. The browser bundle is not forked: `dist/client.js` is embedded at build time (the csproj runs `npm run build` if it's missing).
 - **Why:** a .NET team shouldn't need Node at runtime, and Optimizely sites deploy as plain ASP.NET Core. The format is the risky part, so `test/golden` holds fixtures both test suites must reproduce byte for byte (JS `JSON.stringify` escaping, number printing and key order are ported in `Js.cs`).
-- **Revisit if:** the two servers drift in behaviour beyond the format (then share behaviour fixtures for the API too), or a hosted Redline makes per-stack servers unnecessary.
+- **Revisit if:** the two servers drift in behaviour beyond the format and the edit guards (those share `test/golden/edit`; the API has no shared fixtures yet), or a hosted Redline makes per-stack servers unnecessary.
 
 ## D31 — .NET injects the overlay as the response streams, before `</head>` (2026-10-16)
 - **Decision:** the middleware runs first in the pipeline (an `IStartupFilter`; `ManualPlacement` + `app.UseRedline()` to move it) and wraps the body in a stream that inserts the script before the first `</head>` (else `</body>`, else at the end), holding back at most a partial tag between writes. Content-Length is dropped in `OnStarting`.
