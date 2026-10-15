@@ -139,3 +139,26 @@ test('extensions: files are served under /__redline/ext/, URLs passed through, b
     assert.equal((await s.raw('/ext/1.js')).status, 404);
   } finally { await s.close(); }
 });
+
+test('direct edit: Angular templates (templateUrl .html and inline in the component .ts) treat {{ }} as code (D23)', async () => {
+  const root = await tmpRepo();
+  await fs.mkdir(path.join(root, 'src/app'), { recursive: true });
+  const html = path.join(root, 'src/app/x.html'), ts = path.join(root, 'src/app/card.ts');
+  await fs.writeFile(html, '<h2>Title {{ n }}</h2>\n<p>Use &#123;braces&#125;</p>\n<p>Hi <b *ngIf="on">there</b></p>\n');
+  await fs.writeFile(ts, "@Component({\n  selector: 'c',\n  template: `\n    <h2>Card title</h2>\n  `,\n})\nexport class Card {}\n");
+  const at = (file: string, line: number, tag: string, from: string, to: string) =>
+    JSON.stringify({ from, to, tag, url: 'http://x/', source: { file, line, col: 1 } });
+  const s = await serve(root, { directEdit: true });
+  try {
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/x.html', 1, 'h2', 'Title 3', 'x') })).reason, /expression/);
+    assert.equal((await s.call('/edit', { method: 'POST', body: at('src/app/x.html', 2, 'p', 'Use {braces}', 'Use {curly}') })).ok, true);
+    assert.match(await fs.readFile(html, 'utf8'), /<p>Use &#123;curly&#125;<\/p>/);
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/x.html', 3, 'p', 'Hi there', 'Hi you') })).reason, /directive/);
+
+    assert.deepEqual(await s.call('/edit', { method: 'POST', body: at('src/app/card.ts', 4, 'h2', 'Card title', 'Better title') }), { ok: true, file: 'src/app/card.ts', line: 4, writer: 'markup' });
+    assert.match(await fs.readFile(ts, 'utf8'), /<h2>Better title<\/h2>/);
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/card.ts', 4, 'h2', 'Better title', 'A `quote`') })).reason, /inline template/);
+    await fs.writeFile(path.join(root, 'src/app/util.ts'), 'export const x = "<h2>Card</h2>";\n');
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/util.ts', 1, 'h2', 'Card', 'y') })).reason, /no writer/);
+  } finally { await s.close(); }
+});

@@ -44,8 +44,8 @@ Make this secondary; Publish should be the primary action.
 ## Finding the code — in this order
 
 1. **`target.source`** (`file:line`) — the element's location in source, from framework dev
-   metadata (Svelte `__svelte_meta`, Astro `data-astro-source-*`, React via the plugin's JSX
-   stamp). Usually exact. For shared UI components it points at the *component's* markup;
+   metadata (Svelte `__svelte_meta`, Astro `data-astro-source-*`, Angular template locations,
+   JSX and Vue templates via the plugin's stamp). Usually exact. For shared UI components it points at the *component's* markup;
    check `target.components` (innermost first) to find the call site that needs changing.
 2. **`target.testid`** / `target.id` — grep for it.
 3. **Text** — grep for `target.text` (or the `-` line of a text change). Trust the quoted text

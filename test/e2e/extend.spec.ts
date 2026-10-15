@@ -54,6 +54,10 @@ const cases = [
   { f: FIXTURES.react, rel: 'src/EditZone.tsx', route: '/', dynamic: /expression/ },
   { f: FIXTURES.sveltekit, rel: 'src/lib/EditZone.svelte', route: '/', dynamic: /expression/ },
   { f: FIXTURES.astro, rel: 'src/pages/edit.astro', route: '/edit', dynamic: /expression/ },
+  { f: FIXTURES.vue, rel: 'src/EditZone.vue', route: '/', dynamic: /expression/ },
+  { f: FIXTURES.angular, rel: 'src/app/edit-zone.html', route: '/', dynamic: /expression/ },
+  { f: FIXTURES.solid, rel: 'src/EditZone.tsx', route: '/', dynamic: /expression/ },
+  { f: FIXTURES.preact, rel: 'src/EditZone.tsx', route: '/', dynamic: /expression/ },
 ];
 
 for (const c of cases) {

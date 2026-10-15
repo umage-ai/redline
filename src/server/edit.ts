@@ -92,6 +92,8 @@ export type Token =
 export const INLINE = new Set(('a abbr b bdi bdo br cite code data del dfn em i ins kbd mark q s samp small span strong ' +
   'sub sup time u var wbr').split(' '));
 const VOID = new Set(['br', 'wbr']);
+// Vue / Angular attributes that decide whether an inline element shows, or what it holds.
+const DIRECTIVE = /\s(v-(if|else|else-if|show|for|html|text)|\*[a-zA-Z]+|\[(innerHTML|innerText|textContent|hidden)\]|\[style\.display\])(?=[\s=/>])/;
 /** Tags a reviewer may add while editing (Ctrl+B/I/U, Shift+Enter). */
 const ADDABLE = /^<\/?(b|i|u|s|em|strong)>$|^<br\s*\/?>$/i;
 
@@ -121,6 +123,7 @@ export function tokenize(inner: string, braces: boolean): Tokens {
     if (!m) return fail(braces && /^<[^>]*\{/.test(inner.slice(lt)) ? 'an attribute inside is an expression ({…})' : 'the element holds markup that can\'t be edited inline');
     const [raw, slash, name, , self] = m;
     if (braces && /^[A-Z]/.test(name)) return fail(`the element holds a component (<${name}>)`);
+    if (braces && DIRECTIVE.test(raw)) return fail('inline markup is shown or filled by a directive (v-if, *ngIf, [innerHTML], …)');
     const tag = name.toLowerCase();
     if (!INLINE.has(tag)) return fail(`the element holds a <${tag}>; only inline markup can be edited in place`);
     if (slash) {
