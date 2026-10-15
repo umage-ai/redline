@@ -70,6 +70,10 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
   and resolves a stored target back to an element.
 - `capture.ts`: screenshots (DOM render via modern-screenshot, or tab capture). `sketch.ts`: the SVG drawing layer.
 
+**Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
+and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
+`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`).
+
 **Source location per framework** (`anchor.ts` `sourceInfo`): React through a dev-only JSX transform
 (`src/server/jsx-source.ts` stamps `data-redline-src` on an HTML-tag allowlist), then the fiber chain for components;
 Svelte through `__svelte_meta`; Astro through `data-astro-source-*` (from the snapshot, because Astro's toolbar strips them).

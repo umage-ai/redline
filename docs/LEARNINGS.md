@@ -97,3 +97,8 @@ Prune entries whose cause is gone from the code.
 - **Fix:** ticked (and saved) "Allow npm publish" (D13: fully automatic releases; the alternative is `npm stage publish` + a 2FA approval per release) and re-ran the failed job. The tag didn't need to move.
 - **Also:** after a green publish, npm says "being processed"; the version showed up on the registry ~2 minutes later.
 - **Guard:** the note at the top of `publish.yml`.
+
+## L21 — Astro 404s a page file created just before the test navigates to it
+- **Cause:** Astro's dev server registers new routes from a file watcher; a page written moments before `page.goto` can be requested before the route exists (it passed once, then 404'd).
+- **Fix:** the edit e2e pages are permanent fixture files (`test/fixtures/{vanilla/edit.html,astro/src/pages/edit.astro}`) that the test resets before and after, instead of creating and deleting them.
+- **Guard:** `extend.spec.ts` (direct edit cases).

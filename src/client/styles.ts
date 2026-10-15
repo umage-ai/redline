@@ -73,6 +73,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .pop footer { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .pop footer label { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 12px; cursor: pointer; }
 .pop footer .grow { flex: 1; }
+.pop footer .btn { white-space: nowrap; }
+.pop .why { margin: 8px 12px 0; color: var(--fg-3); font-size: 11.5px; }
+.panel .ext { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.panel .ext h3 { margin: 0 0 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3); }
 .btn { padding: 6px 12px; border-radius: 8px; background: var(--bg-3); color: var(--fg); font-weight: 550; }
 .btn:hover { background: #31313a; }
 .btn.primary { background: var(--ink); color: #fff; }
@@ -101,6 +105,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 /* text edit */
 .ed { position: fixed; outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; pointer-events: auto; white-space: pre-wrap;
   overflow-wrap: break-word; caret-color: var(--ink); z-index: 1; }
+.ed.rich { white-space: normal; }   /* source indentation inside inline markup is not text */
+.ed.rich a { color: inherit; text-decoration: underline; }
 
 /* panel */
 .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; display: flex; flex-direction: column; background: var(--bg);

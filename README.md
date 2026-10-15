@@ -94,6 +94,21 @@ lists the others). Source paths are repo-relative (`apps/web/src/…`, `packages
 `npx redline init` anywhere in the repo: it sets up the repo root (`--here` installs in the current
 folder instead, for when `root` points there).
 
+### Extending
+
+All optional and dev-only; without them Redline behaves as described above. Types (`RedlineApi`, `NoteStore`,
+`SourceWriter`, …) come from `@umage.ai/redline/server`.
+
+- **`directEdit: true`**: the text popover gets **Apply to file** when the edited text is static in source (Astro,
+  Svelte, JSX, Vue, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it.
+  Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
+  save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
+- **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`), or `({ root, dir, app }) => store`,
+  to keep notes elsewhere than markdown. **`hooks`**: `onCreate`, `onUpdate`, `onRemove`, `onSourceWrite`, run after each change.
+- **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
+  A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it. Scripts can also push
+  onto `window.redlineExtensions`.
+
 ## Coding agents
 
 Redline isn't tied to one agent. The notes are plain markdown, and `npx redline init` installs the
