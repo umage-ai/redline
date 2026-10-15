@@ -124,6 +124,31 @@ public class MiddlewareTests
     }
 
     [Fact]
+    public async Task Config_carries_the_page_key_option()
+    {
+        await using (var t = await TestApp.StartAsync())
+            Assert.Equal("route", (await JsonOf(await t.Client.GetAsync("/__redline/config")))["pageKey"]!.GetValue<string>());
+        await using (var t = await TestApp.StartAsync(o => o.PageKey = RedlinePageKey.Path))
+            Assert.Equal("path", (await JsonOf(await t.Client.GetAsync("/__redline/config")))["pageKey"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Head_answers_like_get_without_a_body()
+    {
+        await using var t = await TestApp.StartAsync();
+        foreach (var path in new[] { "/__redline/config", "/__redline/client.js", "/__redline/notes" })
+        {
+            var get = await t.Client.GetAsync(path);
+            var head = await t.Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, path));
+            Assert.Equal(HttpStatusCode.OK, head.StatusCode);
+            Assert.Equal(get.Content.Headers.ContentType, head.Content.Headers.ContentType);
+            Assert.Equal(get.Content.Headers.ContentLength, head.Content.Headers.ContentLength);
+            Assert.Empty(await head.Content.ReadAsByteArrayAsync());
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await t.Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, "/__redline/notes/abc"))).StatusCode);
+    }
+
+    [Fact]
     public async Task Registers_in_servers_json_for_redline_mcp()
     {
         await using var t = await TestApp.StartAsync();

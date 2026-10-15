@@ -85,7 +85,9 @@ public sealed class RedlineMiddleware
         http.Response.StatusCode = status;
         http.Response.ContentType = "application/json; charset=utf-8";
         http.Response.Headers.CacheControl = "no-store";
-        await http.Response.WriteAsync(body.ToJsonString(), Encoding.UTF8);
+        var bytes = Encoding.UTF8.GetBytes(body.ToJsonString());
+        http.Response.ContentLength = bytes.Length;
+        if (!HttpMethods.IsHead(http.Request.Method)) await http.Response.Body.WriteAsync(bytes, http.RequestAborted);
     }
 
     static Task NotFound(HttpContext http) => Json(http, 404, new JsonObject { ["error"] = "not found" });
@@ -117,10 +119,12 @@ public sealed class RedlineMiddleware
         if (reviewer is null) { await NotFound(http); return; }   // online: nothing here for anonymous or unauthorized users
         if (http.Request.Host.HasValue) _rt.Register($"{http.Request.Scheme}://{http.Request.Host}");
         var store = _rt.Store;
+        // HEAD answers like GET without the body: link checkers and proxies probe with it.
+        var read = HttpMethods.IsGet(method) || HttpMethods.IsHead(method);
 
-        if (HttpMethods.IsGet(method) && p == "/client.js") { await Bytes(http, "text/javascript; charset=utf-8", _rt.ClientJs); return; }
-        if (HttpMethods.IsGet(method) && p == "/config") { await Json(http, 200, Config(reviewer.Identity?.Name)); return; }
-        if (HttpMethods.IsGet(method) && p.StartsWith("/assets/", StringComparison.Ordinal))
+        if (read && p == "/client.js") { await Bytes(http, "text/javascript; charset=utf-8", _rt.ClientJs); return; }
+        if (read && p == "/config") { await Json(http, 200, Config(reviewer.Identity?.Name)); return; }
+        if (read && p.StartsWith("/assets/", StringComparison.Ordinal))
         {
             var a = await store.AssetAsync(p.Substring(8), http.RequestAborted);
             if (a is null) { await NotFound(http); return; }
@@ -130,13 +134,13 @@ public sealed class RedlineMiddleware
             await Bytes(http, a.ContentType, a.Data);
             return;
         }
-        if (HttpMethods.IsGet(method) && p == "/ext/tokens.js" && PersonalTokens)
+        if (read && p == "/ext/tokens.js" && PersonalTokens)
         {
             await Bytes(http, "text/javascript; charset=utf-8", RedlineRuntime.ReadResource("Umage.Redline.tokens.js"));
             return;
         }
         var ext = System.Text.RegularExpressions.Regex.Match(p, @"^/ext/(\d+)\.js$");
-        if (HttpMethods.IsGet(method) && ext.Success)
+        if (read && ext.Success)
         {
             var i = int.Parse(ext.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
             var file = i < _rt.Options.Extensions.Count ? Path.GetFullPath(Path.Combine(_rt.Context.ServerRoot, _rt.Options.Extensions[i])) : null;
@@ -144,7 +148,7 @@ public sealed class RedlineMiddleware
             await Bytes(http, "text/javascript; charset=utf-8", await File.ReadAllBytesAsync(file, http.RequestAborted));
             return;
         }
-        if (HttpMethods.IsGet(method) && p == "/notes")
+        if (read && p == "/notes")
         {
             var version = await store.VersionAsync(http.RequestAborted);
             if (http.Request.Headers.IfNoneMatch.ToString() == $"\"{version}\"") { http.Response.StatusCode = 304; return; }
@@ -153,7 +157,7 @@ public sealed class RedlineMiddleware
             await Json(http, 200, new JsonObject { ["version"] = version, ["root"] = store.Dir, ["notes"] = new JsonArray(notes.Select(n => (JsonNode)n.ToJson()).ToArray()) });
             return;
         }
-        if (HttpMethods.IsGet(method) && p == "/tokens" && PersonalTokens)
+        if (read && p == "/tokens" && PersonalTokens)
         {
             var list = await _rt.Tokens!.TokensAsync(reviewer.Identity!.Name!, http.RequestAborted);
             await Json(http, 200, new JsonObject { ["tokens"] = new JsonArray(list.Select(t => (JsonNode)new JsonObject { ["id"] = t.Id, ["name"] = t.Name, ["created"] = t.Created.ToString("u"), ["lastUsed"] = t.LastUsed?.ToString("u") }).ToArray()) });
@@ -240,6 +244,7 @@ public sealed class RedlineMiddleware
             ["directEdit"] = _rt.Writers.Count > 0,
             ["extensions"] = ext,
             ["guide"] = guide,
+            ["pageKey"] = _rt.Options.PageKey == RedlinePageKey.Path ? "path" : "route",
         };
         if (_rt.Options.Online) { o["online"] = true; o["user"] = user; }
         return o;
@@ -365,6 +370,6 @@ public sealed class RedlineMiddleware
         http.Response.ContentType = type;
         http.Response.Headers.CacheControl = "no-store";
         http.Response.ContentLength = data.Length;
-        await http.Response.Body.WriteAsync(data, http.RequestAborted);
+        if (!HttpMethods.IsHead(http.Request.Method)) await http.Response.Body.WriteAsync(data, http.RequestAborted);
     }
 }

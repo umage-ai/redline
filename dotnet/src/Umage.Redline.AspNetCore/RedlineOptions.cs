@@ -16,6 +16,12 @@ public sealed class RedlineOptions
     public string Hotkey { get; set; } = "alt+shift+r";
     /// <summary>Show the small launcher button when the overlay is closed.</summary>
     public bool Launcher { get; set; } = true;
+    /// <summary>
+    /// What groups notes into one page (one notes file and one pin set), D26. <see cref="RedlinePageKey.Route"/>
+    /// (default): the path plus a hash route (<c>#/settings</c>). <see cref="RedlinePageKey.Path"/>: the path only, so
+    /// a page with hash-addressed views (a slide deck's <c>#/3</c>) keeps one notes file.
+    /// </summary>
+    public RedlinePageKey PageKey { get; set; } = RedlinePageKey.Route;
     /// <summary>Monorepos: the app's name in notes. Default: the content root relative to the repo root; "" at the root.</summary>
     public string? App { get; set; }
 
@@ -70,6 +76,15 @@ public sealed class RedlineOptions
         Store = (_, _) => new SqlNoteStore(connect, dialect, prefix);
         return this;
     }
+}
+
+/// <summary>How the overlay groups notes into pages (the pageKey option).</summary>
+public enum RedlinePageKey
+{
+    /// <summary>The decoded path, <c>/index.html</c> folded into <c>/</c>, plus the hash when it is a hash route (<c>#/…</c>).</summary>
+    Route,
+    /// <summary>The path only; every hash is ignored.</summary>
+    Path,
 }
 
 public sealed class RedlineMcpOptions
