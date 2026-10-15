@@ -7,12 +7,12 @@ import type { Note, NotesResponse, NoteType } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
 import { clip, describe, labelFor, resolve, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
-import { bboxOf, sketchFile, SketchLayer, type Tool } from './sketch.ts';
+import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
 import { CSS } from './styles.ts';
 
 type StoredNote = Note & { file: string };
 type Mode = 'idle' | 'comment' | 'text' | 'sketch';
-interface Config { hotkey: string; launcher: boolean; dir: string }
+interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string }
 interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
@@ -82,10 +82,64 @@ function matchHotkey(e: KeyboardEvent, spec: string): boolean {
   return e.code === (key.length === 1 ? (/[0-9]/.test(key) ? 'Digit' : 'Key') + key.toUpperCase() : key) || e.key.toLowerCase() === key;
 }
 
+
 const isTyping = (e: Event) => e.composedPath().some(n => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
 
 const ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/><path d="M14 20h6"/></svg>`;
 const TYPE_ICON: Record<NoteType, string> = { comment: '💬', text: 'T', sketch: '✎' };
+
+/* ---------- shield: the app never notices the overlay (D14, L17) ---------- */
+// Dropdowns, popovers and comboboxes close on any press, focus move or Escape outside
+// themselves, so using the toolbar would close the very UI being reviewed.
+// - Bubble-phase listeners on document/window: cut at the host.
+// - Capture-phase listeners on document (Headless UI, Radix Escape): cut at window, where we
+//   are registered first. Events our own UI needs are re-dispatched inside the shadow root as
+//   non-composed copies, which never leave it. `click` is never copied: a dispatched click
+//   runs activation behaviour again (a checkbox would toggle twice); bubble-cutting it is enough.
+// - Focus leaving the app for the overlay (blur/focusout/pointerout with relatedTarget = host)
+//   is hidden from the app, as is the blur when opening the overlay or pressing on a
+//   non-focusable part of it.
+let quietBlur = false;
+function quietly(fn: () => void) { quietBlur = true; try { fn(); } finally { quietBlur = false; } }
+
+const BUBBLE_CUT = ['pointerdown', 'pointerup', 'pointermove', 'pointerover', 'pointerout', 'pointercancel', 'mousedown', 'mouseup',
+  'mousemove', 'mouseover', 'mouseout', 'click', 'dblclick', 'auxclick', 'contextmenu', 'touchstart', 'touchmove', 'touchend',
+  'wheel', 'focusin', 'focusout', 'input', 'change', 'keydown', 'keyup', 'keypress', 'beforeinput', 'paste', 'copy', 'cut'];
+const CAPTURE_CUT = ['mousedown', 'mouseup', 'touchstart', 'touchend', 'focusin', 'focusout', 'pointerover', 'pointerout', 'mouseover', 'mouseout', 'keyup', 'keypress'];
+const CAPTURE_COPY = ['pointerdown', 'pointerup', 'keydown'];   // the overlay itself listens to these
+const LEAVING = ['blur', 'focusout', 'pointerout', 'pointerleave', 'mouseout', 'mouseleave'];
+const INIT = ['bubbles', 'cancelable', 'clientX', 'clientY', 'screenX', 'screenY', 'button', 'buttons', 'altKey', 'ctrlKey', 'shiftKey',
+  'metaKey', 'pointerId', 'pointerType', 'isPrimary', 'width', 'height', 'pressure', 'key', 'code', 'location', 'repeat', 'isComposing', 'detail'];
+
+function redispatch(e: Event) {
+  const init: Record<string, unknown> = { composed: false };
+  for (const k of INIT) if (k in e) init[k] = (e as unknown as Record<string, unknown>)[k];
+  const copy = new (e.constructor as typeof Event)(e.type, init);
+  e.composedPath()[0].dispatchEvent(copy);
+  if (copy.defaultPrevented) e.preventDefault();
+}
+
+function shieldApp(host: HTMLElement) {
+  for (const t of BUBBLE_CUT) host.addEventListener(t, e => e.stopPropagation());
+  let pressedAt = 0;
+  const ours = (e: Event) => e.composedPath().includes(host);
+  for (const t of [...CAPTURE_CUT, ...CAPTURE_COPY]) {
+    addEventListener(t, e => {
+      if (!ours(e)) return;
+      if (t === 'pointerdown' || t === 'mousedown') pressedAt = Date.now();
+      e.stopPropagation();   // not Immediate: the overlay's own window listeners still run
+      if (CAPTURE_COPY.includes(t)) redispatch(e);
+    }, true);
+  }
+  for (const t of LEAVING) {
+    addEventListener(t, e => {
+      if (ours(e)) return;   // the overlay's own editors still need their blur
+      const to = (e as FocusEvent | MouseEvent).relatedTarget;
+      // Pressing a non-focusable part of the overlay moves focus to <body> (relatedTarget null).
+      if (to === host || quietBlur || (to === null && t !== 'mouseout' && t !== 'pointerout' && Date.now() - pressedAt < 400)) e.stopPropagation();
+    }, true);
+  }
+}
 
 /* ---------- app ---------- */
 async function boot() {
@@ -101,8 +155,7 @@ async function boot() {
   shadow.append(h('style', {}, CSS));
   const ui = h('div', { class: 'rl' });
   shadow.append(ui);
-  // Keystrokes typed into the overlay must not reach the app's shortcut handlers.
-  for (const t of ['keydown', 'keyup', 'keypress']) host.addEventListener(t, e => e.stopPropagation());
+  shieldApp(host);
   const mount = () => { if (!host.isConnected) document.documentElement.append(host); };
   mount();
   new MutationObserver(mount).observe(document.documentElement, { childList: true });
@@ -124,11 +177,10 @@ async function boot() {
   const pins = h('div');
   const tip = h('div', { class: 'tip', style: 'display:none' });
   const bar = h('div', { class: 'bar' });
-  const hint = h('div', { class: 'hint' });
   const panel = h('div', { class: 'panel' });
   const popLayer = h('div');
   const toastEl = h('div', { class: 'toast', style: 'display:none' });
-  ui.append(hl, hlLabel, pins, launcher, bar, hint, panel, popLayer, tip, toastEl);
+  ui.append(hl, hlLabel, pins, launcher, bar, panel, popLayer, tip, toastEl);
 
   let toastTimer = 0;
   function toast(msg: string, err = false, ms = 2600) {
@@ -158,15 +210,23 @@ async function boot() {
     } catch { /* dev server restarting */ }
   }
 
-  const pageNotes = (p = page) => notes.filter(n => n.page === p);
-  const numberOf = (n: Note) => pageNotes(n.page).indexOf(n as StoredNote) + 1;
+  // Monorepos: every app's notes come back from /notes; this app only pins and numbers its own.
+  const app = config.app ?? '';
+  const pageNotes = (p = page, a = app) => notes.filter(n => n.page === p && (n.app ?? '') === a);
+  const numberOf = (n: Note) => pageNotes(n.page, n.app ?? '').indexOf(n as StoredNote) + 1;
   const openCount = () => notes.filter(n => !n.done).length;
 
   /* ---------- open / mode ---------- */
+  // An autofocused field would swallow the single-key shortcuts (C, T, S, N). Only text fields
+  // are blurred (a focused menu item keeps focus), and quietly, so an open combobox stays open.
+  function releaseTextFocus() {
+    const a = document.activeElement;
+    if (a instanceof HTMLElement && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) quietly(() => a.blur());
+  }
+
   function setOpen(v: boolean) {
     state.open = v;
-    // An autofocused field would swallow the single-key shortcuts (C, T, S, N).
-    if (v && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
+    if (v) releaseTextFocus();
     if (!v) { cancelDraft(); state.mode = 'idle'; state.panel = false; hideHl(); }
     persist(); renderAll();
   }
@@ -192,29 +252,23 @@ async function boot() {
 
   function renderBar() {
     bar.style.display = state.open && state.mode !== 'sketch' ? '' : 'none';
-    hint.style.display = state.open && !draft ? '' : 'none';
     if (!state.open) return;
-    const btn = (m: Mode, label: string, key: string) =>
-      h('button', { class: state.mode === m ? 'on' : '', title: `${label} (${key})`, onclick: () => setMode(m) }, label, h('kbd', {}, key));
+    // No hint line: the buttons show their keys, and the extras live in the tooltips (D18).
+    const btn = (m: Mode, label: string, key: string, how: string) =>
+      h('button', { class: state.mode === m ? 'on' : '', title: `${label} (${key}): ${how}`, onclick: () => setMode(m) }, label, h('kbd', {}, key));
     const open = openCount();
     bar.replaceChildren(
       h('div', { class: 'brand', html: ICON + '<span>Redline</span>' }),
       h('div', { class: 'sep' }),
-      btn('comment', 'Comment', 'C'), btn('text', 'Text', 'T'), btn('sketch', 'Sketch', 'S'),
+      btn('comment', 'Comment', 'C', 'click an element. Alt+click picks its parent, Shift+click the whole page.'),
+      btn('text', 'Text', 'T', 'click any text and rewrite it in place; Enter keeps it.'),
+      btn('sketch', 'Sketch', 'S', 'draw boxes, arrows, lines and labels. Ctrl+Z undoes, Enter finishes.'),
       h('div', { class: 'sep' }),
       h('button', { class: state.panel ? 'on' : '', title: 'Notes (N)', onclick: () => togglePanel() }, 'Notes', h('span', { class: 'count' }, String(open))),
       h('button', { title: `Close (${config.hotkey})`, onclick: () => setOpen(false) }, '✕'),
     );
-    const hk = config.hotkey.split('+').map(k => `<kbd>${esc(k[0].toUpperCase() + k.slice(1))}</kbd>`).join('+');
-    hint.innerHTML = {
-      idle: `Pick a mode: <kbd>C</kbd> comment · <kbd>T</kbd> text · <kbd>S</kbd> sketch · <kbd>N</kbd> notes · ${hk} hide`,
-      comment: `<b>Click</b> an element to comment · <kbd>Alt</kbd>+click picks its parent · <kbd>Shift</kbd>+click = whole page · <kbd>Esc</kbd> stop`,
-      text: `<b>Click</b> any text and rewrite it in place · <kbd>Enter</kbd> keep · <kbd>Esc</kbd> stop`,
-      sketch: `Drag to draw · <kbd>1</kbd> box <kbd>2</kbd> arrow <kbd>3</kbd> pen <kbd>4</kbd> text · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Enter</kbd> done · <kbd>Esc</kbd> cancel`,
-    }[state.mode];
     // Astro's dev toolbar also lives bottom-centre; sit above it.
     ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
-    hint.style.bottom = state.mode === 'sketch' ? 'calc(16px + var(--lift))' : '';
   }
 
   /* ---------- hover highlight ---------- */
@@ -247,17 +301,24 @@ async function boot() {
 
   // Swallow pointer input while picking so the app never sees the click. Picks happen on
   // pointerup, not click: browsers don't fire click on disabled buttons and inputs.
-  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'touchstart', 'touchend', 'submit']) {
+  // touchstart/touchmove are hidden from the app but not cancelled, so a finger can still
+  // scroll; a scroll fires pointercancel, so only a tap reaches pointerup (L15).
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'touchstart', 'touchmove', 'touchend', 'submit']) {
+    const scrolls = type === 'touchstart' || type === 'touchmove';
     addEventListener(type, e => {
       if (!picking() || fromUs(e)) return;
-      e.preventDefault();
+      if (!scrolls && e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
       if (type === 'pointerup' && (e as PointerEvent).button === 0) onPick(e as MouseEvent);
-    }, { capture: true, passive: false });
+    }, { capture: true, passive: scrolls });
   }
+  addEventListener('pointercancel', () => { if (picking() && !draft) hideHl(); }, true);
 
   function onPick(e: MouseEvent) {
     if (draft) {
+      // Tapping outside a text edit finishes it. The page's pointerdown is cancelled, so the
+      // editor never blurs by itself (and phones have no Enter-to-confirm habit).
+      if (draft.editor?.isContentEditable) { draft.editor.blur(); return; }
       const ta = popLayer.querySelector('textarea');
       if (draft.editor || (ta && ta.value.trim())) { popLayer.querySelector('.pop')?.animate([{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 160); return; }
       cancelDraft();
@@ -324,14 +385,27 @@ async function boot() {
     );
     (pop as HTMLElement & { _shot?: HTMLInputElement })._shot = shot;
     popLayer.replaceChildren(pop);
-    // place near the anchor point, inside the viewport
-    const W = 360, H = pop.offsetHeight || 200;
-    let x = d.x + 14, y = d.y + 14;
-    if (x + W > innerWidth - 8) x = Math.max(8, d.x - W - 14);
-    if (y + H > innerHeight - 8) y = Math.max(8, innerHeight - H - 8);
-    Object.assign(pop.style, { left: `${x}px`, top: `${y}px` });
+    placePop();
     setTimeout(() => ta.focus());
   }
+
+  // Near the anchor point, inside the visible viewport. On phones the on-screen keyboard
+  // shrinks only the visual viewport, so re-place when it opens or closes.
+  function placePop() {
+    const pop = popLayer.querySelector<HTMLElement>('.pop');
+    if (!pop || !draft) return;
+    const vv = visualViewport;
+    const top = vv?.offsetTop ?? 0, bottom = vv ? vv.offsetTop + vv.height : innerHeight;
+    const W = pop.offsetWidth || 360, H = pop.offsetHeight || 200;
+    let x = draft.x + 14, y = draft.y + 14;
+    if (x + W > innerWidth - 8) x = Math.max(8, draft.x - W - 14);
+    if (x + W > innerWidth - 8) x = Math.max(8, innerWidth - W - 8);
+    if (y + H > bottom - 8) y = Math.max(top + 8, bottom - H - 8);
+    if (y < top + 8) y = top + 8;
+    Object.assign(pop.style, { left: `${x}px`, top: `${y}px` });
+  }
+  visualViewport?.addEventListener('resize', placePop);
+  visualViewport?.addEventListener('scroll', placePop);
 
   async function saveDraft(text: string) {
     const d = draft!;
@@ -375,7 +449,7 @@ async function boot() {
       draft = null;
       popLayer.replaceChildren();
       toast(`Saved → ${saved.file ?? config.dir}`);
-      if (d.type === 'sketch') { state.mode = 'idle'; persist(); }
+      state.mode = 'idle'; persist();   // one note per pick: the next tap goes to the app again (D15)
       await poll(true);
     } catch (err) {
       toast('Could not save: ' + (err as Error).message, true, 5000);
@@ -436,25 +510,54 @@ async function boot() {
 
   /* ---------- sketch mode ---------- */
   let tools: HTMLElement | null = null;
+  let paletteOpen = false;   // the colour swatch folds out the palette
+  function setPalette(open: boolean) { if (paletteOpen !== open) { paletteOpen = open; renderTools(); } }
   function startSketch() {
-    const layer = new SketchLayer(shadow, () => renderTools());
+    const layer = new SketchLayer(ui, () => renderTools(), bar);
+    const saved = ls.get('sketchColor', COLORS[0].c);
+    layer.color = COLORS.some(x => x.c === saved) ? saved : COLORS[0].c;
+    layer.el.addEventListener('pointerdown', () => setPalette(false));   // drawing folds it away
+    paletteOpen = false;
     draft = { type: 'sketch', sketch: layer, x: 0, y: 0 };
     tools = h('div', { class: 'tools' });
     ui.append(tools);
     renderTools();
   }
+  function setColor(c: string) {
+    if (!draft?.sketch) return;
+    draft.sketch.color = c;
+    ls.set('sketchColor', c);   // the next sketch starts with it too
+    paletteOpen = false;
+    renderTools();
+  }
   function renderTools() {
     if (!tools || !draft?.sketch) return;
     const sk = draft.sketch;
+    const cur = COLORS.find(x => x.c === sk.color) ?? COLORS[0];
     const t = (tool: Tool, label: string, key: string) =>
       h('button', { class: sk.tool === tool ? 'on' : '', onclick: () => { sk.tool = tool; renderTools(); } }, label, h('kbd', {}, key));
     tools.replaceChildren(
       t('rect', '▭ Box', '1'), t('arrow', '→ Arrow', '2'), t('pen', '✎ Pen', '3'), t('text', 'T Text', '4'),
-      h('button', { onclick: () => sk.undo(), disabled: !sk.shapes.length }, '↶ Undo'),
+      h('span', { class: 'colors' },
+        h('button', { class: 'sw current', 'aria-haspopup': 'true', 'aria-expanded': String(paletteOpen), style: `--c:${sk.color}`,
+          title: `Colour: ${cur.name} (C cycles)`, 'aria-label': `Colour: ${cur.name}`, onclick: () => setPalette(!paletteOpen) }),
+        paletteOpen && h('span', { class: 'palette', role: 'radiogroup', 'aria-label': 'Colour' }, ...COLORS.map(x =>
+          h('button', { class: 'sw' + (sk.color === x.c ? ' on' : ''), role: 'radio', 'aria-checked': String(sk.color === x.c),
+            title: x.name, 'aria-label': x.name, style: `--c:${x.c}`, onclick: () => setColor(x.c) })))),
+      h('button', { title: 'Undo (Ctrl+Z)', onclick: () => sk.undo(), disabled: !sk.shapes.length }, '↶ Undo'),
       h('button', { onclick: () => sk.clear(), disabled: !sk.shapes.length }, 'Clear'),
-      h('button', { onclick: () => endSketch(false) }, 'Cancel'),
+      h('button', { title: 'Cancel (Esc)', onclick: () => endSketch(false) }, 'Cancel'),
       h('button', { class: 'done', onclick: () => endSketch(true) }, 'Done', h('kbd', {}, '↵')),
     );
+    // Keep the folded-out palette on screen (on a phone the swatch can sit near an edge).
+    const pal = tools.querySelector<HTMLElement>('.palette');
+    if (pal) {
+      // From layout sizes, not getBoundingClientRect: the fold-out animation starts scaled down.
+      const host = pal.parentElement!.getBoundingClientRect(), w = pal.offsetWidth;
+      const left = host.left + host.width / 2 - w / 2;
+      const dx = left < 8 ? 8 - left : left + w > innerWidth - 8 ? innerWidth - 8 - (left + w) : 0;
+      if (dx) pal.style.marginLeft = `${dx}px`;
+    }
   }
   function endSketch(keep: boolean) {
     const d = draft;
@@ -512,8 +615,10 @@ async function boot() {
       pin.className = `pin ${n.type}${n.done ? ' done' : ''}`;
       pin.textContent = String(numberOf(n));
       const fx = Math.min(Math.max(n.target!.fx ?? 1, 0), 1), fy = Math.min(Math.max(n.target!.fy ?? 0, 0), 1);
-      pin.style.left = `${r.x + fx * r.width}px`;
-      pin.style.top = `${r.y + fy * r.height}px`;
+      // Kept on screen: full-width targets on a phone would put the pin past the right edge.
+      const size = pin.offsetWidth || 24;
+      pin.style.left = `${Math.min(r.x + fx * r.width, innerWidth - size - 4)}px`;
+      pin.style.top = `${Math.max(r.y + fy * r.height, size + 4)}px`;
       pin.style.display = r.bottom < 0 || r.top > innerHeight ? 'none' : '';
     }
     for (const [id, el] of pinEls) if (!keep.has(id)) { el.remove(); pinEls.delete(id); }
@@ -619,19 +724,27 @@ async function boot() {
       if (!here.length) listEl.append(h('div', { class: 'empty' }, pageNotes().length ? 'All notes on this page are done.' : 'No notes on this page yet. Press C to comment.'));
       for (const n of here) listEl.append(card(n, true));
     } else {
-      const pages = [...new Set(notes.filter(visible).map(n => n.page))].sort((a, b) => (a === page ? -1 : b === page ? 1 : a.localeCompare(b)));
-      if (!pages.length) listEl.append(h('div', { class: 'empty' }, 'No notes yet.'));
-      for (const p of pages) {
-        listEl.append(h('div', { class: 'group' }, p === page ? `${p}  (this page)` : p));
-        for (const n of notes.filter(x => x.page === p && visible(x))) listEl.append(card(n, p === page));
+      // Grouped by app + page; in a monorepo other apps' notes are listed too (they open in their own app).
+      const key = (n: Note) => `${n.app ?? ''}\u0000${n.page}`, mine = `${app}\u0000${page}`;
+      const groups = [...new Set(notes.filter(visible).map(key))].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : a.localeCompare(b)));
+      if (!groups.length) listEl.append(h('div', { class: 'empty' }, 'No notes yet.'));
+      for (const g of groups) {
+        const [gApp, gPage] = g.split('\u0000');
+        const label = (gApp && gApp !== app ? `${gApp} · ` : '') + gPage;
+        listEl.append(h('div', { class: 'group' }, g === mine ? `${label}  (this page)` : label));
+        for (const n of notes.filter(x => key(x) === g && visible(x))) listEl.append(card(n, g === mine));
       }
     }
     const tab = ls.get('tabcapture', '0') === '1';
     const file = pageNotes()[0]?.file;
     const open = state.scope === 'page' ? pageNotes().filter(n => !n.done).length : openCount();
+    // Works in any agent: names the installed guide, or spells out the contract when there is none (D16).
+    const how = config.guide
+      ? `Follow ${config.guide} (the redline skill).`
+      : 'For each open "### [ ]" note: make the change, tick it "### [x]" and add a one-line "> " reply saying what changed (or a question, leaving it open). Never edit the <!-- redline … --> lines.';
     const prompt = state.scope === 'page' && file
-      ? `Apply the open Redline notes in ${file} (${open} open) — use the redline skill.`
-      : `Work through the open Redline UI feedback in ${config.dir}/INDEX.md (${openCount()} open) — use the redline skill.`;
+      ? `Apply the open Redline notes in ${file} (${open} open). ${how}`
+      : `Apply the open Redline UI feedback in ${config.dir}/INDEX.md (${openCount()} open). ${how}`;
     panel.replaceChildren(
       h('header', {}, h('h2', {}, 'Notes'), h('button', { title: 'Close panel (N)', onclick: () => togglePanel(false) }, '✕')),
       h('div', { class: 'filters' },
@@ -646,11 +759,12 @@ async function boot() {
         h('div', { class: 'file' }, file && state.scope === 'page' ? file : `${config.dir}/INDEX.md`),
         h('div', { class: 'row' },
           h('button', { class: 'btn primary', disabled: !open, onclick: async () => {
-            try { await navigator.clipboard.writeText(prompt); toast('Prompt copied — paste it into Claude'); }
+            try { await navigator.clipboard.writeText(prompt); toast('Prompt copied — paste it into your coding agent'); }
             catch { toast(prompt, false, 8000); }
-          } }, 'Copy prompt for Claude'),
+          } }, 'Copy prompt for your agent'),
         ),
-        h('label', { title: 'Capture the real pixels of this tab (needed for WebGL/maps/video). Chrome asks for permission once per page load.' },
+        // Mobile browsers have no getDisplayMedia.
+        typeof navigator.mediaDevices?.getDisplayMedia === 'function' && h('label', { title: 'Capture the real pixels of this tab (needed for WebGL/maps/video). Chrome asks for permission once per page load.' },
           h('input', { type: 'checkbox', ...(tab ? { checked: true } : {}), onchange: async (e: Event) => {
             const on = (e.target as HTMLInputElement).checked;
             ls.set('tabcapture', on ? '1' : '0');
@@ -672,9 +786,10 @@ async function boot() {
       const sk = draft.sketch;
       const tool = ({ '1': 'rect', '2': 'arrow', '3': 'pen', '4': 'text' } as Record<string, Tool>)[e.key];
       if (tool) { sk.tool = tool; renderTools(); }
+      else if (e.key === 'c' || e.key === 'C') setColor(COLORS[(COLORS.findIndex(x => x.c === sk.color) + (e.shiftKey ? COLORS.length - 1 : 1)) % COLORS.length].c);
       else if (e.key === 'z' && e.ctrlKey) sk.undo();
       else if (e.key === 'Enter') endSketch(true);
-      else if (e.key === 'Escape') endSketch(false);
+      else if (e.key === 'Escape') { if (paletteOpen) setPalette(false); else endSketch(false); }
       else return;
       e.preventDefault(); e.stopImmediatePropagation();
       return;
@@ -713,6 +828,7 @@ async function boot() {
 
   await poll(true);
   renderAll();
+  if (state.open) releaseTextFocus();   // reopened after a reload: the page's autofocus ran meanwhile
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void boot());

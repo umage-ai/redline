@@ -2,13 +2,15 @@
 // <script> injection into HTML pages. Works in any Node dev server that accepts
 // (req, res, next) middleware: Vite, Astro, SvelteKit, Express.
 
-import { promises as fs, existsSync, realpathSync } from 'node:fs';
+import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Target } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
 import { createStore, type Store } from './store.ts';
-import { pageSlug } from './format.ts';
+import { pageFile } from './format.ts';
+import { appOf, findRoot, real } from './root.ts';
+import { GUIDE_PATHS } from '../init.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -22,6 +24,8 @@ export interface RedlineOptions {
   hotkey?: string;
   /** Show the small launcher button when the overlay is closed. Default true. */
   launcher?: boolean;
+  /** Monorepos: the app's name in notes. Default: the dev server's folder relative to root ("apps/web"); "" at the root. */
+  app?: string;
 }
 
 const MARK = 'data-redline-client';
@@ -33,15 +37,7 @@ const SNAPSHOT = '<script>(function(){var m=window.__redlineSrc=window.__redline
   'm.set(e,[e.getAttribute("data-astro-source-file"),e.getAttribute("data-astro-source-loc")||""])})})()</script>';
 const MAX_BODY = 30 * 1024 * 1024;
 
-export function findRoot(start: string): string {
-  let dir = path.resolve(start);
-  for (;;) {
-    if (existsSync(path.join(dir, '.git'))) return dir;
-    const up = path.dirname(dir);
-    if (up === dir) return path.resolve(start);
-    dir = up;
-  }
-}
+export { findRoot };
 
 function json(res: ServerResponse, status: number, body: unknown) {
   const s = JSON.stringify(body);
@@ -80,14 +76,12 @@ export function normaliseSource(file: string, root: string, serverRoot: string):
   return path.relative(real(root), real(abs)).replace(/\\/g, '/');
 }
 
-function real(p: string): string {
-  try { return realpathSync.native(p); } catch { return p; }
-}
 
 export function createHandler(opts: RedlineOptions & { serverRoot: string; clientFile: string }): { api: Middleware; inject: Middleware; store: Store; root: string } {
   const root = opts.root ? path.resolve(opts.root) : findRoot(opts.serverRoot);
   const store = createStore({ root, dir: opts.dir });
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir };
+  const app = opts.app ?? appOf(root, opts.serverRoot);
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);
@@ -106,7 +100,8 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         res.end(await fs.readFile(opts.clientFile));
         return;
       }
-      if (method === 'GET' && p === '/config') return json(res, 200, config);
+      // guide: the agent guide `redline init` installed, so the copied prompt can point at it.
+      if (method === 'GET' && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
       if (method === 'GET' && p.startsWith('/assets/')) {
         const file = store.assetPath(p.slice(8));
         if (!file || !existsSync(file)) return json(res, 404, { error: 'not found' });
@@ -130,8 +125,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         const body = JSON.parse(await readBody(req)) as NewNoteRequest;
         if (!body?.note?.page || !body.note.type) return json(res, 400, { error: 'note.page and note.type are required' });
         fixTarget(body.note.target);
+        body.note.app = app || undefined;   // set here, never by the page
         const note = await store.create(body);
-        return json(res, 200, { ...note, file: `${store.dir}/pages/${pageSlug(note.page)}.md` });
+        return json(res, 200, { ...note, file: `${store.dir}/pages/${pageFile(note.page, note.app)}` });
       }
       const m = /^\/notes\/([a-z0-9]+)$/.exec(p);
       if (m && method === 'PATCH') {

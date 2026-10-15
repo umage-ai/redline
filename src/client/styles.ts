@@ -37,9 +37,6 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .bar button.on kbd { background: rgba(255,255,255,.2); color: #fff; }
 .bar .count { background: var(--bg-3); color: var(--fg); border-radius: 9px; padding: 0 6px; font-size: 11px; font-weight: 650; }
 .bar button.on .count { background: rgba(255,255,255,.25); }
-.hint { position: fixed; left: 50%; bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 5px 12px; border-radius: 8px;
-  background: rgba(19,19,22,.92); color: var(--fg-2); font-size: 12px; pointer-events: none; white-space: nowrap; }
-.hint b { color: var(--fg); font-weight: 600; }
 
 /* hover highlight */
 .hl { position: fixed; pointer-events: none; border: 2px solid var(--ink); border-radius: 3px; background: rgba(255,45,85,.07);
@@ -61,7 +58,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .tip .re { margin-top: 6px; padding-left: 8px; border-left: 2px solid var(--ok); color: var(--fg-2); }
 
 /* popover */
-.pop { position: fixed; width: 360px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
+.pop { position: fixed; width: min(360px, calc(100vw - 16px)); border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
   box-shadow: 0 16px 48px rgba(0,0,0,.45); pointer-events: auto; overflow: hidden; }
 .pop header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); }
 .pop header .what { flex: 1; min-width: 0; font: 600 11.5px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -86,12 +83,20 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .rl-sketch { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: auto; cursor: crosshair; touch-action: none; }
 .rl-sketch-input { position: fixed; min-width: 160px; padding: 4px 8px; border-radius: 6px; border: 2px solid var(--ink); outline: 0;
   background: #fff; color: #111; font: 600 16px system-ui, sans-serif; pointer-events: auto; }
-.tools { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); display: flex; gap: 2px; padding: 4px; border-radius: 12px;
+.tools { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; white-space: nowrap; width: max-content; max-width: calc(100vw - 16px); padding: 4px; border-radius: 12px;
   background: var(--bg); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.35); pointer-events: auto; }
 .tools button { padding: 6px 10px; border-radius: 8px; color: var(--fg-2); display: flex; gap: 6px; align-items: center; }
 .tools button:hover { background: var(--bg-3); color: var(--fg); }
 .tools button.on { background: var(--bg-3); color: var(--fg); box-shadow: inset 0 0 0 1px var(--ink); }
 .tools button.done { background: var(--ink); color: #fff; }
+/* colour: one swatch; the palette folds out under it */
+.tools .colors { position: relative; display: flex; align-items: center; padding: 0 8px; margin: 0 2px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.tools button.sw { width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); transition: transform .1s; }
+.tools button.sw:hover { background: var(--c); transform: scale(1.12); }
+.tools button.sw.current[aria-expanded="true"], .tools .palette button.sw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.tools .palette { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px 10px;
+  border-radius: 12px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); animation: rl-fold .14s ease-out; }
+@keyframes rl-fold { from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(.92); } }
 
 /* text edit */
 .ed { position: fixed; outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; pointer-events: auto; white-space: pre-wrap;
@@ -144,8 +149,46 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .zoom img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 
 /* toast */
-.toast { position: fixed; left: 50%; bottom: calc(104px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
+.toast { position: fixed; left: 50%; bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
 .busy { position: fixed; inset: 0; cursor: progress; pointer-events: auto; }
+
+/* touch: bigger targets, no keyboard hints, actions always visible */
+@media (pointer: coarse) {
+  .launcher { width: 44px; height: 44px; }
+  .launcher svg { width: 22px; height: 22px; }
+  .bar kbd, .tools kbd { display: none; }
+  .bar button, .tools button { min-height: 40px; padding: 6px 12px; }
+  .tools button.sw { width: 30px; height: 30px; min-height: 0; padding: 0; }
+  .tools .palette { gap: 10px; padding: 10px 12px; }
+  .toast { bottom: calc(76px + var(--lift, 0px)); }
+  .pin { width: 28px; height: 28px; margin-top: -28px; border-radius: 14px 14px 14px 2px; font-size: 12px; }
+  .pop header button { padding: 6px 10px; }
+  .pop textarea, .card textarea { font-size: 16px; }
+  .btn { padding: 9px 14px; }
+  .card .acts { opacity: 1; }
+  .card .acts button { padding: 6px 9px; font-size: 14px; }
+  .seg button { padding: 7px 10px; }
+  .pop footer input, .filters input, .panel > footer input { width: 18px; height: 18px; }
+}
+@media (hover: none) { .card .acts { opacity: 1; } }
+
+/* phones: fit everything inside the viewport */
+@media (max-width: 560px) {
+  .launcher { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
+  .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
+  .bar .brand span, .bar .brand + .sep { display: none; }
+  .bar .brand { padding: 0 6px; }
+  .bar button { padding: 6px 9px; }
+  .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
+  .tools { top: max(8px, env(safe-area-inset-top)); }
+  .tools button { padding: 6px 9px; }
+  .pop { width: calc(100vw - 16px); }
+  .pop textarea { max-height: 30vh; }
+  .panel { width: 100vw; border-left: 0; }
+  .filters { flex-wrap: wrap; }
+  .tip { max-width: calc(100vw - 16px); }
+  .rl-sketch-input { max-width: calc(100vw - 8px); }
+}
 `;

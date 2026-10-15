@@ -31,7 +31,8 @@ export interface Target {
 export interface Note {
   id: string;
   type: NoteType;
-  page: string;             // normalised pathname; one markdown file per page
+  page: string;             // normalised pathname; one markdown file per page (per app)
+  app?: string;             // monorepos: the dev server's folder relative to the root, e.g. "apps/web"
   url: string;
   title?: string;           // document.title
   at: string;               // 'YYYY-MM-DD HH:MM'

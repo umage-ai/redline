@@ -100,7 +100,7 @@ console.log(plugins.length, integration.name, typeof mw.api, typeof parsePage, t
   const initDir = path.join(tmp, 'apps', 'react');
   writeFileSync(path.join(initDir, 'CLAUDE.md'), '# App\n');
   run('npx redline init .', initDir);
-  for (const f of ['.claude/skills/redline/SKILL.md', '.gitignore', 'CLAUDE.md']) if (!existsSync(path.join(initDir, f))) throw new Error(`init did not write ${f}`);
+  for (const f of ['.agents/skills/redline/SKILL.md', 'AGENTS.md', '.claude/skills/redline/SKILL.md', '.gitignore', 'CLAUDE.md']) if (!existsSync(path.join(initDir, f))) throw new Error(`init did not write ${f}`);
   if (!readFileSync(path.join(initDir, 'CLAUDE.md'), 'utf8').includes('Redline')) throw new Error('init did not add the CLAUDE.md section');
 
   step('browser tests against the installed package');

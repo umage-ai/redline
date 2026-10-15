@@ -1,4 +1,7 @@
 // Parcelly is fictional. Everything here is static demo data.
+import { useState } from 'react';
+import { DriverFilter, ExportMenu, RowMenu } from './menus.tsx';
+
 const stats = [
   { label: 'Out for delivery', value: '1,284', delta: '+6.2%', up: true },
   { label: 'Delivered today', value: '3,917', delta: '+11.4%', up: true },
@@ -28,7 +31,7 @@ export function App() {
             <p className="lead">Live status for today's routes across all depots.</p>
           </div>
           <div className="actions">
-            <button className="ghost">Export CSV</button>
+            <ExportMenu />
             <button className="primary" data-testid="new-route">New route</button>
           </div>
         </header>
@@ -73,31 +76,36 @@ function StatCard({ label, value, delta, up }: { label: string; value: string; d
 }
 
 function RoutesTable() {
+  const [driver, setDriver] = useState('');
+  const shown = routes.filter(r => r.driver.toLowerCase().includes(driver.toLowerCase()));
   return (
     <div className="card routes">
       <div className="card-head">
         <h2>Active routes</h2>
-        <input placeholder="Search routes…" />
+        <DriverFilter drivers={routes.map(r => r.driver)} value={driver} onChange={setDriver} />
       </div>
-      <table>
-        <thead>
-          <tr><th>Route</th><th>Driver</th><th>Zone</th><th>Progress</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {routes.map(r => (
-            <tr key={r.id}>
-              <td className="mono">{r.id}</td>
-              <td>{r.driver}</td>
-              <td>{r.zone}</td>
-              <td>
-                <div className="progress"><span style={{ width: `${(r.done / r.stops) * 100}%` }} /></div>
-                <small>{r.done}/{r.stops} stops</small>
-              </td>
-              <td><span className={`badge ${r.status.toLowerCase().replace(' ', '-')}`}>{r.status}</span></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Route</th><th>Driver</th><th>Zone</th><th>Progress</th><th>Status</th><th /></tr>
+          </thead>
+          <tbody>
+            {shown.map(r => (
+              <tr key={r.id}>
+                <td className="mono">{r.id}</td>
+                <td>{r.driver}</td>
+                <td>{r.zone}</td>
+                <td>
+                  <div className="progress"><span style={{ width: `${(r.done / r.stops) * 100}%` }} /></div>
+                  <small>{r.done}/{r.stops} stops</small>
+                </td>
+                <td><span className={`badge ${r.status.toLowerCase().replace(' ', '-')}`}>{r.status}</span></td>
+                <td className="row-acts"><RowMenu label={r.id} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

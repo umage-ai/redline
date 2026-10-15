@@ -28,6 +28,7 @@ test('comment: app never sees the click; note has anchors, screenshot, index', a
   expect(note.viewport?.slice(0, 2)).toEqual([1280, 800]);
   expect(await assetExists(f, note.screenshot)).toBe(true);
   await expect(ui(page, '.pin')).toHaveCount(1);
+  await expect(ui(page, '.bar button.on')).toHaveCount(0);   // saving returns to idle (D15)
 
   const md = await readPage(f);
   expect(md).toMatch(/^### \[ \] Comment · `button` “Save draft” · \[data-testid="agent-save"\]$/m);
@@ -86,6 +87,7 @@ test('text mode: rewrite in place → diff note', async ({ page }) => {
   const saved = waitForSave(page);
   await page.keyboard.press('Enter');            // empty note + Enter saves text changes
   const note = await saved;
+  await expect(ui(page, '.bar button.on')).toHaveCount(0);
   expect(note).toMatchObject({ type: 'text', from: 'Configure how your agent responds to incoming webhooks.', to: 'Choose how your agent answers webhooks.' });
   expect(await readPage(f)).toContain('```diff\n- Configure how your agent responds to incoming webhooks.\n+ Choose how your agent answers webhooks.\n```');
 });
@@ -149,4 +151,129 @@ test('agent edits to the markdown show up live; done/delete from the panel', asy
   await del.click();                                      // second click confirms
   await expect.poll(() => fs.stat(file).then(() => true, () => false)).toBe(false);
   expect(await assetExists(f, note.screenshot)).toBe(false);
+});
+
+test('an open dropdown stays open while using the toolbar, picking an item and typing (D14)', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.getByTestId('menu-btn').click();                  // idle: the app gets the click
+  const menu = page.getByTestId('menu');
+  await expect(menu).toBeVisible();
+  await expect(page.getByTestId('menu-rename')).toBeFocused();
+  const closedBy = () => page.evaluate(() => (window as unknown as { menuClosedBy?: string }).menuClosedBy ?? null);
+
+  await ui(page, '.bar .brand').click();                        // a non-focusable bit of the overlay
+  await ui(page, '.bar button').filter({ hasText: 'Comment' }).click();
+  expect(await closedBy()).toBeNull();
+  await mouseAt(page, page.getByTestId('menu-archive'));
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  await page.keyboard.type('Archive needs a confirm step.');
+  await ui(page, '.pop label').click();                         // checkbox: toggled once, not twice
+  await expect(ui(page, '.pop input[type=checkbox]')).not.toBeChecked();
+  await ui(page, '.pop label').click();
+  const saved = waitForSave(page);
+  await ui(page, '.pop .btn.primary').click();
+  expect((await saved).target?.testid).toBe('menu-archive');
+  await expect(menu).toBeVisible();
+  expect(await closedBy()).toBeNull();
+
+  await ui(page, '.bar button').filter({ hasText: 'Comment' }).click();   // saving went back to idle (D15)
+  await mouseAt(page, page.getByTestId('menu-rename'));         // Escape cancels our draft, not the app's menu
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(ui(page, '.pop')).toHaveCount(0);
+  expect(await closedBy()).toBeNull();
+});
+
+test('opening the overlay with the hotkey keeps a focused menu open', async ({ page }) => {
+  await page.goto(f.url, { waitUntil: 'networkidle' });
+  await expect(ui(page, '.launcher')).toBeAttached();
+  await page.getByTestId('menu-btn').click();
+  await expect(page.getByTestId('menu-rename')).toBeFocused();
+  await page.keyboard.press('Alt+Shift+KeyR');
+  await page.keyboard.press('c');
+  await expect(ui(page, '.bar button.on')).toContainText('Comment');
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await expect(page.getByTestId('menu-rename')).toBeFocused();
+});
+
+test('the copied prompt works for any agent: names the installed guide, or spells out the contract (D16)', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const guide = path.join(f.dir, '.agents/skills/redline/SKILL.md');
+  await fs.rm(path.join(f.dir, '.agents'), { recursive: true, force: true });
+  const copied = async () => {
+    await page.keyboard.press('n');
+    await ui(page, '.panel footer .btn.primary').click();
+    await expect(ui(page, '.toast')).toContainText('coding agent');
+    await page.keyboard.press('n');
+    return page.evaluate(() => navigator.clipboard.readText());
+  };
+  try {
+    await openOverlay(page, f);
+    await comment(page, page.getByTestId('agent-save'), 'Bigger.');
+    await expect(ui(page, '.panel footer .btn.primary')).toBeHidden();
+    expect(await copied()).toMatch(/^Apply the open Redline notes in .*index\.md \(1 open\)\. For each open "### \[ \]" note: .*tick it "### \[x\]"/);
+
+    await fs.mkdir(path.dirname(guide), { recursive: true });
+    await fs.writeFile(guide, '# guide\n');
+    await page.reload({ waitUntil: 'networkidle' });        // config (with the guide) is read at load
+    await expect(ui(page, '.bar')).toBeVisible();           // the open state survives the reload
+    expect(await copied()).toMatch(/\(1 open\)\. Follow \.agents\/skills\/redline\/SKILL\.md \(the redline skill\)\.$/);
+  } finally {
+    await fs.rm(path.join(f.dir, '.agents'), { recursive: true, force: true });
+  }
+});
+
+test('monorepo: an app pins and numbers only its own notes; All lists the other apps too (D17)', async ({ page }) => {
+  const note = (id: string, app: string, testid: string) => ({
+    id, app, type: 'comment', page: '/', url: f.url + '/', at: '2026-10-15 10:00', body: `${app} note`, reply: '', done: false,
+    target: { testid, selector: `[data-testid="${testid}"]` }, file: `.redline/pages/${app.replace('/', '-')}--index.md`,
+  });
+  await page.route('**/__redline/config', r => r.fulfill({ json: { hotkey: 'alt+shift+r', launcher: true, dir: '.redline', app: 'apps/web', guide: null } }));
+  await page.route('**/__redline/notes', r => r.fulfill({ json: { version: 'v1', root: '.redline',
+    notes: [note('aaaa1', 'apps/admin', 'agent-save'), note('bbbb2', 'apps/web', 'agent-delete')] } }));
+  await openOverlay(page, f);
+  await expect(ui(page, '.pin')).toHaveCount(1);
+  await expect(ui(page, '.pin')).toHaveText('1');
+  await page.keyboard.press('n');
+  await expect(ui(page, '.card')).toHaveCount(1);
+  await expect(ui(page, '.card .body')).toHaveText('apps/web note');
+  await ui(page, '.seg button').filter({ hasText: 'All' }).click();
+  await expect(ui(page, '.group')).toHaveText(['/  (this page)', 'apps/admin · /']);
+});
+
+test('sketch colours: the swatch folds out a palette; per shape, C cycles, saved in the svg, remembered', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('s');
+  const drag = async (x: number, y: number) => {
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + 120, y + 60, { steps: 4 }); await page.mouse.up();
+  };
+  const current = ui(page, '.tools .sw.current'), palette = ui(page, '.tools .palette');
+  await expect(palette).toHaveCount(0);                            // folded away until asked for
+  await current.click();
+  await expect(palette.locator('.sw')).toHaveCount(6);
+  await palette.locator('.sw[aria-label="Blue"]').click();
+  await expect(palette).toHaveCount(0);                            // picking folds it back
+  await expect(current).toHaveAttribute('aria-label', 'Colour: Blue');
+  await current.click();
+  await page.keyboard.press('Escape');                             // Escape folds the palette, not the sketch
+  await expect(palette).toHaveCount(0);
+  await expect(ui(page, '.tools')).toBeVisible();
+  await current.click();
+  await drag(200, 300);                                            // drawing folds it too
+  await expect(palette).toHaveCount(0);
+  await page.keyboard.press('c');                                  // Blue → Green
+  await expect(current).toHaveAttribute('aria-label', 'Colour: Green');
+  await drag(450, 300);
+  await expect(ui(page, '.rl-sketch path[stroke-width="3"]')).toHaveCount(2);
+  await page.keyboard.press('Enter');
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  const saved = waitForSave(page);
+  await page.keyboard.press('Control+Enter');
+  const svg = await fs.readFile(path.join(f.dir, '.redline/pages', (await saved).sketch!), 'utf8');
+  expect(svg).toContain('stroke="#2f80ff"');
+  expect(svg).toContain('stroke="#22c55e"');
+  await page.keyboard.press('s');
+  await expect(current).toHaveAttribute('aria-label', 'Colour: Green');
+  await page.keyboard.press('Escape');
 });
