@@ -2,7 +2,7 @@
 // chain, test id, selector) and so the overlay can find it again after reloads
 // (selector → test id → id → xpath → tag+text).
 
-import type { SourceLoc, Target } from '../shared/types.ts';
+import type { CmsRef, SourceLoc, Target } from '../shared/types.ts';
 
 const TESTID_ATTRS = ['data-testid', 'data-test-id', 'data-test', 'data-cy', 'data-qa'];
 
@@ -103,7 +103,7 @@ function htmlExcerpt(el: Element): string {
   const clone = el.cloneNode(true) as Element;
   // Drop noise the agent can't use.
   clone.querySelectorAll?.('svg *').forEach(n => n.remove());
-  for (const n of [clone, ...Array.from(clone.querySelectorAll?.('[data-redline-src]') ?? [])]) n.removeAttribute?.('data-redline-src');
+  for (const n of [clone, ...Array.from(clone.querySelectorAll?.('[data-redline-src],[data-redline-cms]') ?? [])]) { n.removeAttribute?.('data-redline-src'); n.removeAttribute?.('data-redline-cms'); }
   let html = clone.outerHTML.replace(/\s+/g, ' ');
   if (html.length > 400) {
     const open = html.slice(0, html.indexOf('>') + 1);
@@ -117,7 +117,7 @@ function htmlExcerpt(el: Element): string {
 type SvelteMeta = { loc?: { file: string; line: number; column: number }; parent?: SvelteParent };
 type SvelteParent = { type?: string; file?: string; line?: number; column?: number; componentTag?: string; parent?: SvelteParent | null };
 
-const baseName = (f: string) => f.split(/[\\/]/).pop()!.replace(/\.(svelte|astro|tsx|jsx|vue)$/, '');
+const baseName = (f: string) => f.split(/[\\/]/).pop()!.replace(/\.(svelte|astro|tsx|jsx|vue|razor|cshtml)$/, '');
 
 function svelteInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
   for (let cur: Element | null = el; cur; cur = cur.parentElement) {
@@ -185,13 +185,38 @@ function reactInfo(el: Element): { source?: SourceLoc; components?: string[] } |
   let fiber: Fiber | null = null;
   for (let cur: Element | null = el; cur && !fiber; cur = cur.parentElement) fiber = fiberOf(cur);
   if (!fiber && !source) return null;
+  // No React (Razor, Blazor, other server-stamped markup): the files of the stamped ancestors are the chain.
+  if (!fiber) return { source, components: dedupe(stampChain(el)) };
   const comps: string[] = [];
-  for (let f = fiber; f && comps.length < 6; f = f.return ?? null) {
+  for (let f: Fiber | null = fiber; f && comps.length < 6; f = f.return ?? null) {
     if (!source && f._debugSource) source = { file: f._debugSource.fileName, line: f._debugSource.lineNumber, col: f._debugSource.columnNumber };
     const n = reactName(f.type);
     if (n && !REACT_PLUMBING.test(n) && !n.startsWith('_')) comps.push(n);
   }
   return { source, components: dedupe(comps) };
+}
+
+function stampChain(el: Element): string[] {
+  const out: string[] = [];
+  for (let cur = el.closest('[data-redline-src]'); cur; cur = cur.parentElement?.closest('[data-redline-src]') ?? null)
+    out.push(baseName(/^(.*):\d+:\d+$/.exec(cur.getAttribute('data-redline-src')!)?.[1] ?? ''));
+  return out;
+}
+
+/**
+ * CMS content behind the element: `data-redline-cms="<content id>|<property>"` (stamped by a CMS
+ * integration such as Umage.Redline.Optimizely), or Optimizely's own edit-mode attributes.
+ */
+export function cmsInfo(el: Element): CmsRef | undefined {
+  const stamped = el.closest('[data-redline-cms]')?.getAttribute('data-redline-cms');
+  if (stamped) {
+    const i = stamped.lastIndexOf('|');
+    const content = (i < 0 ? stamped : stamped.slice(0, i)) || undefined, property = i < 0 ? undefined : stamped.slice(i + 1) || undefined;
+    return content || property ? { content, property } : undefined;
+  }
+  const epi = el.closest('[data-epi-property-name],[data-epi-edit]');
+  const property = epi?.getAttribute('data-epi-property-name') ?? epi?.getAttribute('data-epi-edit') ?? undefined;
+  return property ? { property } : undefined;
 }
 
 function dedupe(a: string[]): string[] | undefined {
@@ -234,6 +259,7 @@ export function describe(el: Element, clickX?: number, clickY?: number): Target 
     html: htmlExcerpt(el),
     source: info.source,
     components: info.components,
+    cms: cmsInfo(el),
     box: [Math.round(r.x + scrollX), Math.round(r.y + scrollY), Math.round(r.width), Math.round(r.height)],
   };
   if (clickX !== undefined && clickY !== undefined && r.width && r.height) {

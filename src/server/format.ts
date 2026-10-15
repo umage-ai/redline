@@ -46,7 +46,9 @@ export function headingFor(n: Note): string {
     parts.push(`\`${t.tag ?? 'element'}\`` + (t.text ? ` “${clip(t.text, 50)}”` : ''));
     if (t.testid) parts.push(`[data-testid="${t.testid}"]`);
     else if (t.id) parts.push(`#${t.id}`);
-    if (t.source) parts.push(t.source.file + (t.source.line ? `:${t.source.line}` : ''));
+    // Text from CMS content: name the content and property rather than the template line.
+    if (t.cms?.property) parts.push(`CMS ${[t.cms.type, t.cms.content].filter(Boolean).join(' ') || 'content'}${t.cms.name ? ` “${clip(t.cms.name, 40)}”` : ''} › ${t.cms.property}`);
+    else if (t.source) parts.push(t.source.file + (t.source.line ? `:${t.source.line}` : ''));
     else if (t.components?.length) parts.push(`<${t.components[0]}>`);
   }
   return `### [${n.done ? 'x' : ' '}] ${parts.join(' · ')}`;
@@ -58,8 +60,9 @@ function anchorJson(n: Note): string {
     if (MARKDOWN_OWNED.has(k) || v === undefined || v === '' || v === null) continue;
     meta[k] = v;
   }
-  // "--" would end the HTML comment early.
-  return JSON.stringify(meta).replace(/--/g, '\\u002d\\u002d');
+  // "--" would end the HTML comment early. U+2028/2029 end a line for ANCHOR_RE's `.`, which
+  // dropped the whole note on the next read (L21).
+  return JSON.stringify(meta).replace(/--/g, '\\u002d\\u002d').replace(/[\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16));
 }
 
 function diffBlock(n: Note): string {

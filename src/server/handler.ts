@@ -199,6 +199,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         const edit: EditRequest = {
           from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
           tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
+          cms: body.cms && typeof body.cms === 'object' ? { ...body.cms } : undefined,
         };
         if (edit.source) edit.source.file = normaliseSource(edit.source.file, root, opts.serverRoot);
         const dryRun = inspect || /[?&]dry=1/.test(url);

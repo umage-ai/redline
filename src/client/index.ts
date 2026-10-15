@@ -8,7 +8,7 @@ import { API_BASE } from '../shared/types.ts';
 import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
 import type { Token } from '../server/edit.ts';
 import type { RedlineApi, RedlineButton, RedlineEvents, RedlineExtension, RedlinePanelSection } from '../shared/extension.ts';
-import { clip, describe, labelFor, resolve, sourceInfo, textBlockFor } from './anchor.ts';
+import { clip, cmsInfo, describe, labelFor, resolve, sourceInfo, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
 import { CSS } from './styles.ts';
@@ -430,13 +430,13 @@ async function boot() {
   /* ---------- direct source edits (D20) ---------- */
   type Direct = { btn: HTMLButtonElement; why: HTMLElement };
   const editRequest = (d: Draft) => ({
-    from: d.from, to: d.to, html: d.html, tag: d.el!.localName, url: location.href, source: sourceInfo(d.el!).source,
+    from: d.from, to: d.to, html: d.html, tag: d.el!.localName, url: location.href, source: sourceInfo(d.el!).source, cms: cmsInfo(d.el!),
   });
 
   // When text mode opens on an element: is it written in source, and with inline markup?
   // Then the editor shows that markup and keeps it (the presentations editor's approach).
   async function inspectBlock(block: Element, from: string): Promise<Inspection | null> {
-    const req = api<EditResult>('POST', '/edit?inspect=1', { from, tag: block.localName, url: location.href, source: sourceInfo(block).source });
+    const req = api<EditResult>('POST', '/edit?inspect=1', { from, tag: block.localName, url: location.href, source: sourceInfo(block).source, cms: cmsInfo(block) });
     const r = await Promise.race([req.catch(() => null), new Promise<null>(res => setTimeout(() => res(null), 1500))]);
     return r?.ok && r.inspect ? r.inspect : null;
   }

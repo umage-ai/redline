@@ -6,7 +6,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { SourceLoc } from '../shared/types.ts';
+import type { CmsRef, SourceLoc } from '../shared/types.ts';
 import { apply, locateAt, locateUnique, type Located, type Token } from './edit.ts';
 
 export interface EditRequest {
@@ -16,6 +16,7 @@ export interface EditRequest {
   tag: string;           // the edited element's tag, lowercase
   source?: SourceLoc;    // where the element is written (repo-relative), when the framework says
   url: string;           // page URL, for writers that map pages to files
+  cms?: CmsRef;          // CMS content/property behind the element, when a CMS integration stamped it
 }
 
 export type EditResult =
