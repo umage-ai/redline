@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/OptimizelySample/OptimizelySample.csproj" />
     <Project Path="samples/RazorSample/RazorSample.csproj" />
   </Folder>
   <Folder Name="/samples/BlazorSample/">
@@ -9,6 +10,7 @@
   <Folder Name="/src/">
     <Project Path="src/Umage.Redline.AspNetCore/Umage.Redline.AspNetCore.csproj" />
     <Project Path="src/Umage.Redline.Build/Umage.Redline.Build.csproj" />
+    <Project Path="src/Umage.Redline.Optimizely/Umage.Redline.Optimizely.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Umage.Redline.Tests/Umage.Redline.Tests.csproj" />

@@ -19,6 +19,10 @@ public sealed class RedlineMiddleware
 {
     public const string ApiBase = "/__redline";
     public const string Mark = "data-redline-client";
+    internal const string OverlayKey = "Umage.Redline.Overlay";
+
+    /// <summary>True while rendering a page that gets the overlay (dev, or an authorized reviewer online; not CMS edit mode).</summary>
+    public static bool IsOverlayRequest(HttpContext? http) => http?.Items.ContainsKey(OverlayKey) == true;
     const int MaxBody = 30 * 1024 * 1024;
     static readonly string[] GuidePaths = { ".agents/skills/redline/SKILL.md", ".claude/skills/redline/SKILL.md", ".github/skills/redline/SKILL.md" };
     static readonly string Version = typeof(RedlineMiddleware).Assembly.GetName().Version?.ToString(3) ?? "0";
@@ -54,6 +58,7 @@ public sealed class RedlineMiddleware
             await _next(http);
             return;
         }
+        http.Items[OverlayKey] = true;   // integrations stamp extra metadata only on these pages
         var original = http.Response.Body;
         var tag = $"<script type=\"module\" src=\"{http.Request.PathBase}{ApiBase}/client.js\" {Mark}></script>";
         var online = _rt.Options.Online;

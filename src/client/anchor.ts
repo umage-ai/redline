@@ -206,17 +206,25 @@ function stampChain(el: Element): string[] {
 /**
  * CMS content behind the element: `data-redline-cms="<content id>|<property>"` (stamped by a CMS
  * integration such as Umage.Redline.Optimizely), or Optimizely's own edit-mode attributes.
+ * The nearest stamp with a content id decides the content; a property stamp below it names the
+ * property (a block in a content area: the block, not the page's area property). A property
+ * rendered as the element's only child (a wrapper around the value) counts as the element's own.
  */
 export function cmsInfo(el: Element): CmsRef | undefined {
-  const stamped = el.closest('[data-redline-cms]')?.getAttribute('data-redline-cms');
-  if (stamped) {
-    const i = stamped.lastIndexOf('|');
-    const content = (i < 0 ? stamped : stamped.slice(0, i)) || undefined, property = i < 0 ? undefined : stamped.slice(i + 1) || undefined;
-    return content || property ? { content, property } : undefined;
+  const kid = el.children.length === 1 ? el.firstElementChild! : null;
+  const start = kid?.hasAttribute('data-redline-cms') && clip(kid.textContent, 200) === clip(el.textContent, 200) ? kid : el;
+  let property: string | undefined;
+  for (let cur: Element | null = start.closest('[data-redline-cms]'); cur; cur = cur.parentElement?.closest('[data-redline-cms]') ?? null) {
+    const v = cur.getAttribute('data-redline-cms')!;
+    const i = v.lastIndexOf('|');
+    const content = (i < 0 ? v : v.slice(0, i)) || undefined;
+    property ??= (i < 0 ? '' : v.slice(i + 1)) || undefined;
+    if (content) return { content, property };
   }
+  if (property) return { property };
   const epi = el.closest('[data-epi-property-name],[data-epi-edit]');
-  const property = epi?.getAttribute('data-epi-property-name') ?? epi?.getAttribute('data-epi-edit') ?? undefined;
-  return property ? { property } : undefined;
+  const epiProperty = epi?.getAttribute('data-epi-property-name') ?? epi?.getAttribute('data-epi-edit') ?? undefined;
+  return epiProperty ? { property: epiProperty } : undefined;
 }
 
 function dedupe(a: string[]): string[] | undefined {

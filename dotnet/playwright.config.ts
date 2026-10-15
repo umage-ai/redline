@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
-// Browser smoke tests for the .NET integration: the Razor and Blazor samples on ports 5210/5211
+// Browser smoke tests for the .NET integration: the Razor and Blazor samples on ports 5210/5211,
+// and the Optimizely sample on 5212 with REDLINE_E2E_OPTIMIZELY=1
 // (dotnet run, Development). Uses the repo's Playwright: from the repo root,
 //   npx playwright test -c dotnet/playwright.config.ts
 // Notes go to <repo>/.redline/e2e-dotnet (gitignored with .redline).
@@ -26,5 +27,7 @@ export default defineConfig({
   webServer: [
     { command: 'dotnet run --project samples/RazorSample --no-launch-profile --urls http://localhost:5210', cwd: here, url: 'http://localhost:5210/__redline/config', reuseExistingServer: true, timeout: 240_000, env },
     { command: 'dotnet run --project samples/BlazorSample/BlazorSample --no-launch-profile --urls http://localhost:5211', cwd: here, url: 'http://localhost:5211/__redline/config', reuseExistingServer: true, timeout: 240_000, env },
+    // Optimizely CMS 12 needs SQL Server LocalDB: opt in with REDLINE_E2E_OPTIMIZELY=1.
+    ...(process.env.REDLINE_E2E_OPTIMIZELY ? [{ command: 'dotnet run --project samples/OptimizelySample --no-launch-profile --urls http://localhost:5212', cwd: here, url: 'http://localhost:5212/__redline/config', reuseExistingServer: true, timeout: 300_000, env }] : []),
   ],
 });

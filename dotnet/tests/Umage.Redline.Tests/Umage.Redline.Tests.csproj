@@ -12,7 +12,6 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.1" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.8" />
@@ -24,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Umage.Redline.AspNetCore\Umage.Redline.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\Umage.Redline.Build\Umage.Redline.Build.csproj" />
+    <ProjectReference Include="..\..\src\Umage.Redline.Optimizely\Umage.Redline.Optimizely.csproj" />
   </ItemGroup>
 
   <ItemGroup>

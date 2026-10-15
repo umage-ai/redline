@@ -72,10 +72,9 @@ public sealed class RedlineRuntime
         return m.ToArray();
     }
 
-    /// <summary>The reviewer for this request, or null when Redline isn't for them. Dev mode: an anonymous reviewer.</summary>
+    /// <summary>The reviewer for this request, or null when Redline isn't for them. Dev mode: whoever it is (signed in when the app has authentication).</summary>
     public async Task<ClaimsPrincipal?> ReviewerAsync(HttpContext http)
     {
-        if (!Options.Online) return http.User;
         var user = http.User;
         if (user.Identity?.IsAuthenticated != true)
         {
@@ -86,11 +85,13 @@ public sealed class RedlineRuntime
                 if (schemes is not null && await schemes.GetDefaultAuthenticateSchemeAsync() is not null)
                 {
                     var result = await http.AuthenticateAsync();
-                    if (result.Succeeded && result.Principal is not null) user = result.Principal;
+                    // Keep it on the request, so writers and the CMS's own access checks see the reviewer.
+                    if (result.Succeeded && result.Principal is not null) http.User = user = result.Principal;
                 }
             }
             catch (InvalidOperationException) { /* no authentication configured */ }
         }
+        if (!Options.Online) return user;   // dev: everyone on the dev server (signed in or not)
         if (user.Identity?.IsAuthenticated != true) return null;
         if (Options.Policy is { } policy)
         {

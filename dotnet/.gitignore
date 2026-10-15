@@ -6,3 +6,4 @@ artifacts/
 *.db
 TestResults/
 App_Data/
+modules/_protected/
