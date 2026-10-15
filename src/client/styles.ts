@@ -73,6 +73,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .pop footer { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .pop footer label { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 12px; cursor: pointer; }
 .pop footer .grow { flex: 1; }
+.pop footer .btn { white-space: nowrap; }
+.pop .why { margin: 8px 12px 0; color: var(--fg-3); font-size: 11.5px; }
+.panel .ext { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.panel .ext h3 { margin: 0 0 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3); }
 .btn { padding: 6px 12px; border-radius: 8px; background: var(--bg-3); color: var(--fg); font-weight: 550; }
 .btn:hover { background: #31313a; }
 .btn.primary { background: var(--ink); color: #fff; }
@@ -101,6 +105,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 /* text edit */
 .ed { position: fixed; outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; pointer-events: auto; white-space: pre-wrap;
   overflow-wrap: break-word; caret-color: var(--ink); z-index: 1; }
+.ed.rich { white-space: normal; }   /* source indentation inside inline markup is not text */
+.ed.rich a { color: inherit; text-decoration: underline; }
 
 /* panel */
 .panel { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; display: flex; flex-direction: column; background: var(--bg);
@@ -138,6 +144,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .card .reply { margin-top: 8px; padding: 6px 9px; border-left: 2px solid var(--ok); background: rgba(62,207,142,.07); border-radius: 0 6px 6px 0; color: var(--fg); white-space: pre-wrap; }
 .card .reply::before { content: 'Agent'; display: block; font-size: 10.5px; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: .05em; }
 .card .meta { margin-top: 6px; color: var(--fg-3); font-size: 11px; }
+.card .meta .stale { color: #e8a33d; }
 .card textarea { width: 100%; min-height: 70px; margin-top: 6px; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; resize: vertical; outline: 0; }
 .panel > footer { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .panel > footer .file { color: var(--fg-3); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }

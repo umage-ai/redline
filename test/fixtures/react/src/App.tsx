@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { EditZone } from './EditZone';
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -17,6 +18,7 @@ export function App() {
       <Card title="Counter">
         <button data-testid="card-action" onClick={() => setN(n + 1)}>Clicked {n}</button>
       </Card>
+      <EditZone />
     </main>
   );
 }

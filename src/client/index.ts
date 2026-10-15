@@ -5,20 +5,26 @@
 
 import type { Note, NotesResponse, NoteType } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
-import { clip, describe, labelFor, resolve, textBlockFor } from './anchor.ts';
+import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
+import type { Token } from '../server/edit.ts';
+import type { RedlineApi, RedlineButton, RedlineEvents, RedlineExtension, RedlinePanelSection } from '../shared/extension.ts';
+import { clip, describe, labelFor, resolve, sourceInfo, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
 import { CSS } from './styles.ts';
 
-type StoredNote = Note & { file: string };
+type StoredNote = Note & { file?: string };
 type Mode = 'idle' | 'comment' | 'text' | 'sketch';
-interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string }
+interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[] }
 interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
+  rich?: Inspection; html?: string;   // rich text edits (D20): the source tokens and the new source content
 }
+interface Inspection { tokens: Token[]; braces: boolean; selfClose: boolean }
+type EditResult = { ok: true; file: string; line?: number; inspect?: Inspection } | { ok: false; reason: string };
 
-declare global { interface Window { __redline?: boolean } }
+declare global { interface Window { __redline?: boolean; redlineExtensions?: { push(...fns: RedlineExtension[]): unknown } } }
 
 /* ---------- errors seen on the page, attached to notes ---------- */
 const errors: string[] = [];
@@ -82,6 +88,11 @@ function matchHotkey(e: KeyboardEvent, spec: string): boolean {
   return e.code === (key.length === 1 ? (/[0-9]/.test(key) ? 'Digit' : 'Key') + key.toUpperCase() : key) || e.key.toLowerCase() === key;
 }
 
+
+/** Extension code must never break the overlay. */
+function safely<T>(fn: () => T, fallback: T): T {
+  try { return fn(); } catch (err) { console.warn('[redline] extension failed:', err); return fallback; }
+}
 
 const isTyping = (e: Event) => e.composedPath().some(n => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
 
@@ -170,6 +181,15 @@ async function boot() {
   let busy = false;
   const persist = () => ss.set({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone });
 
+  /* extensions (D21): buttons, keys, panel sections, events */
+  const extButtons: RedlineButton[] = [];
+  const extSections: RedlinePanelSection[] = [];
+  const listeners = new Map<string, Set<(...a: unknown[]) => void>>();
+  function emit<E extends keyof RedlineEvents>(e: E, ...args: RedlineEvents[E]) {
+    for (const fn of listeners.get(e) ?? []) { try { fn(...args); } catch (err) { console.warn(`[redline] "${e}" listener failed:`, err); } }
+  }
+  const BUILTIN_KEYS = ['c', 't', 's', 'k', 'n', 'escape'];
+
   /* layers */
   const launcher = h('button', { class: 'launcher', title: `Redline (${config.hotkey})`, html: ICON, onclick: () => setOpen(true) });
   const hl = h('div', { class: 'hl', style: 'display:none' });
@@ -203,10 +223,12 @@ async function boot() {
       const r = await fetch(`${API_BASE}/notes`, { headers: force || !version ? {} : { 'if-none-match': `"${version}"` }, cache: 'no-store' });
       if (r.status === 304) return;
       const data = (await r.json()) as NotesResponse;
+      const changed = data.version !== version;
       version = data.version;
       notes = data.notes as StoredNote[];
       config.dir = data.root;
       renderAll();
+      if (changed) emit('notes', notes);
     } catch { /* dev server restarting */ }
   }
 
@@ -225,17 +247,21 @@ async function boot() {
   }
 
   function setOpen(v: boolean) {
+    const was = state.open;
     state.open = v;
     if (v) releaseTextFocus();
     if (!v) { cancelDraft(); state.mode = 'idle'; state.panel = false; hideHl(); }
     persist(); renderAll();
+    if (was !== v) emit(v ? 'open' : 'close');
   }
 
   function setMode(m: Mode) {
     if (draft) cancelDraft();
+    if (m !== 'idle' && !state.open) { state.open = true; emit('open'); }
     state.mode = state.mode === m ? 'idle' : m;
     if (state.mode === 'sketch') startSketch();
     hideHl(); persist(); renderAll();
+    emit('mode', state.mode);
   }
 
   /* ---------- rendering ---------- */
@@ -257,12 +283,17 @@ async function boot() {
     const btn = (m: Mode, label: string, key: string, how: string) =>
       h('button', { class: state.mode === m ? 'on' : '', title: `${label} (${key}): ${how}`, onclick: () => setMode(m) }, label, h('kbd', {}, key));
     const open = openCount();
+    const ext = extButtons.length ? [h('div', { class: 'sep' }), ...extButtons.map(b => h('button', {
+      class: safely(() => b.active?.(), false) ? 'on' : '', 'data-ext': b.id,
+      title: (b.title ?? b.label) + (b.key ? ` (${b.key.toUpperCase()})` : ''), onclick: () => safely(() => b.onClick(), undefined),
+    }, b.label, b.key ? h('kbd', {}, b.key.toUpperCase()) : null))] : [];
     bar.replaceChildren(
       h('div', { class: 'brand', html: ICON + '<span>Redline</span>' }),
       h('div', { class: 'sep' }),
       btn('comment', 'Comment', 'C', 'click an element. Alt+click picks its parent, Shift+click the whole page.'),
       btn('text', 'Text', 'T', 'click any text and rewrite it in place; Enter keeps it.'),
       btn('sketch', 'Sketch', 'S', 'draw boxes, arrows, lines and labels. Ctrl+Z undoes, Enter finishes.'),
+      ...ext,
       h('div', { class: 'sep' }),
       h('button', { class: state.panel ? 'on' : '', title: 'Notes (N)', onclick: () => togglePanel() }, 'Notes', h('span', { class: 'count' }, String(open))),
       h('button', { title: `Close (${config.hotkey})`, onclick: () => setOpen(false) }, '✕'),
@@ -326,7 +357,7 @@ async function boot() {
     let el = e.target as Element;
     if (state.mode === 'text') {
       const block = textBlockFor(el);
-      if (block) startTextEdit(block);
+      if (block) void startTextEdit(block);
       return;
     }
     if (e.altKey && el.parentElement && el.parentElement !== document.documentElement) el = el.parentElement;
@@ -362,6 +393,10 @@ async function boot() {
     const shot = h('input', { type: 'checkbox', ...(shotOn ? { checked: true } : {}) }) as HTMLInputElement;
     shot.addEventListener('change', () => ls.set('shot', shot.checked ? '1' : '0'));
     const save = h('button', { class: 'btn primary', onclick: () => saveDraft(ta.value) }, 'Save');
+    const direct: Direct | null = d.type === 'text' && config.directEdit && d.el && d.to !== undefined ? {
+      btn: h('button', { class: 'btn apply', disabled: true, title: 'Checking whether this text is written in source…', onclick: () => applyDirect(d, direct!, save) }, 'Apply to file'),
+      why: h('div', { class: 'why', style: 'display:none' }),
+    } : null;
     ta.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveDraft(ta.value); }
       else if (e.key === 'Enter' && !e.shiftKey && d.type !== 'comment' && !ta.value.trim()) { e.preventDefault(); saveDraft(''); }
@@ -376,17 +411,75 @@ async function boot() {
       ),
       d.type === 'text' ? h('div', { class: 'diff', html: `<div class="del">${esc(d.from ?? '')}</div><div class="ins">${esc(d.to ?? '')}</div>` }) : null,
       ta,
+      direct ? direct.why : null,
       h('footer', {},
         h('label', { title: 'Attach a screenshot with the target outlined' }, shot, 'Screenshot'),
         h('span', { class: 'grow' }),
         h('button', { class: 'btn', onclick: cancelDraft }, 'Cancel'),
         save,
+        direct ? direct.btn : null,
       ),
     );
     (pop as HTMLElement & { _shot?: HTMLInputElement })._shot = shot;
     popLayer.replaceChildren(pop);
     placePop();
     setTimeout(() => ta.focus());
+    if (direct) void checkDirect(d, direct, save);
+  }
+
+  /* ---------- direct source edits (D20) ---------- */
+  type Direct = { btn: HTMLButtonElement; why: HTMLElement };
+  const editRequest = (d: Draft) => ({
+    from: d.from, to: d.to, html: d.html, tag: d.el!.localName, url: location.href, source: sourceInfo(d.el!).source,
+  });
+
+  // When text mode opens on an element: is it written in source, and with inline markup?
+  // Then the editor shows that markup and keeps it (the presentations editor's approach).
+  async function inspectBlock(block: Element, from: string): Promise<Inspection | null> {
+    const req = api<EditResult>('POST', '/edit?inspect=1', { from, tag: block.localName, url: location.href, source: sourceInfo(block).source });
+    const r = await Promise.race([req.catch(() => null), new Promise<null>(res => setTimeout(() => res(null), 1500))]);
+    return r?.ok && r.inspect ? r.inspect : null;
+  }
+
+  // Dry run first: offer "Apply to source" only when a writer accepts this edit.
+  async function checkDirect(d: Draft, direct: Direct, save: HTMLButtonElement) {
+    let r: EditResult;
+    try { r = await api<EditResult>('POST', '/edit?dry=1', editRequest(d)); }
+    catch (e) { r = { ok: false, reason: (e as Error).message }; }
+    if (draft !== d) return;
+    if (r.ok) {
+      direct.btn.disabled = false;
+      direct.btn.title = `Write the new text into ${r.file}${r.line ? ':' + r.line : ''}`;
+      direct.btn.className = 'btn apply primary';
+      save.className = 'btn';
+      save.textContent = 'Save note';
+    } else refuse(direct, save, r.reason);
+    placePop();
+  }
+
+  // Can't write it: the note is the way (the old text-note flow), and the reason is shown.
+  function refuse(direct: Direct, save: HTMLButtonElement, reason: string) {
+    direct.btn.disabled = true;
+    direct.btn.className = 'btn apply';
+    direct.btn.title = `Can't apply to source: ${reason}`;
+    direct.why.textContent = `Can't apply to the file: ${reason}. Save it as a note for your agent.`;
+    direct.why.style.display = '';
+    save.className = 'btn primary';
+    placePop();
+  }
+
+  async function applyDirect(d: Draft, direct: Direct, save: HTMLButtonElement) {
+    busy = true;
+    try {
+      const r = await api<EditResult>('POST', '/edit', editRequest(d));
+      if (!r.ok) { refuse(direct, save, r.reason); return; }
+      emit('sourceWritten', { file: r.file, line: r.line, from: d.from!, to: d.to! });
+      cancelDraft();
+      state.mode = 'idle'; persist(); renderAll();
+      toast(`Written to ${r.file}${r.line ? ':' + r.line : ''}`);
+    } catch (e) {
+      refuse(direct, save, (e as Error).message);
+    } finally { busy = false; }
   }
 
   // Near the anchor point, inside the visible viewport. On phones the on-screen keyboard
@@ -409,8 +502,10 @@ async function boot() {
 
   async function saveDraft(text: string) {
     const d = draft!;
-    const body = text.trim();
+    let body = text.trim();
     if (d.type === 'comment' && !body) { toast('Write a comment first', true); return; }
+    // A rich edit saved as a note: the diff shows text only, so give the agent the wanted markup too.
+    if (d.type === 'text' && d.rich && d.html) body = [body, 'Wanted source (keeps the markup): `' + d.html.replace(/\s+/g, ' ').trim() + '`'].filter(Boolean).join('\n\n');
     const wantShot = ((popLayer.querySelector('.pop') as HTMLElement & { _shot?: HTMLInputElement })?._shot?.checked) ?? true;
     busy = true;
     popLayer.style.display = 'none';
@@ -450,6 +545,7 @@ async function boot() {
       popLayer.replaceChildren();
       toast(`Saved → ${saved.file ?? config.dir}`);
       state.mode = 'idle'; persist();   // one note per pick: the next tap goes to the app again (D15)
+      emit('noteCreated', saved);
       await poll(true);
     } catch (err) {
       toast('Could not save: ' + (err as Error).message, true, 5000);
@@ -470,20 +566,65 @@ async function boot() {
     return themeOf() === 'dark' ? '#111' : '#fff';
   }
 
-  function startTextEdit(block: Element) {
+  // The rich editor's content: source tags become plain elements tagged with their token index,
+  // so serialising can write each one back byte for byte. Tag names are from the server's
+  // inline allowlist; attributes are left out on purpose (they stay in the source).
+  function richHtml(tokens: Token[]): string {
+    return tokens.map((t, i) => t.k === 'text' ? esc(t.text)
+      : !/^[a-z][a-z0-9]*$/.test(t.tag) ? ''
+      : t.k === 'close' ? `</${t.tag}>` : `<${t.tag} data-rl="${i}">`).join('');
+  }
+
+  const ADDABLE = ['b', 'i', 'u', 's', 'em', 'strong'];
+  /** The editor's content as source: original tags verbatim, unchanged text verbatim, the rest encoded. */
+  function serialize(ed: HTMLElement, insp: Inspection): string {
+    const texts = insp.tokens.filter(t => t.k === 'text') as Extract<Token, { k: 'text' }>[];
+    const rawText = new Map(texts.map(t => [t.text, t.raw]));
+    const keepNbsp = texts.some(t => t.text.includes('\u00a0'));
+    const encode = (s: string) => {
+      if (!keepNbsp) s = s.replace(/\u00a0/g, ' ');   // Chrome types nbsp at the end of a line
+      s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\u00a0/g, '&nbsp;');
+      return insp.braces ? s.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;') : s;
+    };
+    const walk = (n: Node): string => {
+      if (n.nodeType === Node.TEXT_NODE) { const t = (n as Text).data; return rawText.get(t) ?? encode(t); }
+      if (!(n instanceof Element)) return '';
+      const kids = Array.from(n.childNodes).map(walk).join('');
+      const i = n.getAttribute('data-rl');
+      const tok = i === null ? undefined : insp.tokens[+i];
+      if (tok && tok.k === 'open' && tok.tag === n.localName) return tok.raw + kids + insp.tokens[tok.close].raw;
+      if (tok && tok.k === 'void' && tok.tag === n.localName) return tok.raw;
+      if (n.localName === 'br') return insp.selfClose ? '<br />' : '<br>';
+      if (ADDABLE.includes(n.localName)) return `<${n.localName}>${kids}</${n.localName}>`;
+      return kids;   // whatever else the browser made (div, styled span): keep its text
+    };
+    const nodes = Array.from(ed.childNodes);
+    const last = nodes[nodes.length - 1];
+    if (last instanceof HTMLBRElement && !last.hasAttribute('data-rl')) nodes.pop();   // Chrome's placeholder <br>
+    return nodes.map(walk).join('');
+  }
+
+  async function startTextEdit(block: Element) {
     const r = block.getBoundingClientRect();
     const cs = getComputedStyle(block);
     const from = (cs.textTransform === 'none' ? (block as HTMLElement).innerText : block.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
-    const ed = h('div', { class: 'ed', contenteditable: 'plaintext-only', spellcheck: 'true' });
-    ed.textContent = from;
+    // Hold the pick while asking the server whether the source has inline markup to keep.
+    const pending: Draft = { type: 'text', el: block, x: r.right, y: r.bottom, from };
+    draft = pending;
+    showHl(block, null, 'text');
+    const insp = config.directEdit ? await inspectBlock(block, from) : null;
+    if (draft !== pending) return;
+    const rich = insp && insp.tokens.some(t => t.k !== 'text') ? insp : undefined;
+    const ed = h('div', { class: 'ed' + (rich ? ' rich' : ''), contenteditable: rich ? 'true' : 'plaintext-only', spellcheck: 'true' });
+    if (rich) ed.innerHTML = richHtml(rich.tokens); else ed.textContent = from;
+    const original = rich ? serialize(ed, rich) : '';
     const copy = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform',
       'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'color', 'wordSpacing', 'textIndent'] as const;
     for (const k of copy) (ed.style as unknown as Record<string, string>)[k] = cs[k];
     Object.assign(ed.style, { left: `${r.x}px`, top: `${r.y}px`, minWidth: `${r.width}px`, maxWidth: `${Math.max(r.width, innerWidth - r.x - 8)}px`, minHeight: `${r.height}px`, background: bgOf(block) });
     if (cs.display.startsWith('inline')) ed.style.width = 'auto'; else ed.style.width = `${r.width}px`;
     popLayer.replaceChildren(ed);
-    draft = { type: 'text', el: block, x: r.right, y: r.bottom, from, editor: ed };
-    showHl(block, null, 'text');
+    draft = { ...pending, editor: ed, rich };
     renderBar();
     ed.focus();
     // caret where the user clicked is nice-to-have; put it at the end
@@ -492,18 +633,24 @@ async function boot() {
 
     const commit = () => {
       const to = ed.innerText.replace(/\n$/, '').trim();
-      if (to === from) { cancelDraft(); return; }
+      const html = rich ? serialize(ed, rich) : undefined;
+      if (to === from && html === (rich ? original : undefined)) { cancelDraft(); return; }
       draft!.to = to;
+      draft!.html = html;
       ed.contentEditable = 'false';
       const er = ed.getBoundingClientRect();
       draft!.x = er.left; draft!.y = er.bottom;
-      const pop = (() => { renderPop(); return popLayer.querySelector('.pop')!; })();
+      renderPop();
       popLayer.prepend(ed);   // keep the new text showing under the popover
-      void pop;
     };
     ed.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
       else if (e.key === 'Escape') { e.preventDefault(); cancelDraft(); }
+    });
+    // Rich editor: paste plain text only, so no markup from elsewhere gets in.
+    if (rich) ed.addEventListener('paste', e => {
+      e.preventDefault();
+      document.execCommand('insertText', false, e.clipboardData?.getData('text/plain') ?? '');
     });
     ed.addEventListener('blur', () => setTimeout(() => { if (draft?.editor === ed && ed.isContentEditable) commit(); }, 120));
   }
@@ -672,7 +819,11 @@ async function boot() {
       n.body ? h('div', { class: 'body' }, n.body) : n.type === 'sketch' ? h('div', { class: 'body muted' }, 'See the sketch.') : null,
       n.screenshot ? h('img', { src: assetUrl(n.screenshot) + `?v=${version}`, alt: 'screenshot', loading: 'lazy', onclick: () => zoom(assetUrl(n.screenshot)) }) : null,
       n.reply ? h('div', { class: 'reply' }, n.reply) : null,
-      h('div', { class: 'meta' }, `${n.at}${n.viewport ? ` · ${n.viewport[0]}×${n.viewport[1]}` : ''}${n.theme ? ` · ${n.theme}` : ''}${here && n.target && !targetOf(n) ? ' · ⚠ element not found on page' : ''}`),
+      h('div', { class: 'meta' },
+        !n.done && isStale(n.at)
+          ? h('span', { class: 'age stale', title: `${n.at} · open for over ${STALE_DAYS} days; the UI may have changed since` }, `⏱ ${relativeAge(n.at)}`)
+          : h('span', { class: 'age', title: n.at }, relativeAge(n.at) ?? n.at),
+        `${n.viewport ? ` · ${n.viewport[0]}×${n.viewport[1]}` : ''}${n.theme ? ` · ${n.theme}` : ''}${here && n.target && !targetOf(n) ? ' · ⚠ element not found on page' : ''}`),
     );
     c.addEventListener('mouseenter', () => { const el = here ? targetOf(n) : null; if (el && !draft) showHl(el, null); });
     c.addEventListener('mouseleave', () => { if (!draft) hideHl(); });
@@ -754,6 +905,11 @@ async function boot() {
         ),
         h('label', {}, h('input', { type: 'checkbox', ...(state.showDone ? { checked: true } : {}), onchange: (e: Event) => { state.showDone = (e.target as HTMLInputElement).checked; persist(); renderAll(); } }), 'Show done'),
       ),
+      ...extSections.map(s => {
+        const body = h('div');
+        safely(() => s.render(body), undefined);
+        return h('section', { class: 'ext', 'data-ext': s.id }, s.title ? h('h3', {}, s.title) : null, body);
+      }),
       listEl,
       h('footer', {},
         h('div', { class: 'file' }, file && state.scope === 'page' ? file : `${config.dir}/INDEX.md`),
@@ -805,7 +961,11 @@ async function boot() {
     else if (k === 't') setMode('text');
     else if (k === 's' || k === 'k') setMode('sketch');
     else if (k === 'n') togglePanel();
-    else return;
+    else {
+      const b = extButtons.find(x => x.key?.toLowerCase() === k);
+      if (!b) return;
+      safely(() => b.onClick(), undefined);
+    }
     e.preventDefault(); e.stopImmediatePropagation();
   }, true);
 
@@ -829,6 +989,54 @@ async function boot() {
   await poll(true);
   renderAll();
   if (state.open) releaseTextFocus();   // reopened after a reload: the page's autofocus ran meanwhile
+
+  /* ---------- extension API (D21) ---------- */
+  const rl: RedlineApi = {
+    version: 1,
+    addButton(b) {
+      const key = b.key?.toLowerCase();
+      if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
+      const i = extButtons.findIndex(x => x.id === b.id);
+      if (i >= 0) extButtons[i] = b; else extButtons.push(b);
+      renderBar();
+    },
+    addPanelSection(s) {
+      const i = extSections.findIndex(x => x.id === s.id);
+      if (i >= 0) extSections[i] = s; else extSections.push(s);
+      renderPanel(true);
+    },
+    on(e, fn) {
+      const f = fn as (...a: unknown[]) => void;
+      if (!listeners.has(e)) listeners.set(e, new Set());
+      listeners.get(e)!.add(f);
+      return () => { listeners.get(e)?.delete(f); };
+    },
+    open: () => setOpen(true),
+    close: () => setOpen(false),
+    isOpen: () => state.open,
+    setMode: m => setMode(m),
+    togglePanel: v => togglePanel(v),
+    toast: (m, err) => toast(m, err),
+    notes: (scope = 'page') => (scope === 'page' ? pageNotes() : notes).map(n => ({ ...n })),
+    page: () => page,
+    refresh: () => poll(true),
+    render: () => { renderBar(); renderPanel(true); },
+  };
+  const run = (fn: unknown) => {
+    if (typeof fn !== 'function') return;
+    try { Promise.resolve((fn as RedlineExtension)(rl)).catch(err => console.warn('[redline] extension failed:', err)); }
+    catch (err) { console.warn('[redline] extension failed:', err); }
+  };
+  // Scripts can queue extensions before the overlay loads: (window.redlineExtensions ||= []).push(fn)
+  const queued = Array.isArray(window.redlineExtensions) ? window.redlineExtensions as RedlineExtension[] : [];
+  window.redlineExtensions = { push: (...fns: RedlineExtension[]) => { fns.forEach(run); return fns.length; } };
+  queued.forEach(run);
+  for (const url of config.extensions ?? []) {
+    import(/* @vite-ignore */ url).then(m => run(m.default), err => {
+      console.warn(`[redline] couldn't load extension ${url}:`, err);
+      toast(`Extension failed to load: ${url}`, true, 5000);
+    });
+  }
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void boot());

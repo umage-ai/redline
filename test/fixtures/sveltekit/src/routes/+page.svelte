@@ -1,5 +1,6 @@
 <script>
   import Card from '$lib/Card.svelte';
+  import EditZone from '$lib/EditZone.svelte';
   let n = $state(0);
 </script>
 
@@ -7,3 +8,5 @@
 <Card title="Counter">
   <button data-testid="card-action" onclick={() => n++}>Clicked {n}</button>
 </Card>
+
+<EditZone />

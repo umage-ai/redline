@@ -22,8 +22,13 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Open dropdowns/popovers survive the overlay: toolbar, picking, typing, Escape, hotkey (D14) | ✅ fixture menu; try in `examples/demo` (Export, ⋯, driver filter) | `overlay.spec.ts`; not yet tried against real Radix/Headless UI/MUI |
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
+| Pluggable note store (`store`) and server `hooks`; markdown store is the default (D19) | ✅ | `test/unit/extend.test.ts` |
+| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20) | ✅ static .html, React, SvelteKit, Astro; Vue unit only | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
+| `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22) | ✅ | `mcp.test.ts` |
+| Overlay extensions (`extensions`, `window.redlineExtensions`): buttons + keys, panel sections, events (D21) | ✅ | `extend.test.ts`, `extend.spec.ts` |
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
+| Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
 | Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6 | ✅ | `frameworks.spec.ts` |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
 | Sketch text labels (Enter commits once, Escape drops) | ✅ | `overlay.spec.ts` |
@@ -36,7 +41,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 ## Known gaps
 
 - DOM screenshots: WebGL, cross-origin map tiles and video can come out blank; sticky headers are missing when scrolled. Workaround: tab capture.
-- Text mode records the change only; it never writes source (by design, D6).
+- Text mode writes source only with `directEdit` and only static content (D20): text plus inline markup. i18n strings and CMS content stay notes until a writer for them exists. Links can't be added or retargeted in place. Vue has no fixture app.
+- A custom store reaches agents only through `redline mcp` while a dev server runs (D22); SKILL.md describes the markdown files.
 - Notes are keyed by pathname, so `/org/a/agents/1` and `/org/b/agents/1` are separate pages. There's no route-pattern grouping yet.
 - CSS-only `:hover` menus still close when the pointer moves to the toolbar. Workaround: open the menu, then press `C` and click.
 - Pins re-resolve by selector/testid/xpath/text. Heavily dynamic lists can re-pin onto the wrong row.
@@ -46,6 +52,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 
 1. Verify a dev server behind a reverse proxy (HTML through the proxy, `/__redline` routing, HMR unaffected).
    Run the publish workflow once on GitHub (dry run): the e2e and package tests have only run on Windows so far.
-2. Chrome extension reusing `dist/client.js` + `captureVisibleTab`, for non-Vite apps and staging (with a `redline serve` store).
-3. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
-4. Optional MCP tools (`list_open_notes`, `close_note`), only if plain files prove insufficient.
+2. Move the presentations editor (`../presentations/shared/editor.js`) onto Redline: its deck actions as an extension (D21),
+   per-deck `REVIEW.md` as a store or layout option (D19); its static .html slides already work with the rich editor (D20).
+3. Chrome extension reusing `dist/client.js` + `captureVisibleTab`, for non-Vite apps and staging (with a `redline serve` store).
+4. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
+5. Try `redline mcp` with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.

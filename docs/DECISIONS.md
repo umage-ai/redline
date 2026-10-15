@@ -29,8 +29,8 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Why:** Vite's `transformIndexHtml` doesn't run for SvelteKit SSR or Astro pages. One mechanism covers all of them.
 - **Cost:** must handle `writeHead` and content-length correctly (L1). Compressed responses are skipped.
 
-## D6 — Text mode suggests, never writes source (2026-10-13)
-- **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched.
+## D6 — Text mode suggests by default; source writes are opt-in (2026-10-13, amended 2026-10-15)
+- **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched. With `directEdit` on, a source writer may write the change to the file instead (D20); the default is unchanged.
 - **Why:** mapping DOM text back to source is unreliable across frameworks and content stores (i18n, CMS). Mutating framework-owned DOM breaks React reconciliation. The agent applies it with full context.
 
 ## D7 — Source location via framework dev metadata, plus a JSX stamp for React (2026-10-13)
@@ -86,3 +86,24 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** the per-mode hint above the bottom bar is gone. Buttons show their keys; the non-obvious bits (Alt+click = parent, Shift+click = whole page, Ctrl+Z, Esc) are in the button tooltips, and the popover's **↑ Parent** / **Page** buttons cover touch.
 - **Why:** it mostly repeated the visible key labels and sat over the page. Less chrome over the app being reviewed.
 - **Revisit if:** new users miss the modifiers; then a one-time first-run tip, not a permanent line.
+
+## D19 — Pluggable note store and server hooks; markdown stays the default (2026-10-15)
+- **Decision:** the handler talks to a `NoteStore` (`version/list/create/update/remove/asset`, `src/server/store.ts`). Option `store` takes one, or a factory that gets `{ root, dir, app }`; default `createStore` (markdown, D2). `hooks` (`onCreate/onUpdate/onRemove/onSourceWrite`) run after a change is stored; their errors are logged, never returned.
+- **Why:** lets notes land elsewhere (a CMS, a DB, a hosted service later) and lets teams log or notify without forking a store. `asset()` replaced the file path the handler used to read, so stores needn't be files.
+- **Revisit if:** a remote store needs concurrency control: add a version precondition to `update` rather than a second interface. The agent contract (SKILL.md) assumes markdown; other stores reach agents through `redline mcp` (D22).
+
+## D20 — Direct source edits: opt-in writers, dry run first, refuse anything not static (2026-10-15)
+- **Decision:** `directEdit: true` (or a `SourceWriter[]`) adds **Apply to file** to the text popover. The overlay sends `POST /__redline/edit?dry=1` first and offers the button only if a writer accepts; otherwise it says why and the edit stays a note. Built-ins: `markupWriter` (element at the framework's `file:line:col` in .astro/.svelte/.jsx/.tsx/.vue/.html) and `staticHtmlWriter` (plain .html served from disk: the one element of that tag whose text matches). A write needs the element's source content to be static and its text equal to what the page showed: no `{…}` (in text or attributes), no comments, components or block elements; the file must be unchanged since the check and inside the root (not node_modules/.git/notes).
+- **Inline markup (rich edits):** when text mode opens, `?inspect=1` returns the content as tokens (text + inline tags from an allowlist). The overlay then edits a copy that holds those tags, each tagged with its token index, and serialises back with the original tags byte for byte (JSX `className`, quotes, attribute order) and unchanged text verbatim (entities kept). The server accepts only the original tags plus `<b> <i> <u> <s> <em> <strong> <br>`, balanced, with text matching. Paste is plain text. This is the presentations editor's idea (`../presentations/shared/editor.js`: source HTML in the editor, re-check at commit) without its positional alignment, since we have `file:line` or a unique text match.
+- **Why:** reviewers fix copy faster than an agent round trip, but only where the text is truly static; refusing is cheap because the note path still works. Writers are replaceable per stack (i18n JSON, a CMS such as Optimizely). Rebuilding tags from the DOM would rewrite JSX attributes and entities; keeping raw tokens makes the diff only what the reviewer changed.
+- **Revisit if:** reviewers need to add links or change attributes (needs a small link UI and attribute validation), or a writer must handle text split across components.
+
+## D21 — Overlay extensions: ES modules with a small API (2026-10-15)
+- **Decision:** option `extensions` lists browser modules (file paths served at `/__redline/ext/<i>.js`, or `{ url }` for a dev-server URL such as a Vite-compiled `.ts`); scripts can also `(window.redlineExtensions ||= []).push(fn)`. The default export gets `RedlineApi` (`src/shared/extension.ts`): toolbar buttons with keys, panel sections, events (`open/close/mode/notes/noteCreated/sourceWritten`), and open/close/mode/toast/notes/refresh. Built-in keys win; extension errors are caught.
+- **Why:** the presentations editor needs deck-specific actions (deck switcher, go-to-slide, preview, + Slide, settings, studio jobs) to move onto Redline and get its updates. Loading by the dev server keeps it dev-only.
+- **Revisit if:** extensions need to change notes before save or add modes; extend the API, don't expose internals.
+
+## D22 — `redline mcp`: notes as MCP tools, through the running dev server (2026-10-15)
+- **Decision:** a stdio MCP server in the CLI (`src/mcp.ts`, hand-rolled JSON-RPC, no SDK dependency) with `list_notes`, `get_note` (note as the markdown section + screenshot image) and `update_note` (reply, done). It finds dev servers in `<root>/.redline/servers.json` (each registers on listen and on its first `/__redline` request; dead pids pruned) and uses the first that answers. With none, it uses the markdown store directly; with `--url`, it fails clearly instead. `init --mcp` registers it (`.mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`, `.cursor/mcp.json`), as `node <path to the installed cli.js> mcp` when inside the repo (no `npx`/`cmd /c` issues on Windows).
+- **Why:** with a custom store (D19) the files aren't there for the agent. Going through the dev server's API keeps one source of truth for every store, and is the same API a hosted version would expose. The skill (files) stays the zero-setup path; MCP is opt-in.
+- **Revisit if:** agents need notes while no dev server runs and the store isn't markdown (then stores need a CLI-side factory), or MCP gains a standard way to push note changes (subscriptions).

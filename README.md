@@ -94,6 +94,21 @@ lists the others). Source paths are repo-relative (`apps/web/src/…`, `packages
 `npx redline init` anywhere in the repo: it sets up the repo root (`--here` installs in the current
 folder instead, for when `root` points there).
 
+### Extending
+
+All optional and dev-only; without them Redline behaves as described above. Types (`RedlineApi`, `NoteStore`,
+`SourceWriter`, …) come from `@umage.ai/redline/server`.
+
+- **`directEdit: true`**: the text popover gets **Apply to file** when the edited text is static in source (Astro,
+  Svelte, JSX, Vue, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it.
+  Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
+  save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
+- **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`), or `({ root, dir, app }) => store`,
+  to keep notes elsewhere than markdown. **`hooks`**: `onCreate`, `onUpdate`, `onRemove`, `onSourceWrite`, run after each change.
+- **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
+  A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it. Scripts can also push
+  onto `window.redlineExtensions`.
+
 ## Coding agents
 
 Redline isn't tied to one agent. The notes are plain markdown, and `npx redline init` installs the
@@ -114,6 +129,10 @@ or `.gemini/`, `.github/copilot-instructions.md`…), or when you ask: `npx redl
 **Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline
 notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
 `init`, the prompt spells out the note format itself, so any agent can work from it.
+
+**MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
+with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
+`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`.
 
 ## What gets written
 
@@ -172,12 +191,8 @@ Releasing: on an up-to-date `main`, run `npm run release -- patch` (or `minor`, 
 version, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) then runs every check,
 publishes to npm through Trusted Publishing and creates the GitHub release with generated notes.
 
-Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions and learnings
-are in [docs/](docs/STATE.md).
-
-## Roadmap
-
-See [docs/STATE.md](docs/STATE.md#next-up).
+Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions, learnings and the
+roadmap are in [docs/](docs/STATE.md#next-up).
 
 ## License
 

@@ -16,13 +16,37 @@ export interface StoreOptions {
 
 export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to'>>;
 
+/**
+ * Where notes are kept. The markdown store below is the default; pass your own as the
+ * `store` option to keep notes elsewhere (D19). `file` on a note is optional: it is only
+ * shown to the reviewer and named in the copied agent prompt.
+ */
+export interface NoteStore {
+  /** Shown to the reviewer as where notes go (".redline", a URL, a CMS name). */
+  dir: string;
+  /** Changes whenever any note changes; the overlay polls with it as an ETag, so keep it cheap. */
+  version(): Promise<string>;
+  list(): Promise<(Note & { file?: string })[]>;
+  /** Assign `id` (keep a valid `req.note.id`) and `at`, keep the screenshot/sketch, return the note. */
+  create(req: NewNoteRequest): Promise<Note & { file?: string }>;
+  update(id: string, patch: NotePatch): Promise<Note | null>;
+  remove(id: string): Promise<boolean>;
+  /** A note's screenshot (`<id>.png`) or sketch (`<id>.svg`) by file name, or null. */
+  asset(name: string): Promise<{ type: string; data: Buffer | string } | null>;
+}
+
+/** Note ids are lowercase base36, 4–24 chars; custom stores should keep to it (the API routes on it). */
+export const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-z0-9]{4,24}$/.test(id);
+
 const stamp = (d = new Date()) => {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
 export const newId = () => Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+export { stamp };
 
+/** The default store: markdown under <root>/.redline/ (D2). */
 export function createStore(opts: StoreOptions) {
   const dirRel = opts.dir ?? '.redline';
   const base = path.resolve(opts.root, dirRel);
@@ -75,6 +99,12 @@ export function createStore(opts: StoreOptions) {
     return null;
   }
 
+  /** Resolve a request path under assets/ to a file, or null. */
+  function assetPath(name: string): string | null {
+    if (!/^[a-z0-9]+\.(png|svg)$/.test(name)) return null;
+    return path.join(assetsDir, name);
+  }
+
   async function removeAssets(n: Note) {
     for (const rel of [n.screenshot, n.sketch]) {
       if (!rel) continue;
@@ -102,9 +132,9 @@ export function createStore(opts: StoreOptions) {
       return out;
     },
 
-    create(req: NewNoteRequest): Promise<Note> {
+    create(req: NewNoteRequest): Promise<Note & { file: string }> {
       return serial(async () => {
-        const id = req.note.id && /^[a-z0-9]{4,24}$/.test(req.note.id) ? req.note.id : newId();
+        const id = validId(req.note.id) ? req.note.id : newId();
         const note: Note = { ...req.note, id, at: stamp(), body: req.note.body ?? '', reply: '', done: false };
         if (req.screenshot?.startsWith('data:image/png;base64,')) {
           await fs.mkdir(assetsDir, { recursive: true });
@@ -121,7 +151,7 @@ export function createStore(opts: StoreOptions) {
         notes.push(note);
         await writeFile(file, notes);
         await writeIndex();
-        return note;
+        return { ...note, file: `${dirRel}/pages/${file}` };
       });
     },
 
@@ -152,12 +182,15 @@ export function createStore(opts: StoreOptions) {
       });
     },
 
-    /** Resolve a request path under assets/ to a file, or null. */
-    assetPath(name: string): string | null {
-      if (!/^[a-z0-9]+\.(png|svg)$/.test(name)) return null;
-      return path.join(assetsDir, name);
+    assetPath,
+
+    async asset(name: string) {
+      const file = assetPath(name);
+      if (!file) return null;
+      try { return { type: name.endsWith('.svg') ? 'image/svg+xml' : 'image/png', data: await fs.readFile(file) }; }
+      catch { return null; }
     },
-  };
+  } satisfies NoteStore & Record<string, unknown>;
 }
 
 export type Store = ReturnType<typeof createStore>;

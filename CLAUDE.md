@@ -36,6 +36,7 @@ npm run check          # everything: typecheck, unit, docs, e2e. Run before call
 npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests (slow; runs on prepublishOnly)
 # Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
+node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22)
 npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
 npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright
 
@@ -69,6 +70,10 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 - `anchor.ts`: describes an element (selector, xpath, test id, role/name, html excerpt, **source + components**)
   and resolves a stored target back to an element.
 - `capture.ts`: screenshots (DOM render via modern-screenshot, or tab capture). `sketch.ts`: the SVG drawing layer.
+
+**Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
+and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
+`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`).
 
 **Source location per framework** (`anchor.ts` `sourceInfo`): React through a dev-only JSX transform
 (`src/server/jsx-source.ts` stamps `data-redline-src` on an HTML-tag allowlist), then the fiber chain for components;

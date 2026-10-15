@@ -55,7 +55,8 @@ Make this secondary; Publish should be the primary action.
 
 Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,
 e.g. a dark-mode-only or mobile-width issue. `errors` lists console errors seen on the page
-when the note was written; they may or may not be related.
+when the note was written; they may or may not be related. `at` is when the note was written;
+on an old note, check the UI still looks like the screenshot before changing anything.
 
 ## Workflow
 
@@ -67,12 +68,20 @@ when the note was written; they may or may not be related.
    - tick it: `### [ ]` → `### [x]`
    - add a one-line `> ` reply under it saying what changed and where, e.g.
      `> Button now variant="secondary"; Publish is primary (AgentForm.svelte:142).`
+   - if you commit the fix, end the reply with the short hash: `… (fixed in a1b2c3d)`.
 4. If a note is ambiguous, conflicts with another note or the design system, or would need a
    larger decision: leave it open (`[ ]`) and put your question in the `> ` reply. The
    reviewer sees replies live in the overlay.
 5. Verify in the browser where you can (the dev server is usually already running; the
    overlay picks up your file edits within a couple of seconds).
 6. Report what you applied and what you left open, with the questions.
+
+## With the `redline` MCP server
+
+If the `redline` MCP tools are available (`list_notes`, `get_note`, `update_note`), use them instead
+of reading and editing the files: they work with any note store, and `get_note` returns the
+screenshot. Same workflow: `list_notes` → `get_note` per open note → change the code →
+`update_note` with `done: true` and the one-line reply (or only a `reply` with your question).
 
 ## Rules
 
