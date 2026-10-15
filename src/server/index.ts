@@ -14,11 +14,11 @@ export function redlineMiddleware(opts: RedlineOptions & { serverRoot?: string }
 export { createStore, newId, stamp, validId } from './store.ts';
 export { parsePage, serializePage } from './format.ts';
 export { defaultWriters, markupWriter, staticHtmlWriter } from './writers.ts';
-export { editAt, editUnique, tokenize } from './edit.ts';
-export type { Token, Edit } from './edit.ts';
+export { decodeEntities, editAt, editUnique, tokenize } from './edit.ts';
+export type { Token, Edit, Nth } from './edit.ts';
 export type { RedlineOptions };
 export type { RedlineHooks } from './handler.ts';
 export type { NoteStore, NotePatch } from './store.ts';
 export type { SourceWriter, EditRequest, EditResult, WriterContext, Inspection } from './writers.ts';
 export type { Note, NewNoteRequest, Target, SourceLoc } from '../shared/types.ts';
-export type { RedlineApi, RedlineButton, RedlinePanelSection, RedlineEvents, RedlineExtension, RedlineMode } from '../shared/extension.ts';
+export type { RedlineApi, RedlineButton, RedlinePanelSection, RedlinePanelState, RedlinePageKey, RedlineEvents, RedlineExtension, RedlineMode } from '../shared/extension.ts';

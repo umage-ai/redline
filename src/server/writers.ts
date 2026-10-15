@@ -7,7 +7,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { SourceLoc } from '../shared/types.ts';
-import { apply, locateAt, locateUnique, type Located, type Token } from './edit.ts';
+import { apply, locateAt, locateUnique, spellings, type Located, type Nth, type Token } from './edit.ts';
 
 export interface EditRequest {
   from: string;          // text the page showed
@@ -16,6 +16,8 @@ export interface EditRequest {
   tag: string;           // the edited element's tag, lowercase
   source?: SourceLoc;    // where the element is written (repo-relative), when the framework says
   url: string;           // page URL, for writers that map pages to files
+  /** Several elements with this tag and text on the page: which one (static .html has no source location). */
+  nth?: Nth;
 }
 
 export type EditResult =
@@ -27,6 +29,8 @@ export interface Inspection {
   tokens: Token[];
   braces: boolean;       // `{}` in text must be encoded (JSX, Svelte, Astro, Vue)
   selfClose: boolean;    // write <br /> (JSX) rather than <br>
+  /** Characters the source writes as references ("—" → "&mdash;"); new text keeps that spelling. */
+  spell: Record<string, string>;
 }
 
 export interface WriterContext {
@@ -52,7 +56,10 @@ const SELF_CLOSE = new Set(['.jsx', '.tsx']);
 /** Shared tail of the file writers: inspect, dry run or write what was located. */
 async function finish(file: string, rel: string, loc: Located, before: string, braces: boolean, req: EditRequest, writer: string, ctx: WriterContext): Promise<EditResult> {
   if (!loc.ok) return { ok: false, reason: loc.reason, writer };
-  if (ctx.inspect) return { ok: true, file: rel, line: loc.line, writer, inspect: { tokens: loc.analysis.tokens, braces, selfClose: SELF_CLOSE.has(path.extname(rel).toLowerCase()) } };
+  if (ctx.inspect) return { ok: true, file: rel, line: loc.line, writer, inspect: {
+    tokens: loc.analysis.tokens, braces, selfClose: SELF_CLOSE.has(path.extname(rel).toLowerCase()),
+    spell: spellings(loc.analysis.tokens.map(t => t.k === 'text' ? t.raw : '').join('')),
+  } };
   const plan = apply(before, loc, req, braces);
   if (!plan.ok) return { ok: false, reason: plan.reason, writer };
   if (!ctx.dryRun) {
@@ -81,7 +88,10 @@ export function markupWriter(): SourceWriter {
   };
 }
 
-/** Plain .html pages served from disk (no framework metadata): the one element with exactly this text. */
+/**
+ * Plain .html pages served from disk (no framework metadata): the one element with exactly this
+ * text, or the eq.nth one when the file has as many such elements as the page.
+ */
 export function staticHtmlWriter(): SourceWriter {
   return {
     name: 'static-html',
@@ -97,7 +107,7 @@ export function staticHtmlWriter(): SourceWriter {
         if (!file) continue;
         let before: string;
         try { before = await fs.readFile(file, 'utf8'); } catch { continue; }
-        return finish(file, rel, locateUnique(before, req.tag, req.from), before, false, req, this.name, ctx);
+        return finish(file, rel, locateUnique(before, req.tag, req.from, false, req.nth), before, false, req, this.name, ctx);
       }
       return null;
     },

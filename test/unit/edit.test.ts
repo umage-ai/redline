@@ -92,3 +92,29 @@ test('editUnique: the one element with this text, refuses when ambiguous or abse
 test('checkInner normalises whitespace and nbsp the way innerText does', () => {
   assert.deepEqual(checkInner('\n   Two&nbsp;words\n  ', 'Two words', true), { ok: true });
 });
+
+test('decodeEntities: the full HTML named set, legacy names without ";", numeric edge cases', async () => {
+  const { decodeEntities } = await import('../../src/server/edit.ts');
+  assert.equal(decodeEntities('A &mdash; B &middot; C &rarr; D &hellip; &laquo;x&raquo; &euro;5'), 'A — B · C → D … «x» €5');
+  assert.equal(decodeEntities('&NotEqualTilde; &AMP; &Amp;'), '≂̸ & &Amp;');   // two code points; names are case-sensitive
+  assert.equal(decodeEntities('&copy2026 &amp &notit; &bogus;'), '©2026 & ¬it; &bogus;');
+  assert.equal(decodeEntities('&#x1F600; &#8212; &#0; &#xD800; &#99999999;'), '😀 — � � �');
+});
+
+test('plain edits keep the source\'s entity spelling for the same characters', () => {
+  const src = '<p>Slides &mdash; part&nbsp;one &#8594; next</p>';
+  const r = ok(editAt(src, { tag: 'p', line: 1 }, plain('Slides — part one → next', 'Deck — part two → next & more'), false));
+  assert.equal(r.content, '<p>Deck &mdash; part&nbsp;two &#8594; next &amp; more</p>');
+  // characters the source wrote raw stay raw; a stray &#32; doesn't turn every space into one
+  assert.equal(ok(editAt('<p>A — B&#32;C</p>', { tag: 'p', line: 1 }, plain('A — B C', 'A — D E'), false)).content, '<p>A — D E</p>');
+});
+
+test('editUnique: several matches are told apart by nth only when the file has as many as the page', () => {
+  const html = '<ul>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n</ul>';
+  const r = ok(editUnique(html, 'span', plain('Yes', 'No'), false, { index: 1, count: 3 }));
+  assert.equal(r.content, '<ul>\n<li><span>Yes</span></li>\n<li><span>No</span></li>\n<li><span>Yes</span></li>\n</ul>');
+  assert.equal(r.line, 3);
+  no(editUnique(html, 'span', plain('Yes', 'No'), false, { index: 1, count: 4 }), /3 <span> elements .*the page shows 4/);   // one is rendered by script
+  no(editUnique(html, 'span', plain('Yes', 'No'), false, { index: 3, count: 3 }), /3 <span> elements/);
+  no(editUnique(html, 'span', plain('Yes', 'No')), /3 <span> elements/);
+});
