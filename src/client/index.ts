@@ -394,7 +394,7 @@ async function boot() {
     shot.addEventListener('change', () => ls.set('shot', shot.checked ? '1' : '0'));
     const save = h('button', { class: 'btn primary', onclick: () => saveDraft(ta.value) }, 'Save');
     const direct: Direct | null = d.type === 'text' && config.directEdit && d.el && d.to !== undefined ? {
-      btn: h('button', { class: 'btn apply', disabled: true, title: 'Checking whether this text is written in source…', onclick: () => applyDirect(d) }, 'Apply to file'),
+      btn: h('button', { class: 'btn apply', disabled: true, title: 'Checking whether this text is written in source…', onclick: () => applyDirect(d, direct!, save) }, 'Apply to file'),
       why: h('div', { class: 'why', style: 'display:none' }),
     } : null;
     ta.addEventListener('keydown', e => {
@@ -453,25 +453,32 @@ async function boot() {
       direct.btn.className = 'btn apply primary';
       save.className = 'btn';
       save.textContent = 'Save note';
-    } else {
-      direct.btn.title = `Can't apply to source: ${r.reason}`;
-      direct.why.textContent = `Can't apply to the file: ${r.reason}.`;
-      direct.why.style.display = '';
-    }
+    } else refuse(direct, save, r.reason);
     placePop();
   }
 
-  async function applyDirect(d: Draft) {
+  // Can't write it: the note is the way (the old text-note flow), and the reason is shown.
+  function refuse(direct: Direct, save: HTMLButtonElement, reason: string) {
+    direct.btn.disabled = true;
+    direct.btn.className = 'btn apply';
+    direct.btn.title = `Can't apply to source: ${reason}`;
+    direct.why.textContent = `Can't apply to the file: ${reason}. Save it as a note for your agent.`;
+    direct.why.style.display = '';
+    save.className = 'btn primary';
+    placePop();
+  }
+
+  async function applyDirect(d: Draft, direct: Direct, save: HTMLButtonElement) {
     busy = true;
     try {
       const r = await api<EditResult>('POST', '/edit', editRequest(d));
-      if (!r.ok) { toast(`Not applied: ${r.reason}`, true, 5000); return; }
+      if (!r.ok) { refuse(direct, save, r.reason); return; }
       emit('sourceWritten', { file: r.file, line: r.line, from: d.from!, to: d.to! });
       cancelDraft();
       state.mode = 'idle'; persist(); renderAll();
       toast(`Written to ${r.file}${r.line ? ':' + r.line : ''}`);
     } catch (e) {
-      toast('Not applied: ' + (e as Error).message, true, 5000);
+      refuse(direct, save, (e as Error).message);
     } finally { busy = false; }
   }
 
@@ -495,8 +502,10 @@ async function boot() {
 
   async function saveDraft(text: string) {
     const d = draft!;
-    const body = text.trim();
+    let body = text.trim();
     if (d.type === 'comment' && !body) { toast('Write a comment first', true); return; }
+    // A rich edit saved as a note: the diff shows text only, so give the agent the wanted markup too.
+    if (d.type === 'text' && d.rich && d.html) body = [body, 'Wanted source (keeps the markup): `' + d.html.replace(/\s+/g, ' ').trim() + '`'].filter(Boolean).join('\n\n');
     const wantShot = ((popLayer.querySelector('.pop') as HTMLElement & { _shot?: HTMLInputElement })?._shot?.checked) ?? true;
     busy = true;
     popLayer.style.display = 'none';

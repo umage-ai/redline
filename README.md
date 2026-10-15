@@ -130,6 +130,10 @@ or `.gemini/`, `.github/copilot-instructions.md`…), or when you ask: `npx redl
 notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
 `init`, the prompt spells out the note format itself, so any agent can work from it.
 
+**MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
+with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
+`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`.
+
 ## What gets written
 
 ```
@@ -187,12 +191,8 @@ Releasing: on an up-to-date `main`, run `npm run release -- patch` (or `minor`, 
 version, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) then runs every check,
 publishes to npm through Trusted Publishing and creates the GitHub release with generated notes.
 
-Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions and learnings
-are in [docs/](docs/STATE.md).
-
-## Roadmap
-
-See [docs/STATE.md](docs/STATE.md#next-up).
+Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions, learnings and the
+roadmap are in [docs/](docs/STATE.md#next-up).
 
 ## License
 

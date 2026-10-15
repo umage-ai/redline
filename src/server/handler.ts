@@ -10,6 +10,7 @@ import { API_BASE } from '../shared/types.ts';
 import { createStore, type NotePatch, type NoteStore } from './store.ts';
 import { appOf, findRoot, real } from './root.ts';
 import { defaultWriters, resolveInside, runWriters, type EditRequest, type EditResult, type SourceWriter } from './writers.ts';
+import { registerServer } from './registry.ts';
 import { GUIDE_PATHS } from '../init.ts';
 
 export type Next = (err?: unknown) => void;
@@ -101,7 +102,7 @@ export function normaliseSource(file: string, root: string, serverRoot: string):
 }
 
 
-export function createHandler(opts: RedlineOptions & { serverRoot: string; clientFile: string }): { api: Middleware; inject: Middleware; store: NoteStore; root: string } {
+export function createHandler(opts: RedlineOptions & { serverRoot: string; clientFile: string }): { api: Middleware; inject: Middleware; store: NoteStore; root: string; register(url: string): void } {
   const root = opts.root ? path.resolve(opts.root) : findRoot(opts.serverRoot);
   const dir = opts.dir ?? '.redline';
   const app = opts.app ?? appOf(root, opts.serverRoot);
@@ -119,9 +120,14 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     catch (err) { console.warn(`[redline] hooks.${name} failed:`, err); }
   };
 
+  // Let `redline mcp` find this server (D22): registered once per host it is reached on.
+  const hosts = new Set<string>();
+  const register = (url: string) => { if (!hosts.has(url)) { hosts.add(url); void registerServer(root, dir, url, app); } };
+
   const api: Middleware = (req, res, next) => {
     const url = req.url ?? '';
     if (!url.startsWith(API_BASE + '/')) return next();
+    if (req.headers.host) register(`${(req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${req.headers.host}`);
     const [p] = url.slice(API_BASE.length).split('?');
     const method = req.method ?? 'GET';
 
@@ -206,7 +212,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     });
   };
 
-  return { api, inject: htmlInjector(SNAPSHOT + `<script type="module" src="${API_BASE}/client.js" ${MARK}></script>`), store, root };
+  return { api, inject: htmlInjector(SNAPSHOT + `<script type="module" src="${API_BASE}/client.js" ${MARK}></script>`), store, root, register };
 }
 
 /**

@@ -76,6 +76,13 @@ on an old note, check the UI still looks like the screenshot before changing any
    overlay picks up your file edits within a couple of seconds).
 6. Report what you applied and what you left open, with the questions.
 
+## With the `redline` MCP server
+
+If the `redline` MCP tools are available (`list_notes`, `get_note`, `update_note`), use them instead
+of reading and editing the files: they work with any note store, and `get_note` returns the
+screenshot. Same workflow: `list_notes` → `get_note` per open note → change the code →
+`update_note` with `done: true` and the one-line reply (or only a `reply` with your question).
+
 ## Rules
 
 - Never edit or delete the `<!-- redline {…} -->` line — the overlay uses it to place pins.

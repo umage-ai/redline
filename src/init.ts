@@ -8,6 +8,8 @@
 //   claude   .claude/skills/redline/SKILL.md, a CLAUDE.md section
 //   gemini   a GEMINI.md section, .gemini/commands/redline.toml (/redline)
 //   copilot  .github/prompts/redline.prompt.md (/redline in VS Code chat)
+// With --mcp, the `redline mcp` server (D22) is registered too: .mcp.json (Claude Code and
+// others), .vscode/mcp.json (copilot), .gemini/settings.json (gemini), .cursor/mcp.json (if .cursor/ exists).
 
 import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -49,6 +51,8 @@ export interface InitOptions {
   createMissing?: boolean;
   /** The skill text (skill/SKILL.md in the package). */
   skill: string;
+  /** Register the `redline mcp` server with this command line (D22). */
+  mcp?: { command: string; args: string[] };
 }
 
 /** Sets the repo up and returns one log line per step. Safe to re-run: files are refreshed, sections added once. */
@@ -103,6 +107,28 @@ export async function initRepo(root: string, opts: InitOptions): Promise<string[
   if (harnesses.includes('copilot')) {
     await write('.github/prompts/redline.prompt.md',
       `---\ndescription: Apply the open Redline UI feedback notes in .redline/\n---\n\n${TASK.replace(GUIDE, `[the redline skill](../../${GUIDE})`)}\n`);
+  }
+  if (opts.mcp) {
+    const { command, args } = opts.mcp;
+    /** Set one key in a JSON config, keeping everything else; leave files we can't parse alone. */
+    const merge = async (file: string, key: 'mcpServers' | 'servers', entry: Record<string, unknown>) => {
+      const abs = path.join(root, file);
+      let json: Record<string, Record<string, unknown>> = {};
+      if (existsSync(abs)) {
+        try { json = JSON.parse(await fs.readFile(abs, 'utf8')); }
+        catch { log.push(`! ${file}: couldn't parse it; add the redline MCP server by hand (${command} ${args.join(' ')})`); return; }
+      }
+      const same = JSON.stringify(json[key]?.redline) === JSON.stringify(entry);
+      json[key] = { ...json[key], redline: entry };
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, JSON.stringify(json, null, 2) + '\n');
+      log.push(same ? `· ${file}: MCP server up to date` : `✓ ${file}: added the redline MCP server`);
+    };
+    await merge('.mcp.json', 'mcpServers', { command, args });
+    if (harnesses.includes('copilot')) await merge('.vscode/mcp.json', 'servers', { type: 'stdio', command, args });
+    if (harnesses.includes('gemini')) await merge('.gemini/settings.json', 'mcpServers', { command, args });
+    if (existsSync(path.join(root, '.cursor'))) await merge('.cursor/mcp.json', 'mcpServers', { command, args });
+    log.push(`· Codex and other global configs: codex mcp add redline -- ${command} ${args.join(' ')}`);
   }
   return log;
 }

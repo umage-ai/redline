@@ -42,7 +42,7 @@ function memoryStore(): NoteStore & { notes: Note[] } {
   };
 }
 
-test('a custom store receives every note, hooks run after each change, nothing is written to .redline', async () => {
+test('a custom store receives every note, hooks run after each change, no markdown is written', async () => {
   const root = await tmpRepo();
   const store = memoryStore();
   const seen: string[] = [];
@@ -67,7 +67,7 @@ test('a custom store receives every note, hooks run after each change, nothing i
     assert.deepEqual(await s.call(`/notes/${n.id}`, { method: 'DELETE' }), { ok: true });
     assert.deepEqual(seen, ['create:Hi', 'update:true:{"done":true}', 'remove']);
     assert.equal((await s.raw('/assets/abc.png')).status, 404);
-    await assert.rejects(fs.stat(path.join(root, '.redline')));
+    await assert.rejects(fs.stat(path.join(root, '.redline/pages')));   // notes went to the custom store (only servers.json, D22)
   } finally { await s.close(); }
 });
 

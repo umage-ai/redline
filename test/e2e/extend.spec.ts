@@ -5,7 +5,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { FIXTURES, type Fixture } from './fixtures.ts';
-import { comment, mouseAt, openOverlay, resetNotes, ui } from './helpers.ts';
+import { comment, mouseAt, openOverlay, resetNotes, ui, waitForSave } from './helpers.ts';
 
 const events = (page: Page) => page.evaluate(() => (window as unknown as { extEvents: string[] }).extEvents);
 
@@ -108,5 +108,27 @@ test('rich editor: Ctrl+B bolds a word and the new <b> is written', async ({ pag
     });
     await ui(page, '.pop .btn.apply').click();
     await expect.poll(file.read).toContain('<a class="menu" href="#menu">menu</a> <b>daily</b></p>');
+  } finally { await file.restore(); }
+});
+
+test('if the write fails after the check, the edit falls back to a text note for the agent', async ({ page }) => {
+  const f = FIXTURES.react;   // hot reload keeps the overlay open (a static .html change reloads the page)
+  await resetNotes(f);
+  const file = await editable(f, 'src/EditZone.tsx');
+  try {
+    await openOverlay(page, f);
+    await edit(page, page.getByTestId('edit-heading'), async () => { await page.keyboard.press('Control+A'); await page.keyboard.type('Better heading'); });
+    const apply = ui(page, '.pop .btn.apply');
+    await expect(apply).toBeEnabled();
+    // someone (an agent, the reviewer's editor) changes the heading in source meanwhile
+    await fs.writeFile(path.join(f.dir, 'src/EditZone.tsx'), (await file.read()).replace('>Static heading<', '>Changed elsewhere<'));
+    await apply.click();
+    await expect(ui(page, '.pop .why')).toContainText(/Can't apply to the file: .*differs/);
+    await expect(apply).toBeDisabled();
+    const save = ui(page, '.pop .btn.primary');
+    await expect(save).toHaveText('Save note');
+    const saved = waitForSave(page);
+    await save.click();
+    expect(await saved).toMatchObject({ type: 'text', from: 'Static heading', to: 'Better heading' });
   } finally { await file.restore(); }
 });
