@@ -59,7 +59,7 @@ The .NET packages (`dotnet/`, not yet published) are `Umage.Redline.AspNetCore`,
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
 - Not supported yet (D23): Nuxt and Next.js (HTML isn't served through a Vite/connect stack we hook), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
 - `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.
-- .NET: apps under a `PathBase` aren't supported (the client calls `/__redline` at the root); hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN.
+- .NET: apps under a `PathBase` aren't supported (the client calls `/__redline` at the root); hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN. The C# writers predate D24–D26: six named entities, no `nth` for same-text elements, no `pageKey` in `/config`, GET-only (no HEAD) routes.
 
 ## Next up
 
