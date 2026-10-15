@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-10-15 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-10-16 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -102,3 +102,8 @@ Prune entries whose cause is gone from the code.
 - **Cause:** Astro's dev server registers new routes from a file watcher; a page written moments before `page.goto` can be requested before the route exists (it passed once, then 404'd).
 - **Fix:** the edit e2e pages are permanent fixture files (`test/fixtures/{vanilla/edit.html,astro/src/pages/edit.astro}`) that the test resets before and after, instead of creating and deleting them.
 - **Guard:** `extend.spec.ts` (direct edit cases).
+
+## L24 — A fixed bar centred with `left: 50%; translateX(-50%)` wraps at half the viewport
+- **Cause:** a shrink-to-fit fixed box only gets the room right of `left`, so once `flex-wrap` is allowed it wraps at 50% width (nowrap had hidden that).
+- **Fix:** `left: 8px; right: calc(8px + var(--panel-w)); width: fit-content; margin: 0 auto` centres it with the full room available.
+- **Guard:** `extend.spec.ts` ("toolbar moves clear of the panel": centred when closed, wraps beside the panel at 760 px).

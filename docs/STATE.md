@@ -1,6 +1,6 @@
 # State
 
-Last updated: 2026-10-15 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-10-16 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
@@ -23,9 +23,11 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
 | Pluggable note store (`store`) and server `hooks`; markdown store is the default (D19) | ✅ | `test/unit/extend.test.ts` |
-| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20) | ✅ static .html, React, SvelteKit, Astro; Vue unit only | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
+| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20); full HTML entity set, source entity spelling kept (D24); same-text elements on static .html picked by position (D25) | ✅ static .html, React, SvelteKit, Astro; Vue unit only | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
 | `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22) | ✅ | `mcp.test.ts` |
-| Overlay extensions (`extensions`, `window.redlineExtensions`): buttons + keys, panel sections, events (D21) | ✅ | `extend.test.ts`, `extend.spec.ts` |
+| Overlay extensions (`extensions`, `window.redlineExtensions`): buttons + keys, panel sections, events (D21); API v2: `removeButton`, `panelState` + `panel` event, `setPageKey` + `page` event (D26) | ✅ | `extend.test.ts`, `extend.spec.ts` |
+| Page key option `pageKey: 'route' \| 'path'` (hash routes as pages, or not) (D26) | ✅ | `page.test.ts`, `extend.test.ts`, `extend.spec.ts` |
+| Toolbar centred left of the open notes panel, wraps when short of room (phones: one scrolling row); `HEAD` answered on GET routes | ✅ | `extend.spec.ts`, `mobile.spec.ts`, `extend.test.ts` |
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
 | Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
@@ -52,8 +54,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 
 1. Verify a dev server behind a reverse proxy (HTML through the proxy, `/__redline` routing, HMR unaffected).
    Run the publish workflow once on GitHub (dry run): the e2e and package tests have only run on Windows so far.
-2. Move the presentations editor (`../presentations/shared/editor.js`) onto Redline: its deck actions as an extension (D21),
-   per-deck `REVIEW.md` as a store or layout option (D19); its static .html slides already work with the rich editor (D20).
+2. Presentations (static Reveal decks on `redlineMiddleware` + a deck writer + an extension): drop its workarounds now
+   that Redline has the entity set, nth, API v2 and `pageKey` (D24–D26).
 3. Chrome extension reusing `dist/client.js` + `captureVisibleTab`, for non-Vite apps and staging (with a `redline serve` store).
 4. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
 5. Try `redline mcp` with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.

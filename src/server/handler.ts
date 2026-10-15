@@ -51,6 +51,12 @@ export interface RedlineOptions {
    * { url } is loaded from that URL instead (e.g. { url: '/src/redline.ext.ts' } to let Vite compile it).
    */
   extensions?: (string | { url: string })[];
+  /**
+   * What groups notes into pages. 'route' (default): the path, plus the hash when it is a
+   * hash route (`#/settings`). 'path': the path only, so a hash-routed app (a slide deck's
+   * `#/3`) keeps one notes file and one pin set. Extensions can set a function (`rl.setPageKey`).
+   */
+  pageKey?: 'route' | 'path';
 }
 
 const MARK = 'data-redline-client';
@@ -110,7 +116,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route' };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);
@@ -130,17 +136,19 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     if (req.headers.host) register(`${(req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${req.headers.host}`);
     const [p] = url.slice(API_BASE.length).split('?');
     const method = req.method ?? 'GET';
+    // HEAD answers like GET (Node drops the body): link checkers and proxies probe with it.
+    const read = method === 'GET' || method === 'HEAD';
 
     (async () => {
-      if (method === 'GET' && p === '/client.js') {
+      if (read && p === '/client.js') {
         res.setHeader('content-type', 'text/javascript; charset=utf-8');
         res.setHeader('cache-control', 'no-store');
         res.end(await fs.readFile(opts.clientFile));
         return;
       }
       // guide: the agent guide `redline init` installed, so the copied prompt can point at it.
-      if (method === 'GET' && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
-      if (method === 'GET' && p.startsWith('/assets/')) {
+      if (read && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
+      if (read && p.startsWith('/assets/')) {
         const a = await store.asset(p.slice(8));
         if (!a) return json(res, 404, { error: 'not found' });
         res.setHeader('content-type', a.type);
@@ -149,7 +157,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return;
       }
       const ext = /^\/ext\/(\d+)\.js$/.exec(p);
-      if (method === 'GET' && ext) {
+      if (read && ext) {
         const file = extFiles[+ext[1]];
         if (!file || !existsSync(file)) return json(res, 404, { error: 'not found' });
         res.setHeader('content-type', 'text/javascript; charset=utf-8');
@@ -157,7 +165,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         res.end(await fs.readFile(file));
         return;
       }
-      if (method === 'GET' && p === '/notes') {
+      if (read && p === '/notes') {
         const version = await store.version();
         if (req.headers['if-none-match'] === `"${version}"`) { res.statusCode = 304; res.end(); return; }
         res.setHeader('etag', `"${version}"`);
@@ -199,6 +207,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         const edit: EditRequest = {
           from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
           tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
+          nth: Number.isInteger(body.nth?.index) && Number.isInteger(body.nth?.count) ? { index: body.nth!.index, count: body.nth!.count } : undefined,
         };
         if (edit.source) edit.source.file = normaliseSource(edit.source.file, root, opts.serverRoot);
         const dryRun = inspect || /[?&]dry=1/.test(url);

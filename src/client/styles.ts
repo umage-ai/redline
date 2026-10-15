@@ -23,8 +23,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   background: var(--ink); color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
 
 /* toolbar */
+/* Centred in the room left of the notes panel (--panel-w, set while it is open); wraps when that room is short. */
 .bar {
-  position: fixed; left: 50%; bottom: calc(16px + var(--lift, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 2px;
+  position: fixed; left: 8px; right: calc(8px + var(--panel-w, 0px)); width: fit-content; margin: 0 auto; bottom: calc(16px + var(--lift, 0px));
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px;
   padding: 4px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
   box-shadow: 0 8px 30px rgba(0,0,0,.35); pointer-events: auto; white-space: nowrap;
 }
@@ -156,7 +158,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .zoom img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 
 /* toast */
-.toast { position: fixed; left: 50%; bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
+.toast { position: fixed; left: calc((100vw - var(--panel-w, 0px)) / 2); bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
 .busy { position: fixed; inset: 0; cursor: progress; pointer-events: auto; }
@@ -184,7 +186,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 /* phones: fit everything inside the viewport */
 @media (max-width: 560px) {
   .launcher { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
-  .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
+  /* phones: one row that scrolls sideways (a wrapped bar would cover the page) */
+  .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); flex-wrap: nowrap; justify-content: flex-start; max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
   .bar .brand span, .bar .brand + .sep { display: none; }
   .bar .brand { padding: 0 6px; }
   .bar button { padding: 6px 9px; }

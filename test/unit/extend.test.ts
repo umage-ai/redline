@@ -25,7 +25,7 @@ async function serve(root: string, opts: RedlineOptions = {}) {
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/__redline`;
   const raw = (p: string, init?: RequestInit) => fetch(base + p, { ...init, headers: { 'content-type': 'application/json', 'x-redline': '1' } });
   const call = async (p: string, init?: RequestInit) => (await raw(p, init)).json();
-  return { call, raw, close: () => new Promise(r => server.close(r)) };
+  return { base, call, raw, close: () => new Promise(r => server.close(r)) };
 }
 
 function memoryStore(): NoteStore & { notes: Note[] } {
@@ -137,5 +137,42 @@ test('extensions: files are served under /__redline/ext/, URLs passed through, b
     assert.match(r.headers.get('content-type') ?? '', /javascript/);
     assert.match(await r.text(), /addButton/);
     assert.equal((await s.raw('/ext/1.js')).status, 404);
+  } finally { await s.close(); }
+});
+
+test('HEAD is answered on the GET routes (client.js, config, notes), mutations still need the header', async () => {
+  const root = await tmpRepo();
+  const s = await serve(root);
+  try {
+    for (const p of ['/client.js', '/config', '/notes']) {
+      const r = await fetch(s.base + p, { method: 'HEAD' });
+      assert.equal(r.status, 200, p);
+      assert.equal(await r.text(), '');
+    }
+    assert.match((await fetch(s.base + '/client.js', { method: 'HEAD' })).headers.get('content-type') ?? '', /javascript/);
+    assert.equal((await fetch(s.base + '/notes', { method: 'POST' })).status, 403);
+  } finally { await s.close(); }
+});
+
+test('pageKey option reaches /config (default route)', async () => {
+  const root = await tmpRepo();
+  for (const [opt, want] of [[undefined, 'route'], ['path', 'path']] as const) {
+    const s = await serve(root, { pageKey: opt });
+    try { assert.equal((await s.call('/config')).pageKey, want); } finally { await s.close(); }
+  }
+});
+
+test('direct edit on static .html: nth picks one of several same-text elements; inspect reports entity spellings', async () => {
+  const root = await tmpRepo();
+  const page = '<body>\n<span>Yes &mdash; ok</span>\n<span>Yes &mdash; ok</span>\n</body>';
+  await fs.writeFile(path.join(root, 'index.html'), page);
+  const s = await serve(root, { directEdit: true });
+  const edit = (body: object, q = '') => s.call('/edit' + q, { method: 'POST', body: JSON.stringify({ from: 'Yes — ok', tag: 'span', url: 'http://x/', ...body }) });
+  try {
+    assert.match((await edit({ to: 'No — ok' }, '?dry=1')).reason, /2 <span> elements/);
+    const insp = await edit({ nth: { index: 1, count: 2 } }, '?inspect=1');
+    assert.deepEqual(insp.inspect.spell, { '—': '&mdash;' });
+    assert.deepEqual(await edit({ to: 'No — ok', nth: { index: 1, count: 2 } }), { ok: true, file: 'index.html', line: 3, writer: 'static-html' });
+    assert.equal(await fs.readFile(path.join(root, 'index.html'), 'utf8'), page.replace(/Yes &mdash; ok(?=<\/span>\n<\/body>)/, 'No &mdash; ok'));
   } finally { await s.close(); }
 });

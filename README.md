@@ -85,7 +85,7 @@ export default defineConfig({ integrations: [redline()] })
 Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, jsxSource: true })`.
 - `root` is where notes go and what source paths are relative to. It defaults to the nearest folder with `.git`.
 - Set `launcher: false` to hide the small round button and rely on the hotkey only.
-- `app` names the app in a monorepo; it defaults to the dev server's folder relative to `root`, e.g. `apps/web`.
+- `app` names the app in a monorepo; it defaults to the dev server's folder relative to `root`, e.g. `apps/web`. `pageKey: 'path'` makes hash routes (a deck's `#/3`) share one notes file.
 
 **Monorepos** work without extra setup. Each app adds the plugin to its own dev server as above. Notes
 from every app go to one `.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`),
@@ -100,14 +100,14 @@ All optional and dev-only; without them Redline behaves as described above. Type
 `SourceWriter`, …) come from `@umage.ai/redline/server`.
 
 - **`directEdit: true`**: the text popover gets **Apply to file** when the edited text is static in source (Astro,
-  Svelte, JSX, Vue, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it.
+  Svelte, JSX, Vue, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it. Entities stay as the file wrote them (`&mdash;`); repeated text on a static page is told apart by position.
   Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
   save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
 - **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`), or `({ root, dir, app }) => store`,
   to keep notes elsewhere than markdown. **`hooks`**: `onCreate`, `onUpdate`, `onRemove`, `onSourceWrite`, run after each change.
 - **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
-  A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it. Scripts can also push
-  onto `window.redlineExtensions`.
+  A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto
+  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event.
 
 ## Coding agents
 

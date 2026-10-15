@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-10-15 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-10-16 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -107,3 +107,18 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** a stdio MCP server in the CLI (`src/mcp.ts`, hand-rolled JSON-RPC, no SDK dependency) with `list_notes`, `get_note` (note as the markdown section + screenshot image) and `update_note` (reply, done). It finds dev servers in `<root>/.redline/servers.json` (each registers on listen and on its first `/__redline` request; dead pids pruned) and uses the first that answers. With none, it uses the markdown store directly; with `--url`, it fails clearly instead. `init --mcp` registers it (`.mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json`, `.cursor/mcp.json`), as `node <path to the installed cli.js> mcp` when inside the repo (no `npx`/`cmd /c` issues on Windows).
 - **Why:** with a custom store (D19) the files aren't there for the agent. Going through the dev server's API keeps one source of truth for every store, and is the same API a hosted version would expose. The skill (files) stays the zero-setup path; MCP is opt-in.
 - **Revisit if:** agents need notes while no dev server runs and the store isn't markdown (then stores need a CLI-side factory), or MCP gains a standard way to push note changes (subscriptions).
+
+## D24 — Full HTML entity table in the server bundle; plain edits keep the file's entity spelling (2026-10-16)
+- **Decision:** `decodeEntities` (`src/server/edit.ts`) knows all 2125 WHATWG named references, legacy names without `;`, and numeric ones (invalid → U+FFFD), from a packed table generated once into `src/server/entities.ts` (no runtime dependency). Plain and rich edits write a character the way the element's source already spelled it (`—` → `&mdash;`); `/edit?inspect=1` returns that map as `spell`.
+- **Why:** static decks use `&mdash;`/`&middot;`/`&rarr;` everywhere; with six known names their text never matched the page, and writes turned `&mdash;` into raw `—`. The table is ~29 KB per Node bundle (server/vite/astro), server-only and dev-only; the client bundle doesn't include it.
+- **Revisit if:** bundle size matters (ship the HTML4 subset), or the HTML standard adds names.
+
+## D25 — Same-text elements on static pages: pick by position only when the counts agree (2026-10-16)
+- **Decision:** the overlay sends `nth: { index, count }` (position among same-tag elements with the same text, in document order) when there are several. `staticHtmlWriter` uses it only if the file has exactly `count` matching static elements; otherwise it still refuses.
+- **Why:** a selector path would break on any wrapper the runtime adds; equal counts are a cheap proof that source order and DOM order line up. A mismatch (one copy rendered by script) means the index can't be trusted.
+- **Revisit if:** framework writers need it (they use line:col and don't).
+
+## D26 — Extension API v2, page key option, toolbar beside the panel (2026-10-16)
+- **Decision:** `RedlineApi.version` is 2 (additive): `removeButton(id)`, `panelState()` and a `panel` event `{ open, width }`, `setPageKey(fn)` (fn gets the location and the built-in key; nullish keeps it) and a `page` event. Option `pageKey: 'route'` (default, unchanged: path + `#/…` routes) or `'path'` reaches the client via `/config`. The toolbar centres in the room left of the open panel (`--panel-w`) and wraps there; phones keep one scrolling row, and a full-width panel doesn't move it.
+- **Why:** a host page (a deck) must lay itself out beside the panel and group all slides as one page; a wide bar with extension buttons sat under the panel.
+- **Revisit if:** route-pattern grouping lands (it could become a third `pageKey` mode).

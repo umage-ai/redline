@@ -132,3 +132,77 @@ test('if the write fails after the check, the edit falls back to a text note for
     expect(await saved).toMatchObject({ type: 'text', from: 'Static heading', to: 'Better heading' });
   } finally { await file.restore(); }
 });
+
+test('static .html: one of several same-text elements is written by position, keeping &mdash;', async ({ page }) => {
+  const f = FIXTURES.vanilla;
+  await resetNotes(f);
+  const file = await editable(f, 'edit.html');
+  try {
+    await openOverlay(page, f, '/edit.html');
+    await edit(page, page.getByTestId('same').locator('p').nth(1), async () => {
+      await page.keyboard.press('Control+A');
+      await page.keyboard.type('No — ok');
+    });
+    const apply = ui(page, '.pop .btn.apply');
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    await expect.poll(file.read).toContain('<p>Yes &mdash; ok</p><p>No &mdash; ok</p><p>Yes &mdash; ok</p>');
+  } finally { await file.restore(); }
+});
+
+type Win = { rl: import('../../src/shared/extension.ts').RedlineApi; panelEvents: { open: boolean; width: number }[]; pageEvents: string[] };
+
+test('extension API v2: removeButton, panel events and width; the toolbar moves clear of the panel', async ({ page }) => {
+  const f = FIXTURES.vanilla;
+  await resetNotes(f);
+  await openOverlay(page, f);
+  const ping = ui(page, '.bar button[data-ext="ping"]');
+  await expect(ping).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as Win).rl.version)).toBe(2);
+
+  await page.keyboard.press('n');
+  const panel = ui(page, '.panel');
+  await expect(panel).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as Win).panelEvents.at(-1))).toEqual({ open: true, width: 380 });
+  expect(await page.evaluate(() => (window as unknown as Win).rl.panelState())).toEqual({ open: true, width: 380 });
+
+  const clear = async () => {
+    const bar = (await ui(page, '.bar').boundingBox())!, p = (await panel.boundingBox())!;
+    expect(bar.x).toBeGreaterThanOrEqual(0);
+    expect(bar.x + bar.width).toBeLessThanOrEqual(p.x);
+  };
+  await clear();
+  await page.setViewportSize({ width: 760, height: 800 });   // too narrow for one row beside the panel: it wraps
+  await clear();
+  expect((await ui(page, '.bar').boundingBox())!.height).toBeGreaterThan(50);
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  await page.keyboard.press('n');
+  await expect.poll(() => page.evaluate(() => (window as unknown as Win).panelEvents.at(-1))).toEqual({ open: false, width: 0 });
+  const bar = (await ui(page, '.bar').boundingBox())!;
+  expect(Math.abs(bar.x + bar.width / 2 - 640)).toBeLessThan(2);   // centred again
+
+  await page.evaluate(() => (window as unknown as Win).rl.removeButton('ping'));
+  await expect(ping).toHaveCount(0);
+  await page.keyboard.press('p');   // its key is gone too
+  expect(await page.evaluate(() => (window as unknown as { pinged?: number }).pinged)).toBeUndefined();
+});
+
+test('setPageKey: a hash-routed page keeps one notes page when an extension says so', async ({ page }) => {
+  const f = FIXTURES.vanilla;
+  await resetNotes(f);
+  await openOverlay(page, f, '/#/3');
+  await expect(ui(page, '.bar button[data-ext="ping"]')).toBeVisible();
+  const key = () => page.evaluate(() => (window as unknown as Win).rl.page());
+  expect(await key()).toBe('/#/3');   // default: a hash route is its own page
+  await page.evaluate(() => (window as unknown as Win).rl.setPageKey((loc, builtIn) => builtIn.replace(/#.*$/, '')));
+  expect(await key()).toBe('/');
+  expect(await page.evaluate(() => (window as unknown as Win).pageEvents)).toEqual(['/']);
+  const saved = await comment(page, page.getByTestId('agent-save'), 'Same notes for every slide.');
+  expect(saved.page).toBe('/');
+  await page.evaluate(() => { location.hash = '#/4'; });
+  await page.waitForTimeout(700);   // the route check runs every 500 ms
+  expect(await key()).toBe('/');
+  await page.evaluate(() => (window as unknown as Win).rl.setPageKey(null));
+  expect(await key()).toBe('/#/4');
+});
