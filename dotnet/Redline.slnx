@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Umage.Redline.AspNetCore/Umage.Redline.AspNetCore.csproj" />
+    <Project Path="src/Umage.Redline.Build/Umage.Redline.Build.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Umage.Redline.Tests/Umage.Redline.Tests.csproj" />
+  </Folder>
+</Solution>

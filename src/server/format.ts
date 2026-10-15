@@ -61,7 +61,7 @@ function anchorJson(n: Note): string {
     meta[k] = v;
   }
   // "--" would end the HTML comment early. U+2028/2029 end a line for ANCHOR_RE's `.`, which
-  // dropped the whole note on the next read (L21).
+  // dropped the whole note on the next read (L30).
   return JSON.stringify(meta).replace(/--/g, '\\u002d\\u002d').replace(/[\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16));
 }
 
