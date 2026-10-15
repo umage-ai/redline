@@ -28,6 +28,10 @@ export default defineConfig({
     { command: 'dotnet run --project samples/RazorSample --no-launch-profile --urls http://localhost:5210', cwd: here, url: 'http://localhost:5210/__redline/config', reuseExistingServer: true, timeout: 240_000, env },
     { command: 'dotnet run --project samples/BlazorSample/BlazorSample --no-launch-profile --urls http://localhost:5211', cwd: here, url: 'http://localhost:5211/__redline/config', reuseExistingServer: true, timeout: 240_000, env },
     // Optimizely CMS 12 needs SQL Server LocalDB: opt in with REDLINE_E2E_OPTIMIZELY=1.
-    ...(process.env.REDLINE_E2E_OPTIMIZELY ? [{ command: 'dotnet run --project samples/OptimizelySample --no-launch-profile --urls http://localhost:5212', cwd: here, url: 'http://localhost:5212/__redline/config', reuseExistingServer: true, timeout: 300_000, env }] : []),
+    // The same sample in online mode on 5213 (only signed-in editors get Redline; /dev/login signs in).
+    ...(process.env.REDLINE_E2E_OPTIMIZELY ? [
+      { command: 'dotnet run --project samples/OptimizelySample --no-launch-profile --urls http://localhost:5212', cwd: here, url: 'http://localhost:5212/__redline/config', reuseExistingServer: true, timeout: 300_000, env },
+      { command: 'dotnet run --no-build --project samples/OptimizelySample --no-launch-profile --urls http://localhost:5213', cwd: here, url: 'http://localhost:5213/', reuseExistingServer: true, timeout: 300_000, env: { ...env, Redline__Online: 'true' } },
+    ] : []),
   ],
 });

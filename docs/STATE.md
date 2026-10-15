@@ -41,7 +41,7 @@ The .NET packages (`dotnet/`, not yet published) are `Umage.Redline.AspNetCore`,
 | .NET (`dotnet/`, D30): API, markdown + SQL stores, hooks, Razor writer, servers.json, streaming injection; .NET 8/9/10 | ✅ | `dotnet test dotnet/tests/Umage.Redline.Tests` (net8.0, net10.0) |
 | Razor Pages, MVC, Blazor Server/WebAssembly/streaming/enhanced nav: source stamps (D32), notes, `.cshtml` direct edits, dev HTTP MCP | ✅ samples on 5210/5211 | `npx playwright test -c dotnet/playwright.config.ts` |
 | Optimizely CMS 12 (13 compiles): CMS content/property in notes, drafts from text mode, no overlay in edit mode (D33) | ✅ sample on 5212 (LocalDB) | `optimizely.spec.ts` with `REDLINE_E2E_OPTIMIZELY=1` |
-| Online mode: role/policy-gated overlay and API, SQL store with author, remote MCP with site/personal tokens (D34–D36) | ✅ unit (TestServer, SQLite; SQL Server with `REDLINE_TEST_SQLSERVER`) | `OnlineTests.cs`, `StoreTests.cs`; not yet on a deployed site |
+| Online mode: role/policy-gated overlay and API, SQL store with author, remote MCP with site/personal tokens (D34–D36) | ✅ unit (TestServer, SQLite; SQL Server with `REDLINE_TEST_SQLSERVER`); browser on the Optimizely sample (LocalDB, panel token → MCP) | `OnlineTests.cs`, `StoreTests.cs`, `online.spec.ts`; not yet on a deployed site |
 | NuGet packages: `dotnet pack dotnet/Redline.slnx` | ✅ installed into a fresh Razor Pages app (stamps + overlay) | manual; no package test script yet |
 | Pixel-perfect tab capture (getDisplayMedia) | ⚠️ manual only | needs a permission prompt, not automatable |
 
