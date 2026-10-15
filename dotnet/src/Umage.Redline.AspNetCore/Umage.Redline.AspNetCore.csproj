@@ -13,9 +13,19 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- Source stamps (data-redline-src on Razor markup, Debug builds only) come with the build package. -->
+  <!--
+    Source stamps (data-redline-src on Razor markup, Debug builds only): this package carries the
+    same targets and task as Umage.Redline.Build (buildTransitive, so they reach the site through
+    Umage.Redline.Optimizely too). The project reference only orders the build.
+  -->
+  <PropertyGroup>
+    <RedlineTaskDll>$(MSBuildThisFileDirectory)..\Umage.Redline.Build\bin\$(Configuration)\netstandard2.0\Umage.Redline.Build.dll</RedlineTaskDll>
+  </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Umage.Redline.Build\Umage.Redline.Build.csproj" PrivateAssets="none" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Umage.Redline.Build\Umage.Redline.Build.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <None Include="..\Umage.Redline.Build\buildTransitive\Umage.Redline.Build.targets" Pack="true" PackagePath="buildTransitive\Umage.Redline.AspNetCore.targets" Link="build\Umage.Redline.Build.targets" />
+    <None Include="..\Umage.Redline.Build\buildTransitive\Umage.Redline.Build.targets" Pack="true" PackagePath="build\Umage.Redline.AspNetCore.targets" Visible="false" />
+    <None Include="$(RedlineTaskDll)" Pack="true" PackagePath="tasks\netstandard2.0\" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

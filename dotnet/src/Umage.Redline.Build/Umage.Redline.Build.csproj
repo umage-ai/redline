@@ -10,6 +10,7 @@
     <DevelopmentDependency>true</DevelopmentDependency>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);RedlinePackTask</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,8 +21,14 @@
     <InternalsVisibleTo Include="Umage.Redline.Tests" />
     <None Include="build\*.targets" Pack="true" PackagePath="build\" />
     <None Include="buildTransitive\*.targets" Pack="true" PackagePath="buildTransitive\" />
-    <None Include="$(OutputPath)$(TargetFramework)\Umage.Redline.Build.dll" Pack="true" PackagePath="tasks\netstandard2.0\" Visible="false" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
   </ItemGroup>
+
+  <!-- The task DLL goes to tasks/, where the targets load it from (not lib/: nothing to reference). -->
+  <Target Name="RedlinePackTask">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(TargetPath)" PackagePath="tasks/$(TargetFramework)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

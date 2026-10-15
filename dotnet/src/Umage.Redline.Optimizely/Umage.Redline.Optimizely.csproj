@@ -13,7 +13,8 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="..\Umage.Redline.AspNetCore\Umage.Redline.AspNetCore.csproj" />
+    <!-- PrivateAssets none: the source-stamp targets (buildTransitive) flow on to the site. -->
+    <ProjectReference Include="..\Umage.Redline.AspNetCore\Umage.Redline.AspNetCore.csproj" PrivateAssets="none" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
   </ItemGroup>
 
