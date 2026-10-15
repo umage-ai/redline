@@ -1,0 +1,13 @@
+@model string[]
+@{
+    ViewData["Title"] = "MVC";
+    Layout = "/Pages/Shared/_Layout.cshtml";
+}
+
+<h2 data-testid="mvc-title">An MVC view</h2>
+<ul>
+    @foreach (var item in Model)
+    {
+        <li>@item</li>
+    }
+</ul>

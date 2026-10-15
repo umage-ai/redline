@@ -1,0 +1,44 @@
+<!--
+  Redline source stamps (D32): in Debug builds, compile copies of the .cshtml/.razor files whose
+  HTML elements carry data-redline-src="path:line:col", so a note names the file and line that
+  rendered the element. Release builds, design-time builds and dotnet watch compile the originals.
+
+  Opt out:  <RedlineSourceStamps>false</RedlineSourceStamps>
+  Force on: <RedlineSourceStamps>true</RedlineSourceStamps> (any configuration)
+-->
+<Project>
+  <PropertyGroup>
+    <RedlineBuildTasksAssembly Condition="'$(RedlineBuildTasksAssembly)' == ''">$(MSBuildThisFileDirectory)..\tasks\netstandard2.0\Umage.Redline.Build.dll</RedlineBuildTasksAssembly>
+    <_RedlineStampsOn Condition="'$(RedlineSourceStamps)' == 'true'">true</_RedlineStampsOn>
+    <_RedlineStampsOn Condition="'$(RedlineSourceStamps)' == '' and '$(Configuration)' == 'Debug' and '$(DesignTimeBuild)' != 'true' and '$(DOTNET_WATCH)' != '1'">true</_RedlineStampsOn>
+  </PropertyGroup>
+
+  <UsingTask TaskName="Umage.Redline.Build.StampRazorFiles" AssemblyFile="$(RedlineBuildTasksAssembly)" Condition="'$(RedlineTaskHost)' != 'true'" />
+  <UsingTask TaskName="Umage.Redline.Build.StampRazorFiles" AssemblyFile="$(RedlineBuildTasksAssembly)" TaskFactory="TaskHostFactory" Condition="'$(RedlineTaskHost)' == 'true'" />
+
+  <Target Name="RedlineStampRazorFiles"
+          AfterTargets="_PrepareRazorSourceGenerators"
+          Condition="'$(_RedlineStampsOn)' == 'true'">
+    <PropertyGroup>
+      <_RedlineStampDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(IntermediateOutputPath)redline-src\'))</_RedlineStampDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_RedlineRazorInput Include="@(AdditionalFiles)" Condition="'%(Extension)' == '.cshtml' or '%(Extension)' == '.razor'" />
+    </ItemGroup>
+
+    <StampRazorFiles Files="@(_RedlineRazorInput)" OutputDirectory="$(_RedlineStampDir)" ProjectDirectory="$(MSBuildProjectDirectory)">
+      <Output TaskParameter="Stamped" ItemName="_RedlineRazorStamped" />
+    </StampRazorFiles>
+
+    <ItemGroup>
+      <AdditionalFiles Remove="@(_RedlineRazorInput)" />
+      <AdditionalFiles Include="@(_RedlineRazorStamped)" />
+    </ItemGroup>
+
+    <!-- Lines are unchanged in the copies, so map them back: PDBs (breakpoints) point at the originals. -->
+    <PropertyGroup>
+      <PathMap Condition="'$(PathMap)' != ''">$(PathMap),$(_RedlineStampDir)=$(MSBuildProjectDirectory)\</PathMap>
+      <PathMap Condition="'$(PathMap)' == ''">$(_RedlineStampDir)=$(MSBuildProjectDirectory)\</PathMap>
+    </PropertyGroup>
+  </Target>
+</Project>

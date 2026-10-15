@@ -6,7 +6,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { SourceLoc } from '../shared/types.ts';
+import type { CmsRef, SourceLoc } from '../shared/types.ts';
 import { apply, locateAt, locateUnique, spellings, type Located, type Nth, type Token } from './edit.ts';
 
 export interface EditRequest {
@@ -18,6 +18,7 @@ export interface EditRequest {
   url: string;           // page URL, for writers that map pages to files
   /** Several elements with this tag and text on the page: which one (static .html has no source location). */
   nth?: Nth;
+  cms?: CmsRef;          // CMS content/property behind the element, when a CMS integration stamped it
 }
 
 export type EditResult =
@@ -98,7 +99,7 @@ export function markupWriter(): SourceWriter {
 
 /**
  * Plain .html pages served from disk (no framework metadata): the one element with exactly this
- * text, or the eq.nth one when the file has as many such elements as the page.
+ * text, or the `req.nth` one when the file has as many such elements as the page.
  */
 export function staticHtmlWriter(): SourceWriter {
   return {

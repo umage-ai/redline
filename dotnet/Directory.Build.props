@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- The repo root: the browser client (dist/client.js) and the shared golden fixtures (test/golden) live there. -->
+    <RedlineRepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RedlineRepoRoot>
+
+    <Version>0.1.0</Version>
+    <Authors>umage.ai</Authors>
+    <Company>umage.ai</Company>
+    <Copyright>Copyright (c) umage.ai</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/umage-ai/redline</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/umage-ai/redline.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>redline;feedback;review;overlay;razor;blazor;aspnetcore;ai-agent;mcp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+</Project>

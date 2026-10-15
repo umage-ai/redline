@@ -1,0 +1,32 @@
+{
+  "page": "/agents",
+  "url": "http://localhost:5173/agents",
+  "notes": [
+    {
+      "id": "mg1abc2def", "type": "comment", "page": "/agents", "url": "http://localhost:5173/agents", "title": "Agents · Acme",
+      "at": "2026-10-13 10:00",
+      "target": {
+        "selector": "main > section:nth-of-type(2) > [data-testid=\"save\"]", "testid": "save", "xpath": "/html/body/main/section[2]/button",
+        "tag": "button", "text": "Save -- draft", "role": "button", "name": "Save draft",
+        "html": "<button data-testid=\"save\" class=\"btn\">Save -- draft</button>",
+        "source": { "file": "src/Form.svelte", "line": 42, "col": 7 }, "components": ["Form", "Page"],
+        "box": [120, 340, 96, 32], "fx": 0.5, "fy": 0.25
+      },
+      "viewport": [1280, 800, 1.5], "scroll": [0, 120], "theme": "dark",
+      "screenshot": "../assets/mg1abc2def.png",
+      "errors": ["TypeError: x is undefined"],
+      "body": "Make this secondary.\n\nSecond paragraph with `code` and <b>html</b>.", "reply": "", "done": false
+    },
+    {
+      "id": "mg1abc3xyz", "type": "text", "page": "/agents", "url": "http://localhost:5173/agents", "at": "2026-10-13 10:05",
+      "target": { "tag": "h1", "text": "Old title", "id": "title" },
+      "from": "Old\ntitle", "to": "New title “quoted” & <tagged>",
+      "body": "", "reply": "Changed in src/Page.astro:3.\nSecond reply line.", "done": true
+    },
+    {
+      "id": "mg1abc4sk", "type": "sketch", "page": "/agents", "url": "http://localhost:5173/agents", "at": "2026-10-13 10:06",
+      "whole": true, "sketch": "../assets/mg1abc4sk.svg", "screenshot": "../assets/mg1abc4sk.png",
+      "body": "Move the chart here →", "reply": "", "done": false
+    }
+  ]
+}

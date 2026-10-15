@@ -15,11 +15,10 @@ dev server as markdown under `.redline/` with everything an agent needs to find 
 - recent console errors
 - a screenshot with the target outlined
 
-Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with
-the bundled `redline` skill. It ticks each note off and
-replies inline, and the replies show up live in the overlay.
+Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with the bundled
+`redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
 
-It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, and with Angular (CLI 17+). Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`).
+It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Angular (CLI 17+), and with ASP.NET Core, Blazor and Optimizely via NuGet. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`, Debug builds).
 
 ## Modes
 
@@ -46,8 +45,7 @@ and the panel goes full width. Use **↑ Parent** and **Page** in place of `Alt`
 
 ![The notes panel with an agent's reply on a done note](docs/images/panel.png)
 
-<sub>Screenshots are from the fictional demo app in [`examples/demo`](examples/demo). Run it with `npm run demo`;
-regenerate the images with `npm run screenshots`.</sub>
+<sub>Screenshots are from the fictional demo app in [`examples/demo`](examples/demo) (`npm run demo`; regenerate with `npm run screenshots`).</sub>
 
 ## Setup in a repo
 
@@ -78,6 +76,9 @@ In dev it turns on Angular's template source locations, so notes point at the te
 ```json
 "serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
 ```
+
+**ASP.NET Core, Blazor, Optimizely CMS**: NuGet `Umage.Redline.AspNetCore` / `Umage.Redline.Optimizely`, then `AddRedline()`.
+Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serves editors on a live site. See [dotnet/README.md](dotnet/README.md).
 
 **Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
 **Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import its `dist/vite.js` directly.
@@ -152,9 +153,8 @@ Make this full-width on mobile only.
 > Added `sm:w-auto`; full width below 640px (LoginForm.tsx:48).
 ```
 
-The markdown is the source of truth. Every write from the overlay re-reads the file first,
-so an agent's ticks and replies are never overwritten. The overlay polls about every 2 s,
-which is why replies appear without a reload.
+The markdown is the source of truth. Every write from the overlay re-reads the file first, so an agent's ticks and
+replies are never overwritten. The overlay polls about every 2 s, which is why replies appear without a reload.
 
 ## How source locations are found
 
@@ -166,6 +166,7 @@ which is why replies appear without a reload.
 | Solid, Preact (Vite) | The same JSX stamp | The components the stamped elements are written in |
 | Vue 3 (Vite) | The plugin stamps HTML elements in `.vue` templates during dev | `__vueParentComponent` chain |
 | Angular 17+ | `data-ng-source-location` (Angular's `enableTemplateSourceLocations`, turned on by the builder in dev) | `ng.getOwningComponent`, then the host components around it |
+| Razor, Blazor (.NET) | Debug builds compile `.cshtml`/`.razor` copies stamped with `data-redline-src`; Optimizely adds CMS content + property | Stamped files up the tree |
 | Anything else | n/a | n/a. The selector, test id and text still identify the element. |
 
 ## Screenshots
@@ -187,9 +188,8 @@ npm run test:package   # install the packed tarball into fresh apps per framewor
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app
 ```
 
-Releasing: on an up-to-date `main`, run `npm run release -- patch` (or `minor`, `major`, `x.y.z`). It bumps the
-version, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) then runs every check,
-publishes to npm through Trusted Publishing and creates the GitHub release with generated notes.
+Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and
+pushes; [`publish.yml`](.github/workflows/publish.yml) runs every check, publishes via Trusted Publishing and creates the release.
 
 Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions, learnings and the
 roadmap are in [docs/](docs/STATE.md#next-up).

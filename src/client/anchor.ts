@@ -2,7 +2,7 @@
 // chain, test id, selector) and so the overlay can find it again after reloads
 // (selector → test id → id → xpath → tag+text).
 
-import type { SourceLoc, Target } from '../shared/types.ts';
+import type { CmsRef, SourceLoc, Target } from '../shared/types.ts';
 
 const TESTID_ATTRS = ['data-testid', 'data-test-id', 'data-test', 'data-cy', 'data-qa'];
 
@@ -100,7 +100,7 @@ function nameOf(el: Element): string | undefined {
 }
 
 // Source stamps (ours for JSX/Vue, Angular's template locations): noise for the agent.
-const NOISE = ['data-redline-src', 'data-ng-source-location'];
+const NOISE = ['data-redline-src', 'data-redline-cms', 'data-ng-source-location'];
 
 function htmlExcerpt(el: Element): string {
   const clone = el.cloneNode(true) as Element;
@@ -120,7 +120,7 @@ function htmlExcerpt(el: Element): string {
 type SvelteMeta = { loc?: { file: string; line: number; column: number }; parent?: SvelteParent };
 type SvelteParent = { type?: string; file?: string; line?: number; column?: number; componentTag?: string; parent?: SvelteParent | null };
 
-const baseName = (f: string) => f.split(/[\\/]/).pop()!.replace(/\.(svelte|astro|tsx|jsx|vue|ts|js|html)$/, '');
+const baseName = (f: string) => f.split(/[\\/]/).pop()!.replace(/\.(svelte|astro|tsx|jsx|vue|ts|js|html|razor|cshtml)$/, '');
 
 function svelteInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
   for (let cur: Element | null = el; cur; cur = cur.parentElement) {
@@ -192,15 +192,18 @@ function reactInfo(el: Element): { source?: SourceLoc; components?: string[] } |
   return { source, components: dedupe(comps) };
 }
 
-/* data-redline-src="file:line:col Component": stamped by the dev server into JSX (jsx-source.ts) and Vue templates (vue-source.ts). */
+/*
+ * data-redline-src="file:line:col[ Component]": stamped by the dev server into JSX (jsx-source.ts) and Vue
+ * templates (vue-source.ts), or by Umage.Redline.Build into Razor/Blazor markup (no component: the file names it).
+ */
 function parseStamp(s: string | null | undefined): { source: SourceLoc; comp?: string } | null {
   const m = s ? /^(.*):(\d+):(\d+)(?: (\S+))?$/.exec(s) : null;
   return m ? { source: { file: m[1], line: +m[2], col: +m[3] }, comp: m[4] } : null;
 }
 const stampOf = (el: Element) => parseStamp(el.closest('[data-redline-src]')?.getAttribute('data-redline-src'));
 
-// Solid and Preact keep no component tree on DOM nodes: the chain is the components the
-// stamped ancestors are written in (the element's own first, then the ones around it).
+// Solid, Preact, Razor and Blazor keep no component tree on DOM nodes: the chain is the components
+// the stamped ancestors are written in (the element's own first, then the ones around it).
 function stampInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
   const own = stampOf(el);
   if (!own) return null;
@@ -263,6 +266,30 @@ function angularInfo(el: Element): { source?: SourceLoc; components?: string[] }
   return source || comps.length ? { source, components: dedupe(comps) } : null;
 }
 
+/**
+ * CMS content behind the element: `data-redline-cms="<content id>|<property>"` (stamped by a CMS
+ * integration such as Umage.Redline.Optimizely), or Optimizely's own edit-mode attributes.
+ * The nearest stamp with a content id decides the content; a property stamp below it names the
+ * property (a block in a content area: the block, not the page's area property). A property
+ * rendered as the element's only child (a wrapper around the value) counts as the element's own.
+ */
+export function cmsInfo(el: Element): CmsRef | undefined {
+  const kid = el.children.length === 1 ? el.firstElementChild! : null;
+  const start = kid?.hasAttribute('data-redline-cms') && clip(kid.textContent, 200) === clip(el.textContent, 200) ? kid : el;
+  let property: string | undefined;
+  for (let cur: Element | null = start.closest('[data-redline-cms]'); cur; cur = cur.parentElement?.closest('[data-redline-cms]') ?? null) {
+    const v = cur.getAttribute('data-redline-cms')!;
+    const i = v.lastIndexOf('|');
+    const content = (i < 0 ? v : v.slice(0, i)) || undefined;
+    property ??= (i < 0 ? '' : v.slice(i + 1)) || undefined;
+    if (content) return { content, property };
+  }
+  if (property) return { property };
+  const epi = el.closest('[data-epi-property-name],[data-epi-edit]');
+  const epiProperty = epi?.getAttribute('data-epi-property-name') ?? epi?.getAttribute('data-epi-edit') ?? undefined;
+  return epiProperty ? { property: epiProperty } : undefined;
+}
+
 function dedupe(a: string[]): string[] | undefined {
   const out = a.filter((x, i) => x && a.indexOf(x) === i).slice(0, 6);
   return out.length ? out : undefined;
@@ -303,6 +330,7 @@ export function describe(el: Element, clickX?: number, clickY?: number): Target 
     html: htmlExcerpt(el),
     source: info.source,
     components: info.components,
+    cms: cmsInfo(el),
     box: [Math.round(r.x + scrollX), Math.round(r.y + scrollY), Math.round(r.width), Math.round(r.height)],
   };
   if (clickX !== undefined && clickY !== undefined && r.width && r.height) {

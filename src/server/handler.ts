@@ -208,6 +208,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
           from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
           tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
           nth: Number.isInteger(body.nth?.index) && Number.isInteger(body.nth?.count) ? { index: body.nth!.index, count: body.nth!.count } : undefined,
+          cms: body.cms && typeof body.cms === 'object' ? { ...body.cms } : undefined,
         };
         if (edit.source) edit.source.file = normaliseSource(edit.source.file, root, opts.serverRoot);
         const dryRun = inspect || /[?&]dry=1/.test(url);

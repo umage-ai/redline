@@ -1,0 +1,21 @@
+@model StartPage
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@Model.Name</title>
+    <style>body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; } .teaser { border: 1px solid #ccc; padding: 1rem; }</style>
+</head>
+<body>
+    <header>
+        <a href="/dev/login" data-testid="login">Sign in as editor</a> · <span>@(User.Identity?.Name ?? "anonymous")</span>
+    </header>
+    <main>
+        <h1 data-testid="heading">@Html.PropertyFor(x => x.Heading)</h1>
+        <p data-testid="teaser" epi-property="@Model.Teaser">@Model.Teaser</p>
+        <div data-testid="body">@Html.PropertyFor(x => x.MainBody)</div>
+        <p data-testid="static">Static text written in the template.</p>
+        <section data-testid="area">@Html.PropertyFor(x => x.MainContentArea)</section>
+    </main>
+</body>
+</html>

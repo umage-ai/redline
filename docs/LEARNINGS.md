@@ -122,3 +122,28 @@ Prune entries whose cause is gone from the code.
 - **Cause:** `nthOf` compared `innerText`, which is `''` for `visibility:hidden` elements, and Reveal hides every slide but the current one, so the hidden copies weren't counted and `nth` was never sent.
 - **Fix:** also match on normalised `textContent` (`src/client/index.ts` `nthOf`).
 - **Guard:** `extend.spec.ts` ("same-text elements (one hidden, like a Reveal slide)").
+
+## L30 — A note vanished after saving: U+2028 in its anchor JSON
+- **Cause:** `JSON.stringify` leaves U+2028/2029 raw, and `.` in the anchor regex doesn't match them, so the `<!-- redline … -->` line no longer parsed and the note was dropped on the next read.
+- **Fix:** `anchorJson` escapes them as `\u2028`/`\u2029` (both servers).
+- **Guard:** `test/golden/pages/unicode.json` (both test suites).
+
+## L31 — Blazor streamed pages had no overlay
+- **Cause:** Blazor's streaming rendering sends `Content-Encoding: identity`; the injector skipped any response with a Content-Encoding header as compressed.
+- **Fix:** treat `identity` as plain (`HtmlInjectionStream.Injects`).
+- **Guard:** `MiddlewareTests.Streams_split_chunks_identity_encoding_and_pages_without_head`, `dotnet.spec.ts` (weather page).
+
+## L32 — Razor stamp target ran, but stamped nothing
+- **Cause:** with both `AfterTargets="_PrepareRazorSourceGenerators"` and `BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun"`, MSBuild ran it before the Razor target (both are "before" the same target), when no Razor AdditionalFiles existed yet.
+- **Fix:** `AfterTargets` only.
+- **Guard:** `dotnet.spec.ts` (every stamp assertion).
+
+## L33 — Optimizely sample: stored-procedure errors at startup; empty `epi-property` elements
+- **Cause:** with minimal hosting, `MapContent()` builds the edit UI's routes before the CMS creates its schema. Separately, `epi-property` only adds edit attributes; it doesn't render the value.
+- **Fix:** the sample uses the `Startup` pattern (`ConfigureCmsDefaults` initializes first); views write `<p epi-property="@Model.X">@Model.X</p>`.
+- **Guard:** `optimizely.spec.ts` (with `REDLINE_E2E_OPTIMIZELY=1`).
+
+## L34 — servers.json from the .NET server had `"at": "…T22.58.31…"`
+- **Cause:** `:` in a .NET custom date format is the culture's time separator; on a Danish machine that is `.`.
+- **Fix:** format with `CultureInfo.InvariantCulture` (`ServerRegistry`); every other stamp already did.
+- **Guard:** `MiddlewareTests.Registers_in_servers_json_for_redline_mcp`. Checked by hand: `node dist/cli.js mcp` lists notes from the Razor sample.

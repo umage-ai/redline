@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- net8.0 builds against Optimizely CMS 12, net10.0 against CMS 13. -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>Umage.Redline.Optimizely</RootNamespace>
+    <PackageId>Umage.Redline.Optimizely</PackageId>
+    <Description>Redline for Optimizely CMS 12 and 13: review notes name the CMS content and property behind the text, text edits can be saved as content drafts, and an online mode lets signed-in editors review a live site with notes in the CMS database.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- PrivateAssets none: the source-stamp targets (buildTransitive) flow on to the site. -->
+    <ProjectReference Include="..\Umage.Redline.AspNetCore\Umage.Redline.AspNetCore.csproj" PrivateAssets="none" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="EPiServer.CMS.AspNetCore.Mvc" Version="12.24.3" />
+    <PackageReference Include="EPiServer.CMS.AspNetCore.TagHelpers" Version="12.24.3" />
+    <PackageReference Include="EPiServer.CMS.AspNetCore.HtmlHelpers" Version="12.24.3" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="EPiServer.CMS.AspNetCore.Mvc" Version="13.4.0" />
+    <PackageReference Include="EPiServer.CMS.AspNetCore.TagHelpers" Version="13.4.0" />
+    <PackageReference Include="EPiServer.CMS.AspNetCore.HtmlHelpers" Version="13.4.0" />
+  </ItemGroup>
+
+</Project>
