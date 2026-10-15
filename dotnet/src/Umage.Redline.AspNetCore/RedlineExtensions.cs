@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Hosting;
 using Umage.Redline.Hosting;
 
@@ -19,7 +20,8 @@ public static class RedlineExtensions
     /// </summary>
     public static IServiceCollection AddRedline(this IServiceCollection services, Action<RedlineOptions>? configure = null)
     {
-        services.AddOptions<RedlineOptions>();
+        // Settings can also come from configuration ("Redline": { "Dir": ..., "Online": true, "Roles": [...] }).
+        services.AddOptions<RedlineOptions>().BindConfiguration("Redline");
         if (configure is not null) services.Configure(configure);
         services.TryAddSingleton<RedlineRuntime>();
         services.TryAddEnumerable(ServiceDescriptor.Transient<IStartupFilter, RedlineStartupFilter>());

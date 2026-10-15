@@ -41,11 +41,13 @@ public sealed class TestApp : IAsyncDisposable
         var app = builder.Build();
         app.MapGet("/", () => Results.Content(Page, "text/html; charset=utf-8"));
         app.MapGet("/fragment", () => Results.Content("<p>no head or body</p>", "text/html"));
+        app.MapGet("/gzip", (HttpContext http) => { http.Response.Headers.ContentEncoding = "gzip"; return Results.Bytes(new byte[] { 31, 139, 8, 0 }, "text/html"); });
         app.MapGet("/json", () => Results.Json(new { a = 1 }));
         app.MapGet("/stream", async (HttpContext http) =>
         {
             // Writes split mid-tag and flushes between, like streaming rendering.
             http.Response.ContentType = "text/html";
+            http.Response.Headers.ContentEncoding = "identity";   // as Blazor's streaming rendering sends it
             foreach (var part in new[] { "<html><head><title>S</title></he", "ad><body><p>first</p>", "<p>second</p></body></html>" })
             {
                 await http.Response.WriteAsync(part);

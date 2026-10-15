@@ -1,0 +1,21 @@
+@page "/server-counter"
+@rendermode InteractiveServer
+
+<PageTitle>Server counter</PageTitle>
+
+<h1 data-testid="server-title">Server counter</h1>
+
+<p role="status" data-testid="server-count">Current count: @currentCount</p>
+
+<button class="btn btn-primary" data-testid="server-click" @onclick="IncrementCount">Click me</button>
+
+@if (currentCount > 0)
+{
+    <p data-testid="server-added">Added by the server after a click.</p>
+}
+
+@code {
+    private int currentCount = 0;
+
+    private void IncrementCount() => currentCount++;
+}

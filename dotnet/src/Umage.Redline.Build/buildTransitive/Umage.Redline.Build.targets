@@ -13,11 +13,11 @@
     <_RedlineStampsOn Condition="'$(RedlineSourceStamps)' == '' and '$(Configuration)' == 'Debug' and '$(DesignTimeBuild)' != 'true' and '$(DOTNET_WATCH)' != '1'">true</_RedlineStampsOn>
   </PropertyGroup>
 
-  <UsingTask TaskName="Umage.Redline.Build.StampRazorFiles" AssemblyFile="$(RedlineBuildTasksAssembly)" />
+  <UsingTask TaskName="Umage.Redline.Build.StampRazorFiles" AssemblyFile="$(RedlineBuildTasksAssembly)" Condition="'$(RedlineTaskHost)' != 'true'" />
+  <UsingTask TaskName="Umage.Redline.Build.StampRazorFiles" AssemblyFile="$(RedlineBuildTasksAssembly)" TaskFactory="TaskHostFactory" Condition="'$(RedlineTaskHost)' == 'true'" />
 
   <Target Name="RedlineStampRazorFiles"
           AfterTargets="_PrepareRazorSourceGenerators"
-          BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun"
           Condition="'$(_RedlineStampsOn)' == 'true'">
     <PropertyGroup>
       <_RedlineStampDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(IntermediateOutputPath)redline-src\'))</_RedlineStampDir>

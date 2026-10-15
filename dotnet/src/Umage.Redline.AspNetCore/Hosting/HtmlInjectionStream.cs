@@ -34,7 +34,9 @@ internal sealed class HtmlInjectionStream : Stream
 
     /// <summary>Will this response get the tag? (Headers are fixed up in the middleware's OnStarting.)</summary>
     public static bool Injects(HttpResponse r) =>
-        (r.ContentType ?? "").Contains("text/html", StringComparison.OrdinalIgnoreCase) && !r.Headers.ContainsKey("Content-Encoding");
+        (r.ContentType ?? "").Contains("text/html", StringComparison.OrdinalIgnoreCase)
+        // Blazor's streaming rendering sends "Content-Encoding: identity" (to keep compression off): still plain text (L31).
+        && (r.Headers.ContentEncoding.Count == 0 || r.Headers.ContentEncoding.All(e => string.Equals(e, "identity", StringComparison.OrdinalIgnoreCase)));
 
     bool IsHtml() => _html ??= Injects(_response);
 

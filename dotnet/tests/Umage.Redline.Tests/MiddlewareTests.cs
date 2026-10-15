@@ -21,13 +21,15 @@ public class MiddlewareTests
     }
 
     [Fact]
-    public async Task Streams_split_chunks_and_pages_without_head()
+    public async Task Streams_split_chunks_identity_encoding_and_pages_without_head()
     {
         await using var t = await TestApp.StartAsync();
         var html = await (await t.Client.SendAsync(t.Get("/stream"))).Content.ReadAsStringAsync();
         Assert.Equal("<html><head><title>S</title>" + Script + "</head><body><p>first</p><p>second</p></body></html>", html);
         var frag = await (await t.Client.SendAsync(t.Get("/fragment"))).Content.ReadAsStringAsync();
         Assert.Equal("<p>no head or body</p>" + Script, frag);
+        var gz = await (await t.Client.SendAsync(t.Get("/gzip"))).Content.ReadAsByteArrayAsync();
+        Assert.Equal(new byte[] { 31, 139, 8, 0 }, gz);   // compressed bodies pass through untouched
         var json = await t.Client.GetStringAsync("/json");
         Assert.DoesNotContain("script", json);
     }
