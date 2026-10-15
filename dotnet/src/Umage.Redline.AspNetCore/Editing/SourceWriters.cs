@@ -19,6 +19,8 @@ public sealed class EditRequest
     public required string Url { get; init; }
     /// <summary>Where the element is written (repo-relative), when the page says.</summary>
     public SourceLoc? Source { get; set; }
+    /// <summary>Several elements with this tag and text on the page: which one (static .html has no source location). D25.</summary>
+    public Nth? Nth { get; init; }
     /// <summary>CMS content/property behind the element (data-redline-cms), when a CMS integration stamped it.</summary>
     public JsonObject? Cms { get; init; }
 }
@@ -31,6 +33,8 @@ public sealed class Inspection
     public bool Braces { get; init; }
     public bool SelfClose { get; init; }
     public bool Razor { get; init; }
+    /// <summary>Characters the source writes as references ("—" → "&amp;mdash;"); new text keeps that spelling (D24).</summary>
+    public Dictionary<string, string> Spell { get; init; } = new();
 }
 
 public sealed class EditResult
@@ -67,6 +71,7 @@ public sealed class EditResult
                     // applied when the edit is written, so the overlay treats it like HTML.
                     ["braces"] = Inspect.Braces,
                     ["selfClose"] = Inspect.SelfClose,
+                    ["spell"] = new JsonObject(Inspect.Spell.Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)kv.Value))),
                 };
         }
         else
@@ -124,7 +129,11 @@ public static class SourceWriters
         if (!loc.Ok) return EditResult.Fail(loc.Reason!, writer);
         var ext = Path.GetExtension(rel);
         if (ctx.Inspect)
-            return new EditResult { Ok = true, File = rel, Line = loc.Line, Writer = writer, Inspect = new Inspection { Tokens = loc.Analysis!.Tokens!, Braces = syntax == MarkupSyntax.Braces, SelfClose = ext is ".jsx" or ".tsx", Razor = syntax == MarkupSyntax.Razor } };
+            return new EditResult { Ok = true, File = rel, Line = loc.Line, Writer = writer, Inspect = new Inspection
+            {
+                Tokens = loc.Analysis!.Tokens!, Braces = syntax == MarkupSyntax.Braces, SelfClose = ext is ".jsx" or ".tsx", Razor = syntax == MarkupSyntax.Razor,
+                Spell = SourceEdit.Spellings(string.Concat(loc.Analysis.Tokens!.Where(t => t.K == "text").Select(t => t.Raw))),
+            } };
         var plan = SourceEdit.Apply(before, loc, req.To, req.Html, syntax);
         if (!plan.Ok) return EditResult.Fail(plan.Reason!, writer);
         if (!ctx.DryRun)
@@ -163,7 +172,10 @@ public static class SourceWriters
         }
     }
 
-    /// <summary>Plain .html pages served from wwwroot (no source location): the one element with exactly this text.</summary>
+    /// <summary>
+    /// Plain .html pages served from wwwroot (no source location): the one element with exactly this
+    /// text, or the <see cref="EditRequest.Nth"/> one when the file has as many such elements as the page.
+    /// </summary>
     public sealed class StaticHtmlWriter : ISourceWriter
     {
         public string Name => "static-html";
@@ -183,7 +195,7 @@ public static class SourceWriters
                 var file = ctx.Resolve(rel);
                 if (file is null || !File.Exists(file)) continue;
                 var before = await File.ReadAllTextAsync(file, ct);
-                return await Finish(file, rel, SourceEdit.LocateUnique(before, req.Tag, req.From), before, MarkupSyntax.Html, req, Name, ctx, ct);
+                return await Finish(file, rel, SourceEdit.LocateUnique(before, req.Tag, req.From, MarkupSyntax.Html, req.Nth), before, MarkupSyntax.Html, req, Name, ctx, ct);
             }
             return null;
         }

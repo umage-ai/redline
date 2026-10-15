@@ -101,6 +101,29 @@ public class MiddlewareTests
     }
 
     [Fact]
+    public async Task Static_html_edit_picks_the_nth_same_text_element_and_keeps_entity_spelling()
+    {
+        await using var t = await TestApp.StartAsync(o => o.DirectEdit = true);
+        var file = Path.Combine(t.Root, "wwwroot", "deck.html");
+        await File.WriteAllTextAsync(file, "<ul>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n</ul>\n<p>Slides &mdash; part one</p>\n");
+        const string Req = """{"from":"Yes","to":"No","tag":"span","url":"http://localhost/deck.html"%NTH%}""";
+        var ambiguous = await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/edit?dry=1", Req.Replace("%NTH%", ""))));
+        Assert.False(ambiguous["ok"]!.GetValue<bool>());
+        var wrongCount = await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/edit?dry=1", Req.Replace("%NTH%", ""","nth":{"index":1,"count":3}"""))));
+        Assert.Contains("the page shows 3", wrongCount["reason"]!.GetValue<string>());
+        var done = await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/edit", Req.Replace("%NTH%", ""","nth":{"index":1,"count":2}"""))));
+        Assert.True(done["ok"]!.GetValue<bool>(), done.ToJsonString());
+        Assert.Equal("wwwroot/deck.html", done["file"]!.GetValue<string>());
+        Assert.Equal(3, done["line"]!.GetValue<int>());
+
+        var inspect = await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/edit?inspect=1", """{"from":"Slides — part one","tag":"p","url":"http://localhost/deck.html"}""")));
+        Assert.Equal("&mdash;", inspect["inspect"]!["spell"]!["—"]!.GetValue<string>());
+        var plain = await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/edit", """{"from":"Slides — part one","to":"Deck — part two","tag":"p","url":"http://localhost/deck.html"}""")));
+        Assert.True(plain["ok"]!.GetValue<bool>(), plain.ToJsonString());
+        Assert.Equal("<ul>\n<li><span>Yes</span></li>\n<li><span>No</span></li>\n</ul>\n<p>Deck &mdash; part two</p>\n", await File.ReadAllTextAsync(file));
+    }
+
+    [Fact]
     public async Task Registers_in_servers_json_for_redline_mcp()
     {
         await using var t = await TestApp.StartAsync();

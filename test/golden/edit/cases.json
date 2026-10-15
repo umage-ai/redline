@@ -1,0 +1,92 @@
+{
+  "_": "Direct-edit guards shared by test/unit/edit.test.ts and dotnet/tests/.../EditGoldenTests.cs (D24, D25). Each edit: src, syntax (braces | html), at {tag, line, col?} (editAt) or tag (editUnique, optional nth), edit {from, to, html?}; then content + line, or refuse (a regex both engines read the same way).",
+  "decode": [
+    ["A &mdash; B &middot; C &rarr; D &hellip; &laquo;x&raquo; &euro;5", "A — B · C → D … «x» €5"],
+    ["&NotEqualTilde; &AMP; &Amp;", "≂̸ & &Amp;"],
+    ["&copy2026 &amp &notit; &bogus;", "©2026 & ¬it; &bogus;"],
+    ["&#x1F600; &#8212; &#0; &#xD800; &#99999999; &#999999999999999999999999;", "😀 — � � � �"],
+    ["&#65&#x42 &lt&gt; &ampx &Eacute;t&eacute &nbsp;", "AB <> &x Été  "],
+    ["no references & loose ampersands &", "no references & loose ampersands &"]
+  ],
+  "spell": [
+    ["Slides &mdash; part&nbsp;one &#8594; next &amp; more", { "—": "&mdash;", " ": "&nbsp;", "→": "&#8594;", "&": "&amp;" }],
+    ["A — B&#32;C&#x9;D &mdash &bogus; &MDash; &mdash; &#8212;", { "—": "&mdash;" }],
+    ["&#x1F600; and &NotEqualTilde;", { "😀": "&#x1F600;" }]
+  ],
+  "edits": [
+    {
+      "name": "astro: static text at line:col, attributes and whitespace kept",
+      "src": "---\nconst t = 1;\n---\n<section>\n  <h1 class=\"x\" data-a={t > 0}>\n    Hello  world\n  </h1>\n</section>\n",
+      "syntax": "braces", "at": { "tag": "h1", "line": 5, "col": 3 }, "edit": { "from": "Hello world", "to": "Hi & <bye>" },
+      "content": "---\nconst t = 1;\n---\n<section>\n  <h1 class=\"x\" data-a={t > 0}>\n    Hi &amp; &lt;bye&gt;\n  </h1>\n</section>\n", "line": 5
+    },
+    { "name": "refuses an expression", "src": "<button>Clicked {n}</button>", "syntax": "braces", "at": { "tag": "button", "line": 1 }, "edit": { "from": "Clicked 0", "to": "x" }, "refuse": "expression" },
+    { "name": "refuses block markup", "src": "<p>Hi <div>there</div></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi there", "to": "x" }, "refuse": "<div>" },
+    { "name": "refuses a component", "src": "<p>Hi <Badge>new</Badge></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi new", "to": "x" }, "refuse": "component" },
+    { "name": "refuses an expression attribute", "src": "<p>Hi <a href={url}>x</a></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi x", "to": "y" }, "refuse": "attribute .*expression" },
+    { "name": "refuses a comment", "src": "<p>Hi <!-- c --></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi", "to": "x" }, "refuse": "comment" },
+    { "name": "refuses a translated expression", "src": "<p>{t(\"hello\")}</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hello", "to": "x" }, "refuse": "expression" },
+    { "name": "refuses text that differs from the page", "src": "<p>Hello</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Bonjour", "to": "x" }, "refuse": "differs" },
+    { "name": "refuses another tag on the line", "src": "<p>Hello</p>", "syntax": "braces", "at": { "tag": "h1", "line": 1 }, "edit": { "from": "Hello", "to": "x" }, "refuse": "no <h1> on line 1" },
+    { "name": "refuses a line past the end", "src": "<p>Hello</p>", "syntax": "braces", "at": { "tag": "p", "line": 9 }, "edit": { "from": "Hello", "to": "x" }, "refuse": "no <p> on line 9" },
+    { "name": "plain edit of inline markup would drop the tags", "src": "<p>Hi <b>there</b></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi there", "to": "Hi you" }, "refuse": "edit it in place" },
+    {
+      "name": "JSX: braces in new text are encoded; line:col picks the element",
+      "src": "export const A = () => (\n  <div><p>One</p><p>Two</p></div>\n);\n",
+      "syntax": "braces", "at": { "tag": "p", "line": 2, "col": 18 }, "edit": { "from": "Two", "to": "Two {2}" },
+      "content": "export const A = () => (\n  <div><p>One</p><p>Two &#123;2&#125;</p></div>\n);\n", "line": 2
+    },
+    {
+      "name": "plain HTML: braces are text, entities compare decoded",
+      "src": "<h2>Fish &amp; chips {daily}</h2>", "syntax": "html", "at": { "tag": "h2", "line": 1 }, "edit": { "from": "Fish & chips {daily}", "to": "Fish {weekly}" },
+      "content": "<h2>Fish {weekly}</h2>", "line": 1
+    },
+    {
+      "name": "rich edit keeps the original tags and may add simple ones",
+      "src": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily\n</p>",
+      "syntax": "braces", "at": { "tag": "p", "line": 1 },
+      "edit": { "from": "Fish & chips on the menu daily", "to": "Fish & chips on the menu daily now", "html": "\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily <i>now</i>\n" },
+      "content": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily <i>now</i>\n</p>", "line": 1
+    },
+    { "name": "rich edit: no script", "src": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily\n</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Fish & chips on the menu daily", "to": "x", "html": "x <script>alert(1)</script>" }, "refuse": "<script>" },
+    { "name": "rich edit: no changed link", "src": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily\n</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Fish & chips on the menu daily", "to": "menu", "html": "<a href=\"https://evil\">menu</a>" }, "refuse": "wasn't there" },
+    { "name": "rich edit: unbalanced", "src": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily\n</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Fish & chips on the menu daily", "to": "a b", "html": "a <b>b" }, "refuse": "invalid" },
+    { "name": "rich edit: text and markup disagree", "src": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily\n</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Fish & chips on the menu daily", "to": "different text", "html": "Fish" }, "refuse": "disagree" },
+    { "name": "rich edit: no expression", "src": "<p data-testid=\"r\">\n  Fish &amp; <b>chips</b> on the <a className=\"m\" href=\"#menu\">menu</a> daily\n</p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Fish & chips on the menu daily", "to": "x {y}", "html": "x {y}" }, "refuse": "expression" },
+    {
+      "name": "unique: the one element with this text",
+      "src": "<main>\n<h1 id=\"t\">Agent settings</h1>\n<p>Save</p>\n<button>Save</button>\n<button>Save</button>\n</main>",
+      "syntax": "html", "tag": "h1", "edit": { "from": "Agent settings", "to": "Agent options" },
+      "content": "<main>\n<h1 id=\"t\">Agent options</h1>\n<p>Save</p>\n<button>Save</button>\n<button>Save</button>\n</main>", "line": 2
+    },
+    { "name": "unique: ambiguous", "src": "<main>\n<h1 id=\"t\">Agent settings</h1>\n<p>Save</p>\n<button>Save</button>\n<button>Save</button>\n</main>", "syntax": "html", "tag": "button", "edit": { "from": "Save", "to": "Store" }, "refuse": "2 <button> elements" },
+    { "name": "unique: absent", "src": "<main>\n<h1 id=\"t\">Agent settings</h1>\n</main>", "syntax": "html", "tag": "h2", "edit": { "from": "Agent settings", "to": "x" }, "refuse": "no <h2>" },
+    {
+      "name": "whitespace and nbsp compare like innerText; nbsp keeps its spelling",
+      "src": "<p>\n   Two&nbsp;words\n  </p>", "syntax": "html", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Two words", "to": "Two more words" },
+      "content": "<p>\n   Two&nbsp;more words\n  </p>", "line": 1
+    },
+    {
+      "name": "plain edit keeps the source's entity spelling",
+      "src": "<p>Slides &mdash; part&nbsp;one &#8594; next</p>", "syntax": "html", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Slides — part one → next", "to": "Deck — part two → next & more" },
+      "content": "<p>Deck &mdash; part&nbsp;two &#8594; next &amp; more</p>", "line": 1
+    },
+    {
+      "name": "raw characters stay raw; a stray &#32; doesn't spread",
+      "src": "<p>A — B&#32;C</p>", "syntax": "html", "at": { "tag": "p", "line": 1 }, "edit": { "from": "A — B C", "to": "A — D E" },
+      "content": "<p>A — D E</p>", "line": 1
+    },
+    {
+      "name": "nth picks one of several when the counts agree",
+      "src": "<ul>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n</ul>", "syntax": "html", "tag": "span", "nth": { "index": 1, "count": 3 }, "edit": { "from": "Yes", "to": "No" },
+      "content": "<ul>\n<li><span>Yes</span></li>\n<li><span>No</span></li>\n<li><span>Yes</span></li>\n</ul>", "line": 3
+    },
+    { "name": "nth: the page shows more than the file", "src": "<ul>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n</ul>", "syntax": "html", "tag": "span", "nth": { "index": 1, "count": 4 }, "edit": { "from": "Yes", "to": "No" }, "refuse": "3 <span> elements .*the page shows 4" },
+    { "name": "nth: index out of range", "src": "<ul>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n</ul>", "syntax": "html", "tag": "span", "nth": { "index": 3, "count": 3 }, "edit": { "from": "Yes", "to": "No" }, "refuse": "3 <span> elements" },
+    { "name": "nth: none sent", "src": "<ul>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n<li><span>Yes</span></li>\n</ul>", "syntax": "html", "tag": "span", "edit": { "from": "Yes", "to": "No" }, "refuse": "3 <span> elements" },
+    { "name": "directive: v-if", "src": "<p>Hi <b v-if=\"on\">there</b></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi there", "to": "x" }, "refuse": "directive" },
+    { "name": "directive: v-html", "src": "<p>Hi <span v-html=\"h\"></span></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi", "to": "x" }, "refuse": "directive" },
+    { "name": "directive: *ngIf", "src": "<p>Hi <b *ngIf=\"on\">there</b></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi there", "to": "x" }, "refuse": "directive" },
+    { "name": "directive: [innerHTML]", "src": "<p>Hi <span [innerHTML]=\"h\"></span></p>", "syntax": "braces", "at": { "tag": "p", "line": 1 }, "edit": { "from": "Hi", "to": "x" }, "refuse": "directive" }
+  ]
+}

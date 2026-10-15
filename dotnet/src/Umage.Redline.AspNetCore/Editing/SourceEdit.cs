@@ -22,6 +22,9 @@ public enum MarkupSyntax
     Razor,
 }
 
+/// <summary>Which of several same-tag, same-text elements was edited: its position among them on the page (0-based) and how many the page has (D25).</summary>
+public sealed record Nth(int Index, int Count);
+
 public sealed record TextRange(int Start, int InnerStart, int InnerEnd);
 
 /// <summary>Source content split into text and tags (kept byte for byte in <see cref="Raw"/>).</summary>
@@ -42,30 +45,86 @@ public sealed record Planned(bool Ok, string? Content, int Line, string? Reason)
 
 public static class SourceEdit
 {
-    static readonly Dictionary<string, string> Named = new() { ["amp"] = "&", ["lt"] = "<", ["gt"] = ">", ["quot"] = "\"", ["apos"] = "'", ["nbsp"] = "\u00a0", ["#39"] = "'" };
-    static readonly Regex Entity = new("&(#x[0-9a-f]+|#\\d+|[a-z]+\\d*);", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     static readonly Regex Ws = new($"{Js.WhitespaceClass}+", RegexOptions.CultureInvariant);
 
     public static readonly HashSet<string> Inline = new(("a abbr b bdi bdo br cite code data del dfn em i ins kbd mark q s samp small span strong " +
         "sub sup time u var wbr").Split(' '));
     static readonly HashSet<string> Void = new() { "br", "wbr" };
+    // Vue / Angular attributes that decide whether an inline element shows, or what it holds.
+    static readonly Regex Directive = new(@"\s(v-(if|else|else-if|show|for|html|text)|\*[a-zA-Z]+|\[(innerHTML|innerText|textContent|hidden)\]|\[style\.display\])(?=[\s=/>])", RegexOptions.CultureInvariant);
     static readonly Regex Addable = new(@"^<\/?(b|i|u|s|em|strong)>$|^<br\s*\/?>$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     // A tag with static attributes only: an attribute value can't hold `{`, so expressions are refused.
     static readonly Regex TagRe = new(@"\G<(\/?)([A-Za-z][\w:.-]*)((?:\s+[^\s<>""'{}=/]+(?:\s*=\s*(?:""[^""{}]*""|'[^'{}]*'|[^\s<>""'{}=`]+))?)*)\s*(\/?)>", RegexOptions.CultureInvariant);
 
-    public static string DecodeEntities(string s) => Entity.Replace(s, m =>
+    /* ---------- character references (D24) ---------- */
+
+    static Dictionary<string, string>? _named;
+    static string[] _legacy = Array.Empty<string>();
+
+    /// <summary>The full HTML named-reference table (<see cref="Entities"/>), unpacked on first use. Names are case-sensitive.</summary>
+    static Dictionary<string, string> NamedRefs()
     {
-        var e = m.Groups[1].Value;
-        if (e[0] == '#')
+        if (_named is { } n) return n;
+        var table = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var e in Entities.Packed.Split(';'))
         {
-            var hex = e.Length > 1 && (e[1] == 'x' || e[1] == 'X');
-            if (long.TryParse(hex ? e.Substring(2) : e.Substring(1), hex ? NumberStyles.HexNumber : NumberStyles.None, CultureInfo.InvariantCulture, out var cp)
-                && cp >= 0 && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF))
-                return char.ConvertFromUtf32((int)cp);
-            return m.Value;
+            var comma = e.IndexOf(',');
+            var sb = new StringBuilder();
+            foreach (var h in e.Substring(comma + 1).Split('.')) sb.Append(char.ConvertFromUtf32(int.Parse(h, NumberStyles.HexNumber, CultureInfo.InvariantCulture)));
+            table[e.Substring(0, comma)] = sb.ToString();
         }
-        return Named.TryGetValue(e.ToLowerInvariant(), out var v) ? v : m.Value;
-    });
+        _legacy = Entities.Legacy.Split(' ').OrderByDescending(x => x.Length).ToArray();   // longest prefix first
+        return _named = table;
+    }
+
+    static readonly Regex Ref = new("&(?:#[xX]([0-9a-fA-F]+);?|#([0-9]+);?|([A-Za-z][A-Za-z0-9]*)(;?))", RegexOptions.CultureInvariant);
+    static readonly Regex RefWithSemi = new("&(?:#[xX][0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*);", RegexOptions.CultureInvariant);
+
+    /// <summary>A numeric reference's character; 0, surrogates and out-of-range values become U+FFFD, as in a browser.</summary>
+    static string CodePoint(string digits, int radix)
+    {
+        long cp = 0;
+        foreach (var c in digits)
+        {
+            cp = cp * radix + (c <= '9' ? c - '0' : (c | 0x20) - 'a' + 10);
+            if (cp > 0x10FFFF) return "�";
+        }
+        return cp > 0 && (cp < 0xD800 || cp > 0xDFFF) ? char.ConvertFromUtf32((int)cp) : "�";
+    }
+
+    /// <summary>Decode character references the way a browser does in text content.</summary>
+    public static string DecodeEntities(string s)
+    {
+        if (!s.Contains('&')) return s;
+        var table = NamedRefs();
+        return Ref.Replace(s, m =>
+        {
+            if (m.Groups[1].Success) return CodePoint(m.Groups[1].Value, 16);
+            if (m.Groups[2].Success) return CodePoint(m.Groups[2].Value, 10);
+            var name = m.Groups[3].Value;
+            if (m.Groups[4].Length > 0 && table.TryGetValue(name, out var v)) return v;
+            // Without `;` (or unknown with it), a legacy name at the start still decodes: "&copy2026".
+            var l = _legacy.FirstOrDefault(x => name.StartsWith(x, StringComparison.Ordinal));
+            return l is null ? m.Value : table[l] + m.Value.Substring(1 + l.Length);
+        });
+    }
+
+    /// <summary>
+    /// How the source spelled characters as references, e.g. "—" → "&amp;mdash;". A plain edit writes
+    /// the same characters the same way, so a file full of <c>&amp;mdash;</c> stays that way.
+    /// </summary>
+    public static Dictionary<string, string> Spellings(string raw)
+    {
+        var o = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match m in RefWithSemi.Matches(raw))
+        {
+            var ch = DecodeEntities(m.Value);
+            // One code point, not ASCII whitespace: a stray `&#32;` must not turn every space into one.
+            var single = ch.Length == 1 ? !char.IsSurrogate(ch[0]) : ch.Length == 2 && char.IsSurrogatePair(ch[0], ch[1]);
+            if (ch != m.Value && single && ch is not ("\t" or "\n" or "\f" or "\r" or " ")) o.TryAdd(ch, m.Value);
+        }
+        return o;
+    }
 
     /// <summary>Whitespace-insensitive form used to compare source text with rendered text.</summary>
     public static string Norm(string s) => Js.Trim(Ws.Replace(s, " "));
@@ -165,6 +224,7 @@ public static class SourceEdit
             var name = m.Groups[2].Value;
             var self = m.Groups[4].Value;
             if ((braces || razor) && char.IsUpper(name[0])) return Fail($"the element holds a component (<{name}>)");
+            if (braces && Directive.IsMatch(tagRaw)) return Fail("inline markup is shown or filled by a directive (v-if, *ngIf, [innerHTML], …)");
             if (razor && tagRaw.Contains('@')) return Fail("an attribute inside is Razor code (@…)");
             if (razor && Regex.IsMatch(tagRaw, @"\sasp-", RegexOptions.IgnoreCase)) return Fail($"the element holds a tag helper (<{name} asp-…>)");
             var tag = name.ToLowerInvariant();
@@ -194,23 +254,38 @@ public static class SourceEdit
         return new Analysis(true, t.List, t.List!.Any(x => x.K != "text"), null);
     }
 
-    public static string EncodeText(string s, MarkupSyntax syntax)
+    /// <summary>
+    /// Text as source: <c>&amp; &lt; &gt;</c> escaped, plus <c>{ }</c> (braces) or <c>@</c> (Razor), and characters
+    /// in <paramref name="spell"/> written the way the source already wrote them.
+    /// </summary>
+    public static string EncodeText(string s, MarkupSyntax syntax, IReadOnlyDictionary<string, string>? spell = null)
     {
-        s = s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-        return syntax switch
+        var sb = new StringBuilder(s.Length);
+        for (var i = 0; i < s.Length; i++)
         {
-            MarkupSyntax.Braces => s.Replace("{", "&#123;").Replace("}", "&#125;"),
-            MarkupSyntax.Razor => s.Replace("@", "@@"),
-            _ => s,
-        };
+            var ch = char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]) ? s.Substring(i++, 2) : s[i].ToString();
+            if (spell is not null && spell.TryGetValue(ch, out var sp)) { sb.Append(sp); continue; }
+            sb.Append(ch switch
+            {
+                "&" => "&amp;", "<" => "&lt;", ">" => "&gt;",
+                "{" when syntax == MarkupSyntax.Braces => "&#123;",
+                "}" when syntax == MarkupSyntax.Braces => "&#125;",
+                "@" when syntax == MarkupSyntax.Razor => "@@",
+                _ => ch,
+            });
+        }
+        return sb.ToString();
     }
 
-    /// <summary>`to` as source text: escaped, and the original's surrounding whitespace kept.</summary>
+    /// <summary>
+    /// `to` as source text: escaped, the original's surrounding whitespace kept, and characters the
+    /// original wrote as references (<c>&amp;mdash;</c>, <c>&amp;#8594;</c>) written the same way again.
+    /// </summary>
     public static string EncodeInner(string original, string to, MarkupSyntax syntax)
     {
         var lead = Regex.Match(original, $"^{Js.WhitespaceClass}*").Value;
         var trail = Regex.Match(original, $"{Js.WhitespaceClass}*\\z").Value;
-        return lead + EncodeText(to, syntax) + (Js.Trim(original).Length > 0 ? trail : "");
+        return lead + EncodeText(to, syntax, Spellings(original)) + (Js.Trim(original).Length > 0 ? trail : "");
     }
 
     public static Outcome ValidateHtml(string html, List<Token> original, string to, MarkupSyntax syntax)
@@ -242,8 +317,12 @@ public static class SourceEdit
         return analysis.Ok ? new Located(true, range, analysis, LineOf(src, start), null) : new Located(false, null, null, 0, analysis.Reason);
     }
 
-    /// <summary>The one `&lt;tag&gt;` in the file whose content matches <paramref name="from"/> (no source location).</summary>
-    public static Located LocateUnique(string src, string tag, string from, MarkupSyntax syntax = MarkupSyntax.Html)
+    /// <summary>
+    /// The `&lt;tag&gt;` in the file whose content matches <paramref name="from"/> (static HTML, no source location).
+    /// Several matches: <paramref name="nth"/> picks one, but only when the file has exactly as many as the page
+    /// (otherwise one of them is rendered or hidden differently, and the index can't be trusted). D25.
+    /// </summary>
+    public static Located LocateUnique(string src, string tag, string from, MarkupSyntax syntax = MarkupSyntax.Html, Nth? nth = null)
     {
         var hits = new List<Located>();
         foreach (Match m in StartTagRe(tag).Matches(src))
@@ -254,8 +333,10 @@ public static class SourceEdit
             if (analysis.Ok) hits.Add(new Located(true, range, analysis, LineOf(src, m.Index), null));
         }
         if (hits.Count == 0) return new Located(false, null, null, 0, $"no <{tag}> with exactly this text in the file (rendered by script?)");
-        if (hits.Count > 1) return new Located(false, null, null, 0, $"{hits.Count} <{tag}> elements have this text; can't tell which one");
-        return hits[0];
+        if (hits.Count == 1) return hits[0];
+        if (nth is not null && nth.Count == hits.Count && nth.Index >= 0 && nth.Index < hits.Count) return hits[nth.Index];
+        var page = nth is null ? "" : $" (the page shows {nth.Count})";
+        return new Located(false, null, null, 0, $"{hits.Count} <{tag}> elements have this text in the file{page}; can't tell which one");
     }
 
     /// <summary>Replace the located element's content: <paramref name="html"/> from the rich editor, else plain <paramref name="to"/>.</summary>
@@ -284,9 +365,9 @@ public static class SourceEdit
         return loc.Ok ? Apply(src, loc, to, html, syntax) : new Planned(false, null, 0, loc.Reason);
     }
 
-    public static Planned EditUnique(string src, string tag, string from, string to, string? html, MarkupSyntax syntax = MarkupSyntax.Html)
+    public static Planned EditUnique(string src, string tag, string from, string to, string? html, MarkupSyntax syntax = MarkupSyntax.Html, Nth? nth = null)
     {
-        var loc = LocateUnique(src, tag, from, syntax);
+        var loc = LocateUnique(src, tag, from, syntax, nth);
         return loc.Ok ? Apply(src, loc, to, html, syntax) : new Planned(false, null, 0, loc.Reason);
     }
 }

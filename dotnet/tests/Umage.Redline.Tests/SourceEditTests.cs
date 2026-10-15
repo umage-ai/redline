@@ -70,6 +70,15 @@ public class SourceEditTests
     }
 
     [Fact]
+    public void Razor_edits_keep_entity_spelling_and_escape_at()
+    {
+        var src = "<p>Mail hi@@x.dk &mdash; caf&eacute;</p>";
+        var r = SourceEdit.EditAt(src, "p", 1, null, "Mail hi@x.dk — café", "Mail team@x.dk — café ©", null, MarkupSyntax.Razor);
+        Assert.True(r.Ok, r.Reason);
+        Assert.Equal("<p>Mail team@@x.dk &mdash; caf&eacute; ©</p>", r.Content);
+    }
+
+    [Fact]
     public void Resolve_keeps_edits_inside_the_project()
     {
         var root = Path.GetTempPath();

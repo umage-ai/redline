@@ -253,6 +253,9 @@ public sealed class RedlineMiddleware
 
     static string? Str(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
+    /// <summary>A JSON number that is an integer (Number.isInteger), else null.</summary>
+    static int? WholeNumber(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) && d == Math.Floor(d) && d >= int.MinValue && d <= int.MaxValue ? (int)d : null;
+
     static int? Int(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) ? (int)d : null;
 
     /// <summary>Online mode: a mutation must come from this site (Origin, else Sec-Fetch-Site).</summary>
@@ -286,7 +289,8 @@ public sealed class RedlineMiddleware
         var edit = new EditRequest
         {
             From = from, To = inspect ? from : to!, Html = Str(body["html"]), Tag = tag.ToLowerInvariant(),
-            Url = Str(body["url"]) ?? "", Source = source, Cms = body["cms"]?.DeepClone() as JsonObject,
+            Url = Str(body["url"]) ?? "", Source = source,
+            Nth = body["nth"] is JsonObject nth && WholeNumber(nth["index"]) is int index && WholeNumber(nth["count"]) is int count ? new Nth(index, count) : null, Cms = body["cms"]?.DeepClone() as JsonObject,
         };
         var dry = inspect || q["dry"] == "1";
         var ctx = new WriterContext

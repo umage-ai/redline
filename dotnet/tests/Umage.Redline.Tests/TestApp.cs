@@ -31,6 +31,7 @@ public sealed class TestApp : IAsyncDisposable
     {
         var root = Path.Combine(Path.GetTempPath(), "redline-test-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(Path.Combine(root, ".git"));
+        Directory.CreateDirectory(Path.Combine(root, "wwwroot"));   // static .html pages (the static-html writer)
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment, ContentRootPath = root });
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
