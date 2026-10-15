@@ -180,6 +180,11 @@
           "type": "string",
           "enum": ["route", "path"],
           "description": "What groups notes into pages: route (path + hash route, default) or path."
+        },
+        "mcpTokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Bearer tokens (plain or sha256:<hex>) for POST /__redline/mcp from other machines."
         }
       },
       "additionalProperties": false

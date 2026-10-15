@@ -16,7 +16,7 @@ import { clientFile } from './vite.ts';
 import { createHandler, type RedlineOptions } from './server/handler.ts';
 
 /** The `redline` block in angular.json: the JSON-safe subset of the Vite plugin options. */
-export interface RedlineAngularOptions extends Pick<RedlineOptions, 'dir' | 'hotkey' | 'launcher' | 'app' | 'extensions' | 'pageKey'> {
+export interface RedlineAngularOptions extends Pick<RedlineOptions, 'dir' | 'hotkey' | 'launcher' | 'app' | 'extensions' | 'pageKey' | 'mcpTokens'> {
   /** Notes root, relative to the workspace. Default: nearest folder with .git. */
   root?: string;
   /** true = the built-in source writers (D20). Default false. */

@@ -130,7 +130,8 @@ notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKIL
 
 **MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
 with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
-`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`.
+`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server
+also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere).
 
 ## What gets written
 
@@ -191,8 +192,7 @@ npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app
 Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and
 pushes; [`publish.yml`](.github/workflows/publish.yml) runs every check, publishes via Trusted Publishing and creates the release.
 
-Contributor and agent guidance is in [CLAUDE.md](CLAUDE.md). Project state, decisions, learnings and the
-roadmap are in [docs/](docs/STATE.md#next-up).
+Contributor guidance: [CLAUDE.md](CLAUDE.md). State, decisions, learnings and roadmap: [docs/](docs/STATE.md#next-up).
 
 ## License
 

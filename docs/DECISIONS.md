@@ -157,9 +157,14 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D35 — Remote MCP over HTTP with bearer tokens (2026-10-16)
 - **Decision:** `POST /__redline/mcp` serves the `redline mcp` tools over MCP's Streamable HTTP transport, stateless (JSON responses, no sessions or SSE; GET is 405). Callers need `Authorization: Bearer`: site tokens configured as SHA-256 hashes (`o.Mcp.TokenHashes`), or personal tokens a reviewer creates in the overlay panel (an extension served by the package, D21), stored hashed with the notes and acting as that user. In development, loopback calls need no token unless site tokens are set. The reviewer's cookie never authorizes MCP.
 - **Why:** agents can't read a production database's notes from files, and a bearer header is what Claude Code, Cursor and VS Code send for HTTP MCP servers. Hashes mean a database or config leak doesn't leak tokens.
-- **Revisit if:** clients expect OAuth for remote MCP, or the Node handler gets the same endpoint (planned: same tools, same auth).
+- **Revisit if:** clients expect OAuth for remote MCP. The Node handler serves the same endpoint (D37).
 
 ## D36 — Online notes in SQL over plain ADO.NET, assets in the database (2026-10-16)
 - **Decision:** `SqlNoteStore` keeps notes, screenshots/sketches, personal tokens and a version counter in four `Redline*` tables, created on first use, through `DbConnection` (SQL Server and SQLite dialects). A note row stores the same JSON the markdown anchor holds. Optimizely uses the CMS database by default.
 - **Why:** an Optimizely site already has SQL Server; EF Core would add a dependency and migrations for four tables, and its `EnsureCreated` does nothing in an existing database. Dynamic Data Store is CMS-only and slow to query. Assets are small PNGs and a review tool's volume is low, so a blob provider isn't worth the setup.
 - **Revisit if:** many reviewers or large screenshots make the database the wrong place for assets (move them to the CMS blob provider behind `AssetAsync`).
+
+## D37 — Node dev servers serve MCP over HTTP too (2026-10-16)
+- **Decision:** the Node handler answers `POST /__redline/mcp` like .NET (D35): Streamable HTTP, stateless JSON (batches allowed, notifications → 202, GET → 405), the tools of `src/mcp.ts` (`handleMcpMessage`, shared with stdio) on the handler's own store, with its hooks. Without `mcpTokens` only loopback callers are answered; with them every caller needs `Authorization: Bearer` (plain or `sha256:<hex>` entries, compared hashed). A cross-origin `Origin` is refused (DNS rebinding); no `x-redline` header needed.
+- **Why:** an agent can reach the notes with a URL alone (no CLI, no servers.json), including one on another machine when the dev server runs with `--host`. Loopback-only by default keeps `--host` from exposing notes to the LAN.
+- **Revisit if:** per-user tokens are wanted in Node (then share .NET's token store design), or MCP clients need SSE.

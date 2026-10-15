@@ -83,7 +83,7 @@ on an old note, check the UI still looks like the screenshot before changing any
 
 If the `redline` MCP tools are available (`list_notes`, `get_note`, `update_note`), use them instead
 of reading and editing the files: they work with any note store, and `get_note` returns the
-screenshot. A deployed site can serve them over HTTP at `/__redline/mcp` (bearer token). Same workflow: `list_notes` → `get_note` per open note → change the code →
+screenshot. Dev servers and deployed .NET sites also serve them over HTTP at `/__redline/mcp` (bearer token when remote). Same workflow: `list_notes` → `get_note` per open note → change the code →
 `update_note` with `done: true` and the one-line reply (or only a `reply` with your question).
 
 ## Rules

@@ -2,6 +2,7 @@
 // It talks to a running dev server's /__redline API, so it works with whatever store the
 // app uses; with no dev server up, it reads and writes the markdown in <root>/.redline.
 // JSON-RPC 2.0, one message per line; stdout carries only protocol, logs go to stderr.
+// The same tools are served over HTTP by the dev server itself (POST /__redline/mcp, D37).
 
 import type { Readable, Writable } from 'node:stream';
 import { createInterface } from 'node:readline';
@@ -141,9 +142,48 @@ async function callTool(backend: Backend, name: string, args: Record<string, unk
 
 class ToolError extends Error {}
 
-/* ---------- JSON-RPC over stdio ---------- */
+/* ---------- JSON-RPC ---------- */
 
 const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+
+export type JsonRpcMessage = { jsonrpc?: string; id?: number | string | null; method?: string; params?: Record<string, unknown> };
+
+/**
+ * One JSON-RPC message in, its response out (null for notifications). Shared by the stdio
+ * server below and the dev server's HTTP endpoint (POST /__redline/mcp, handler.ts).
+ */
+export async function handleMcpMessage(msg: JsonRpcMessage, opts: { backend: () => Promise<Backend>; version?: string }): Promise<object | null> {
+  const isCall = msg.id !== undefined;
+  const reply = (result: unknown) => isCall ? { jsonrpc: '2.0', id: msg.id, result } : null;
+  const fail = (code: number, message: string) => isCall ? { jsonrpc: '2.0', id: msg.id, error: { code, message } } : null;
+  switch (msg.method) {
+    case 'initialize': {
+      const asked = String(msg.params?.protocolVersion ?? '');
+      return reply({
+        protocolVersion: VERSIONS.includes(asked) ? asked : VERSIONS[0],
+        capabilities: { tools: {} },
+        serverInfo: { name: 'redline', version: opts.version ?? '0' },
+        instructions: INSTRUCTIONS,
+      });
+    }
+    case 'ping': return reply({});
+    case 'tools/list': return reply({ tools: TOOLS });
+    case 'tools/call': {
+      const name = String(msg.params?.name ?? '');
+      try {
+        return reply({ content: await callTool(await opts.backend(), name, (msg.params?.arguments as Record<string, unknown>) ?? {}) });
+      } catch (err) {
+        // Tool failures go back as results, so the agent can read and recover.
+        return reply({ content: [{ type: 'text', text: `Error: ${(err as Error).message}` }], isError: true });
+      }
+    }
+    default:
+      if (msg.method?.startsWith('notifications/')) return null;
+      return fail(-32601, `method not found: ${msg.method}`);
+  }
+}
+
+/* ---------- stdio ---------- */
 
 export interface McpOptions { root: string; dir?: string; url?: string; input?: Readable; output?: Writable; version?: string }
 
@@ -153,43 +193,13 @@ export function runMcp(opts: McpOptions): Promise<void> {
   const send = (msg: unknown) => out.write(JSON.stringify(msg) + '\n');
   const rl = createInterface({ input: opts.input ?? process.stdin, crlfDelay: Infinity });
   const pending: Promise<unknown>[] = [];
-
-  const handle = async (msg: { id?: number | string; method?: string; params?: Record<string, unknown> }) => {
-    const reply = (result: unknown) => msg.id !== undefined && send({ jsonrpc: '2.0', id: msg.id, result });
-    const fail = (code: number, message: string) => msg.id !== undefined && send({ jsonrpc: '2.0', id: msg.id, error: { code, message } });
-    switch (msg.method) {
-      case 'initialize': {
-        const asked = String(msg.params?.protocolVersion ?? '');
-        return reply({
-          protocolVersion: VERSIONS.includes(asked) ? asked : VERSIONS[0],
-          capabilities: { tools: {} },
-          serverInfo: { name: 'redline', version: opts.version ?? '0' },
-          instructions: INSTRUCTIONS,
-        });
-      }
-      case 'ping': return reply({});
-      case 'tools/list': return reply({ tools: TOOLS });
-      case 'tools/call': {
-        const name = String(msg.params?.name ?? '');
-        try {
-          const backend = await pickBackend(opts);
-          return reply({ content: await callTool(backend, name, (msg.params?.arguments as Record<string, unknown>) ?? {}) });
-        } catch (err) {
-          // Tool failures go back as results, so the agent can read and recover.
-          return reply({ content: [{ type: 'text', text: `Error: ${(err as Error).message}` }], isError: true });
-        }
-      }
-      default:
-        if (msg.method?.startsWith('notifications/')) return;
-        return fail(-32601, `method not found: ${msg.method}`);
-    }
-  };
+  const backend = () => pickBackend(opts);
 
   rl.on('line', line => {
     if (!line.trim()) return;
     let msg;
     try { msg = JSON.parse(line); } catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); return; }
-    pending.push(handle(msg).catch(err => console.error('[redline mcp]', err)));
+    pending.push(handleMcpMessage(msg, { backend, version: opts.version }).then(r => { if (r) send(r); }).catch(err => console.error('[redline mcp]', err)));
   });
   return new Promise(resolve => rl.on('close', () => { void Promise.all(pending).then(() => resolve()); }));
 }
