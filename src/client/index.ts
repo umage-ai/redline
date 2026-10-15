@@ -5,6 +5,7 @@
 
 import type { Note, NotesResponse, NoteType } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
+import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
 import { clip, describe, labelFor, resolve, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
@@ -672,7 +673,11 @@ async function boot() {
       n.body ? h('div', { class: 'body' }, n.body) : n.type === 'sketch' ? h('div', { class: 'body muted' }, 'See the sketch.') : null,
       n.screenshot ? h('img', { src: assetUrl(n.screenshot) + `?v=${version}`, alt: 'screenshot', loading: 'lazy', onclick: () => zoom(assetUrl(n.screenshot)) }) : null,
       n.reply ? h('div', { class: 'reply' }, n.reply) : null,
-      h('div', { class: 'meta' }, `${n.at}${n.viewport ? ` · ${n.viewport[0]}×${n.viewport[1]}` : ''}${n.theme ? ` · ${n.theme}` : ''}${here && n.target && !targetOf(n) ? ' · ⚠ element not found on page' : ''}`),
+      h('div', { class: 'meta' },
+        !n.done && isStale(n.at)
+          ? h('span', { class: 'age stale', title: `${n.at} · open for over ${STALE_DAYS} days; the UI may have changed since` }, `⏱ ${relativeAge(n.at)}`)
+          : h('span', { class: 'age', title: n.at }, relativeAge(n.at) ?? n.at),
+        `${n.viewport ? ` · ${n.viewport[0]}×${n.viewport[1]}` : ''}${n.theme ? ` · ${n.theme}` : ''}${here && n.target && !targetOf(n) ? ' · ⚠ element not found on page' : ''}`),
     );
     c.addEventListener('mouseenter', () => { const el = here ? targetOf(n) : null; if (el && !draft) showHl(el, null); });
     c.addEventListener('mouseleave', () => { if (!draft) hideHl(); });

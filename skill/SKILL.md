@@ -55,7 +55,8 @@ Make this secondary; Publish should be the primary action.
 
 Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,
 e.g. a dark-mode-only or mobile-width issue. `errors` lists console errors seen on the page
-when the note was written; they may or may not be related.
+when the note was written; they may or may not be related. `at` is when the note was written;
+on an old note, check the UI still looks like the screenshot before changing anything.
 
 ## Workflow
 
@@ -67,6 +68,7 @@ when the note was written; they may or may not be related.
    - tick it: `### [ ]` → `### [x]`
    - add a one-line `> ` reply under it saying what changed and where, e.g.
      `> Button now variant="secondary"; Publish is primary (AgentForm.svelte:142).`
+   - if you commit the fix, end the reply with the short hash: `… (fixed in a1b2c3d)`.
 4. If a note is ambiguous, conflicts with another note or the design system, or would need a
    larger decision: leave it open (`[ ]`) and put your question in the `> ` reply. The
    reviewer sees replies live in the overlay.

@@ -138,6 +138,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .card .reply { margin-top: 8px; padding: 6px 9px; border-left: 2px solid var(--ok); background: rgba(62,207,142,.07); border-radius: 0 6px 6px 0; color: var(--fg); white-space: pre-wrap; }
 .card .reply::before { content: 'Agent'; display: block; font-size: 10.5px; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: .05em; }
 .card .meta { margin-top: 6px; color: var(--fg-3); font-size: 11px; }
+.card .meta .stale { color: #e8a33d; }
 .card textarea { width: 100%; min-height: 70px; margin-top: 6px; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; resize: vertical; outline: 0; }
 .panel > footer { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .panel > footer .file { color: var(--fg-3); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }

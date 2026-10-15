@@ -24,6 +24,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
+| Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
 | Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6 | ✅ | `frameworks.spec.ts` |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
 | Sketch text labels (Enter commits once, Escape drops) | ✅ | `overlay.spec.ts` |
