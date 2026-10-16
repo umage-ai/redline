@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Umage.Redline.Optimizely\Umage.Redline.Optimizely.csproj" />
+    <ProjectReference Include="..\..\src\UmageAI.Redline.Optimizely\UmageAI.Redline.Optimizely.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-// Browser smoke for the .NET integration (Umage.Redline.AspNetCore) against the Razor Pages/MVC
+// Browser smoke for the .NET integration (UmageAI.Redline.AspNetCore) against the Razor Pages/MVC
 // and Blazor Web App samples. The overlay is the same dist/client.js the Node integrations serve.
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { promises as fs } from 'node:fs';

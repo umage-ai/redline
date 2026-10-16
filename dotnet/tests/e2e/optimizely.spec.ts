@@ -1,4 +1,4 @@
-// Browser smoke for Umage.Redline.Optimizely against samples/OptimizelySample (CMS 12, LocalDB,
+// Browser smoke for UmageAI.Redline.Optimizely against samples/OptimizelySample (CMS 12, LocalDB,
 // port 5212). Runs when REDLINE_E2E_OPTIMIZELY=1 (it needs SQL Server LocalDB).
 import { test, expect, type Page, type Locator } from '@playwright/test';
 

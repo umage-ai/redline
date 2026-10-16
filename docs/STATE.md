@@ -7,7 +7,7 @@ Last updated: 2026-10-16 · Cap: 150 lines · Rewrite sections in place; this is
 v0.1.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
 React + Vite 7, SvelteKit) install it as a devDependency. The tarball ships only `dist/` (JS + `dist/types`), `skill/`,
 README and LICENSE. Later releases go through `.github/workflows/publish.yml` (Trusted Publishing, D13).
-The .NET packages (`dotnet/`, not yet published) are `Umage.Redline.AspNetCore`, `Umage.Redline.Build` and `Umage.Redline.Optimizely` (0.1.0).
+The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore`, `UmageAI.Redline.Build` and `UmageAI.Redline.Optimizely` (0.1.0).
 
 ## What works (covered by tests)
 
@@ -42,7 +42,7 @@ The .NET packages (`dotnet/`, not yet published) are `Umage.Redline.AspNetCore`,
 | Packed tarball installed into fresh React / SvelteKit / Astro / node:http apps, wired as the README says; types (bundler + nodenext); `redline init` | ✅ | `npm run test:package` (also `prepublishOnly`) |
 | Markdown format identical in Node and .NET (escaping, numbers, key order, slugs, INDEX) | ✅ | `test/golden` via `golden.test.ts` and `GoldenTests.cs` |
 | Direct-edit guards identical in Node and .NET (entities D24, spelling, `nth` D25, refusals); .NET also has `PageKey` (D26) and HEAD | ✅ | `test/golden/edit` via `edit.test.ts` and `EditGoldenTests.cs` |
-| .NET (`dotnet/`, D30): API, markdown + SQL stores, hooks, Razor writer, servers.json, streaming injection; .NET 8/9/10 | ✅ | `dotnet test dotnet/tests/Umage.Redline.Tests` (net8.0, net10.0) |
+| .NET (`dotnet/`, D30): API, markdown + SQL stores, hooks, Razor writer, servers.json, streaming injection; .NET 8/9/10 | ✅ | `dotnet test dotnet/tests/UmageAI.Redline.Tests` (net8.0, net10.0) |
 | Razor Pages, MVC, Blazor Server/WebAssembly/streaming/enhanced nav: source stamps (D32), notes, `.cshtml` direct edits, dev HTTP MCP | ✅ samples on 5210/5211 | `npx playwright test -c dotnet/playwright.config.ts` |
 | Optimizely CMS 12 (13 compiles): CMS content/property in notes, drafts from text mode, no overlay in edit mode (D33) | ✅ sample on 5212 (LocalDB) | `optimizely.spec.ts` with `REDLINE_E2E_OPTIMIZELY=1` |
 | Online mode: role/policy-gated overlay and API, SQL store with author, remote MCP with site/personal tokens (D34–D36) | ✅ unit (TestServer, SQLite; SQL Server with `REDLINE_TEST_SQLSERVER`); browser on the Optimizely sample (LocalDB, panel token → MCP) | `OnlineTests.cs`, `StoreTests.cs`, `online.spec.ts`; not yet on a deployed site |

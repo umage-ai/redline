@@ -18,7 +18,7 @@ dev server as markdown under `.redline/` with everything an agent needs to find 
 Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with the bundled
 `redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
 
-It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Angular (CLI 17+), and with ASP.NET Core, Blazor and Optimizely via NuGet. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`, Debug builds).
+It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`, Debug builds).
 
 ## Modes
 
@@ -77,7 +77,7 @@ In dev it turns on Angular's template source locations, so notes point at the te
 "serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
 ```
 
-**ASP.NET Core, Blazor, Optimizely CMS**: NuGet `Umage.Redline.AspNetCore` / `Umage.Redline.Optimizely`, then `AddRedline()`.
+**ASP.NET Core, Blazor, Optimizely CMS** (upcoming, not on NuGet yet): `UmageAI.Redline.AspNetCore` / `UmageAI.Redline.Optimizely`, then `AddRedline()`.
 Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serves editors on a live site. See [dotnet/README.md](dotnet/README.md).
 
 **Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.

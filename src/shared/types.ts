@@ -11,7 +11,7 @@ export interface SourceLoc {
   col?: number;
 }
 
-/** CMS content an element's text comes from (CMS integrations, e.g. Umage.Redline.Optimizely). */
+/** CMS content an element's text comes from (CMS integrations, e.g. UmageAI.Redline.Optimizely). */
 export interface CmsRef {
   content?: string;         // content id/reference, e.g. "5" or "5_12"
   property?: string;        // property name, e.g. "Heading"

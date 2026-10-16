@@ -194,7 +194,7 @@ function reactInfo(el: Element): { source?: SourceLoc; components?: string[] } |
 
 /*
  * data-redline-src="file:line:col[ Component]": stamped by the dev server into JSX (jsx-source.ts) and Vue
- * templates (vue-source.ts), or by Umage.Redline.Build into Razor/Blazor markup (no component: the file names it).
+ * templates (vue-source.ts), or by UmageAI.Redline.Build into Razor/Blazor markup (no component: the file names it).
  */
 function parseStamp(s: string | null | undefined): { source: SourceLoc; comp?: string } | null {
   const m = s ? /^(.*):(\d+):(\d+)(?: (\S+))?$/.exec(s) : null;
@@ -268,7 +268,7 @@ function angularInfo(el: Element): { source?: SourceLoc; components?: string[] }
 
 /**
  * CMS content behind the element: `data-redline-cms="<content id>|<property>"` (stamped by a CMS
- * integration such as Umage.Redline.Optimizely), or Optimizely's own edit-mode attributes.
+ * integration such as UmageAI.Redline.Optimizely), or Optimizely's own edit-mode attributes.
  * The nearest stamp with a content id decides the content; a property stamp below it names the
  * property (a block in a content area: the block, not the page's area property). A property
  * rendered as the element's only child (a wrapper around the value) counts as the element's own.
