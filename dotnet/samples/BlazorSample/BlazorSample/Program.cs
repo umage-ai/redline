@@ -1,5 +1,5 @@
 using BlazorSample.Components;
-using Umage.Redline;
+using UmageAI.Redline;
 
 var builder = WebApplication.CreateBuilder(args);
 

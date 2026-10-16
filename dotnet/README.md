@@ -1,5 +1,8 @@
 # Redline for .NET
 
+> **Upcoming.** These packages are not published to NuGet yet; they are still being tested. Build them from this
+> repo with `dotnet pack dotnet/Redline.slnx -o <folder>` and add that folder as a local package source to try them.
+
 Redline is a review overlay for web UIs: a reviewer pins comments, text changes and sketches on the
 running app (Alt+Shift+R), and an AI agent applies them. These packages bring it to ASP.NET Core:
 Razor Pages, MVC, Blazor (Server, WebAssembly, streaming, enhanced navigation) and Optimizely CMS 12/13.
@@ -9,14 +12,14 @@ same agent guide (`npx @umage.ai/redline init`) and `redline mcp` work. Product 
 
 | Package | For |
 |---|---|
-| `Umage.Redline.AspNetCore` | Any ASP.NET Core app (.NET 8, 9, 10). Brings `Umage.Redline.Build`. |
-| `Umage.Redline.Build` | Source stamps on `.cshtml`/`.razor` (Debug builds). Reference it directly in a Blazor `.Client` project. |
-| `Umage.Redline.Optimizely` | Optimizely CMS 12 (.NET 8) and 13 (.NET 10). |
+| `UmageAI.Redline.AspNetCore` | Any ASP.NET Core app (.NET 8, 9, 10). Brings `UmageAI.Redline.Build`. |
+| `UmageAI.Redline.Build` | Source stamps on `.cshtml`/`.razor` (Debug builds). Reference it directly in a Blazor `.Client` project. |
+| `UmageAI.Redline.Optimizely` | Optimizely CMS 12 (.NET 8) and 13 (.NET 10). |
 
 ## Setup
 
 ```bash
-dotnet add package Umage.Redline.AspNetCore
+dotnet add package UmageAI.Redline.AspNetCore
 ```
 
 ```csharp
@@ -31,7 +34,7 @@ folder with `.git`); add `.redline/` to `.gitignore` and install the agent guide
 (a slide deck's `#/3`) keeps one notes file; the default `Route` also splits by `#/…` routes.
 
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:
-`<PackageReference Include="Umage.Redline.Build" Version="…" PrivateAssets="all" />`.
+`<PackageReference Include="UmageAI.Redline.Build" Version="…" PrivateAssets="all" />`.
 
 ## What a note knows
 
@@ -64,7 +67,7 @@ services.AddRedlineOptimizely();   // after AddCms
 
 ```cshtml
 @* _ViewImports.cshtml: lets epi-property elements say which property they show *@
-@addTagHelper *, Umage.Redline.Optimizely
+@addTagHelper *, UmageAI.Redline.Optimizely
 ```
 
 - The overlay runs in view mode, never in the CMS UI or edit/preview frames (Optimizely's own

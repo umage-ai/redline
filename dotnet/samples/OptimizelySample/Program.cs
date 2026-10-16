@@ -6,7 +6,7 @@ using EPiServer.Web.Routing;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Data.SqlClient;
-using Umage.Redline.Optimizely;
+using UmageAI.Redline.Optimizely;
 
 // A minimal Optimizely CMS 12 site with Redline. The database (LocalDB) and the sample content
 // are created on first start; /dev/login signs you in as an editor (Development only).

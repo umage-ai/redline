@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Umage.Redline.AspNetCore\Umage.Redline.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\UmageAI.Redline.AspNetCore\UmageAI.Redline.AspNetCore.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

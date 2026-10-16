@@ -1,16 +1,16 @@
 <!--
   In this repo the samples use the projects, not the packages, so the build package's targets
-  (source stamps, D32) are imported here. A consumer gets them from the Umage.Redline.Build package.
+  (source stamps, D32) are imported here. A consumer gets them from the UmageAI.Redline.Build package.
 -->
 <Project>
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <RedlineBuildTasksAssembly>$(MSBuildThisFileDirectory)..\src\Umage.Redline.Build\bin\$(Configuration)\netstandard2.0\Umage.Redline.Build.dll</RedlineBuildTasksAssembly>
-    <!-- Load the task out of process, so rebuilding Umage.Redline.Build isn't blocked by a locked DLL. -->
+    <RedlineBuildTasksAssembly>$(MSBuildThisFileDirectory)..\src\UmageAI.Redline.Build\bin\$(Configuration)\netstandard2.0\UmageAI.Redline.Build.dll</RedlineBuildTasksAssembly>
+    <!-- Load the task out of process, so rebuilding UmageAI.Redline.Build isn't blocked by a locked DLL. -->
     <RedlineTaskHost>true</RedlineTaskHost>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Umage.Redline.Build\Umage.Redline.Build.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\UmageAI.Redline.Build\UmageAI.Redline.Build.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
-  <Import Project="$(MSBuildThisFileDirectory)..\src\Umage.Redline.Build\buildTransitive\Umage.Redline.Build.targets" />
+  <Import Project="$(MSBuildThisFileDirectory)..\src\UmageAI.Redline.Build\buildTransitive\UmageAI.Redline.Build.targets" />
 </Project>

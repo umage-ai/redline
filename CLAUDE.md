@@ -45,7 +45,7 @@ npx playwright test -g "disabled"                                         # one 
 npx playwright test test/e2e/frameworks.spec.ts                           # one spec file
 
 # .NET (dotnet/; needs dist/client.js, which the csproj embeds: run `npm run build` first after client changes)
-dotnet test dotnet/tests/Umage.Redline.Tests            # unit + TestServer tests, net8.0 and net10.0 (incl. test/golden)
+dotnet test dotnet/tests/UmageAI.Redline.Tests            # unit + TestServer tests, net8.0 and net10.0 (incl. test/golden)
 npx playwright test -c dotnet/playwright.config.ts      # browser smoke: Razor/Blazor samples on 5210/5211; REDLINE_E2E_OPTIMIZELY=1 adds Optimizely (LocalDB) on 5212/5213
 dotnet pack dotnet/Redline.slnx                         # the NuGet packages
 ```
@@ -88,9 +88,9 @@ snapshot, because Astro's toolbar strips them); Angular through `data-ng-source-
 turns on `enableTemplateSourceLocations` in dev) plus the `ng` debug global. One parser reads `data-redline-src`
 (`file:line:col[ Component]`); without a name (Razor/Blazor) the file's base name is the component.
 
-**.NET** (`dotnet/`, D30–D36): a C# port of the server (`Umage.Redline.AspNetCore`: API, stores, writers, streaming
-injector, HTTP MCP), Razor/Blazor source stamps from an MSBuild task (`Umage.Redline.Build`, same `data-redline-src` format,
-no component name) and `Umage.Redline.Optimizely`. The browser bundle is shared. `test/golden` fixtures keep the markdown
+**.NET** (`dotnet/`, D30–D36): a C# port of the server (`UmageAI.Redline.AspNetCore`: API, stores, writers, streaming
+injector, HTTP MCP), Razor/Blazor source stamps from an MSBuild task (`UmageAI.Redline.Build`, same `data-redline-src` format,
+no component name) and `UmageAI.Redline.Optimizely`. The browser bundle is shared. `test/golden` fixtures keep the markdown
 byte-identical in both servers: a format change must pass `golden.test.ts` and `GoldenTests.cs`; an edit-guard change goes in
 `test/golden/edit/cases.json` (`edit.test.ts`, `EditGoldenTests.cs`). After changing `src/server/entities.ts`, run `node scripts/entities-cs.mjs`.
 

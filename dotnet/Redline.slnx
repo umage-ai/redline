@@ -8,11 +8,11 @@
     <Project Path="samples/BlazorSample/BlazorSample/BlazorSample.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Umage.Redline.AspNetCore/Umage.Redline.AspNetCore.csproj" />
-    <Project Path="src/Umage.Redline.Build/Umage.Redline.Build.csproj" />
-    <Project Path="src/Umage.Redline.Optimizely/Umage.Redline.Optimizely.csproj" />
+    <Project Path="src/UmageAI.Redline.AspNetCore/UmageAI.Redline.AspNetCore.csproj" />
+    <Project Path="src/UmageAI.Redline.Build/UmageAI.Redline.Build.csproj" />
+    <Project Path="src/UmageAI.Redline.Optimizely/UmageAI.Redline.Optimizely.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Umage.Redline.Tests/Umage.Redline.Tests.csproj" />
+    <Project Path="tests/UmageAI.Redline.Tests/UmageAI.Redline.Tests.csproj" />
   </Folder>
 </Solution>
