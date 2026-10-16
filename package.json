@@ -90,6 +90,7 @@
     "smoke": "node scripts/smoke.mjs",
     "demo": "npm run build && vite --config examples/demo/vite.config.mjs",
     "screenshots": "npm run build && node scripts/screenshots.mjs",
+    "promo": "npm run build && node promo/record.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {
