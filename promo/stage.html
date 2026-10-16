@@ -1,0 +1,182 @@
+<!doctype html>
+<!-- The frame around the demo app in the promo video (promo/record.mjs drives it through window.stage).
+     Feed (default): laid out at 1440×1800 CSS px and scaled to 1080×1350 (4:5) by ffmpeg.
+     Web (stage.html?format=web): 2400×1350, scaled to 1920×1080 (16:9); caption and panel in a column left of the app.
+     The app is recorded as its own page (Redline never runs inside iframes) and ffmpeg overlays it on .hole,
+     1360×760: at (40, 330) in feed, (1000, 315) in web. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --ink: #ff2d55; --bg: #0e0e11; --bg-2: #17171c; --bg-3: #22222a; --line: #2e2e37;
+    --fg: #f2f2f6; --fg-2: #a3a3ad; --fg-3: #6e6e78; --ok: #3ecf8e; --code: #cfd3ff;
+    --sans: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Code", Consolas, ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1440px; height: 1800px; overflow: hidden; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+  body { background: radial-gradient(1200px 700px at 50% -10%, #2a0f18 0%, transparent 60%), var(--bg); }
+
+  /* caption */
+  .cap { position: absolute; left: 80px; right: 80px; top: 64px; height: 200px; }
+  .cap .step { font: 600 26px/1 var(--mono); color: var(--ink); letter-spacing: .04em; text-transform: uppercase; }
+  .cap h1 { margin: 18px 0 0; font-size: 64px; line-height: 1.08; font-weight: 700; letter-spacing: -.02em; }
+  .cap .keys { position: absolute; right: 0; top: 0; display: flex; gap: 10px; }
+  kbd { font: 600 30px/1 var(--mono); padding: 14px 18px; border-radius: 12px; background: var(--bg-3);
+    border: 1px solid var(--line); border-bottom-width: 4px; color: var(--fg); }
+  .fade { transition: opacity .35s, transform .35s; }
+  .out { opacity: 0; transform: translateY(12px); }
+
+  /* browser window */
+  .win { position: absolute; left: 40px; right: 40px; top: 290px; height: 800px; border-radius: 16px; overflow: hidden;
+    background: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px var(--line); }
+  .chrome { height: 40px; background: #1c1c21; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+  .chrome i { width: 13px; height: 13px; border-radius: 50%; background: #3a3a44; }
+  .chrome .url { margin-left: 18px; flex: 1; height: 26px; border-radius: 8px; background: #2a2a32; color: var(--fg-2);
+    font: 15px/26px var(--sans); padding: 0 12px; }
+  .hole { width: 1360px; height: 760px; background: #f6f7fb; }
+
+  /* panel under the app: the markdown file or the agent's terminal */
+  .panel { position: absolute; left: 40px; right: 40px; top: 1120px; height: 620px; border-radius: 16px; background: var(--bg-2);
+    border: 1px solid var(--line); overflow: hidden; }
+  .panel .tab { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--line);
+    font: 20px var(--mono); color: var(--fg-2); }
+  .panel .tab b { color: var(--fg); font-weight: 600; }
+  .panel .tab .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+  .panel pre { margin: 0; padding: 18px 22px; font: 22px/1.5 var(--mono); color: var(--fg-2); white-space: pre; overflow: hidden; height: 572px; scroll-behavior: smooth; }
+  .panel pre .h { color: var(--fg); font-weight: 600; }
+  .panel pre .x { color: var(--ok); }
+  .panel pre .o { color: var(--ink); }
+  .panel pre .m { color: var(--fg-3); }
+  .panel pre .q { color: var(--code); }
+  .panel pre .add { color: var(--ok); }
+  .panel pre .del { color: #ff6b85; }
+  .panel pre .new { background: rgba(255,45,85,.12); box-shadow: -22px 0 0 rgba(255,45,85,.12), 22px 0 0 rgba(255,45,85,.12); }
+  .panel pre .ag { color: var(--fg); }
+  .panel pre .cmd { color: var(--fg); font-weight: 600; }
+
+  /* title and end cards cover everything */
+  .card { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 28px;
+    background: radial-gradient(900px 600px at 50% 40%, #3a0f1d 0%, var(--bg) 70%); }
+  .card .logo { display: inline-flex; align-items: center; gap: 22px; justify-content: center; font-size: 120px; font-weight: 800; letter-spacing: -.03em; }
+  .card .logo svg { width: 116px; height: 116px; }
+  .card p { margin: 0; font-size: 50px; line-height: 1.25; color: var(--fg); font-weight: 600; }
+  .card p.sub { font-size: 34px; color: var(--fg-2); font-weight: 400; }
+  .card code { display: inline-block; font: 600 40px var(--mono); padding: 22px 34px; border-radius: 14px; background: var(--bg-3);
+    border: 1px solid var(--line); color: var(--fg); }
+  .card code::before { content: "$ "; color: var(--ink); }
+  .card .chips { display: flex; gap: 14px; justify-content: center; margin-top: -12px; }
+  .card .chips span { font-size: 28px; padding: 10px 22px; border-radius: 99px; border: 1px solid var(--line); color: var(--fg-2); }
+  .card .url { font: 30px var(--mono); color: var(--fg-2); }
+  .hidden { display: none; }
+
+  /* web (16:9): the app on the right, the caption and the panel stacked in a 920px column on its left */
+  html.web, html.web body { width: 2400px; height: 1350px; }
+  html.web body { background: radial-gradient(1400px 800px at 20% -10%, #2a0f18 0%, transparent 60%), var(--bg); }
+  html.web .win { left: 1000px; right: auto; width: 1360px; top: 275px; }
+  html.web .cap { left: 40px; right: auto; width: 920px; top: 275px; height: 300px; }
+  html.web .cap h1 { font-size: 54px; text-wrap: balance; }
+  html.web .cap .keys { top: auto; right: auto; left: 0; bottom: 0; }
+  html.web .panel { left: 40px; right: auto; width: 920px; top: 595px; height: 480px; }
+  html.web .panel pre { height: 432px; }
+</style>
+</head>
+<body>
+  <div class="cap fade out" id="cap">
+    <div class="step" id="step"></div>
+    <h1 id="title"></h1>
+    <div class="keys" id="keys"></div>
+  </div>
+
+  <div class="win">
+    <div class="chrome"><i></i><i></i><i></i><div class="url" id="url">localhost:5173</div></div>
+    <div class="hole"></div>
+  </div>
+
+  <div class="panel">
+    <div class="tab"><span class="dot"></span><b id="tabName">.redline/pages/index.md</b><span id="tabNote"></span></div>
+    <pre id="pre"></pre>
+  </div>
+
+  <div class="card fade out hidden" id="card"></div>
+
+<script>
+  if (new URLSearchParams(location.search).get('format') === 'web') document.documentElement.classList.add('web');
+  const $ = id => document.getElementById(id);
+  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  const mark = '<svg viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg>';
+
+  // Colours one line of a .redline page file.
+  function mdLine(l) {
+    if (/^### \[x\]/.test(l)) return `<span class="h"><span class="x">### [x]</span>${esc(l.slice(7))}</span>`;
+    if (/^### \[ \]/.test(l)) return `<span class="h"><span class="o">### [ ]</span>${esc(l.slice(7))}</span>`;
+    if (/^<!-- redline/.test(l)) return `<span class="m">${esc(l)}</span>`;
+    if (/^> /.test(l)) return `<span class="q">${esc(l)}</span>`;
+    if (/^\+/.test(l)) return `<span class="add">${esc(l)}</span>`;
+    if (/^-/.test(l)) return `<span class="del">${esc(l)}</span>`;
+    if (/^!\[|^```|^# /.test(l)) return `<span class="m">${esc(l)}</span>`;
+    return esc(l);
+  }
+
+  window.stage = {
+    async caption(step, title, keys = []) {
+      const cap = $('cap');
+      cap.classList.add('out');
+      await new Promise(r => setTimeout(r, 300));
+      $('step').textContent = step;
+      // The breaks are set for the feed's wide caption; the web column wraps on its own.
+      $('title').innerHTML = document.documentElement.classList.contains('web') ? title.replace(/<br>/g, ' ') : title;
+      $('keys').innerHTML = keys.map(k => `<kbd>${esc(k)}</kbd>`).join('');
+      cap.classList.remove('out');
+    },
+    keys(keys) { $('keys').innerHTML = keys.map(k => `<kbd>${esc(k)}</kbd>`).join(''); },
+    // Shows the markdown file. `fresh` lines (by index) are highlighted; the view scrolls to the first of them.
+    markdown(text, fresh = []) {
+      $('tabName').textContent = '.redline/pages/index.md';
+      $('tabNote').textContent = '';
+      const lines = text.split('\n');
+      const html = lines.map((l, i) => {
+        const h = mdLine(l);
+        return fresh.includes(i) ? `<span class="new">${h}</span>` : h;
+      });
+      $('pre').innerHTML = html.join('\n');
+      const first = fresh.length ? Math.min(...fresh) : 0;
+      $('pre').scrollTop = Math.max(0, (first - 1) * 33);
+    },
+    // A source file excerpt as a diff: "- " / "+ " lines coloured, the rest dimmed.
+    code(name, note, lines) {
+      $('tabName').textContent = name;
+      $('tabNote').textContent = note;
+      $('pre').innerHTML = lines.map(l => l.startsWith('+ ') ? `<span class="new"><span class="add">${esc(l)}</span></span>`
+        : l.startsWith('- ') ? `<span class="del">${esc(l)}</span>` : `<span class="m">${esc(l)}</span>`).join('\n');
+      $('pre').scrollTop = 0;
+    },
+    terminal(lines) {
+      $('tabName').textContent = 'agent';
+      $('tabNote').textContent = '· applying .redline notes';
+      $('pre').innerHTML = lines.map(l => l.startsWith('$ ') ? `<span class="o">$</span> <span class="cmd">${esc(l.slice(2))}</span>`
+        : l.startsWith('  ✓') ? `<span class="add">${esc(l)}</span>`
+        : l.startsWith('  ') ? `<span class="m">${esc(l)}</span>` : `<span class="ag">${esc(l)}</span>`).join('\n');
+      $('pre').scrollTop = 1e6;
+    },
+    async card(kind) {
+      const card = $('card');
+      if (!kind) { card.classList.add('out'); await new Promise(r => setTimeout(r, 400)); card.classList.add('hidden'); return; }
+      card.innerHTML = kind === 'title'
+        ? `<div class="logo">${mark}Redline</div>
+           <p>Mark up your running UI.<br>Your AI agent applies it.</p>`
+        : `<div class="logo">${mark}Redline</div>
+           <p class="sub">Comments, text edits and sketches, saved as markdown<br>next to your code. Agents read them over MCP.</p>
+           <div><code>npm i -D @umage.ai/redline</code></div>
+           <div class="chips"><span>React</span><span>Vue</span><span>Svelte</span><span>Astro</span></div>
+           <div class="chips"><span>Angular</span><span>Solid</span><span>Preact</span></div>
+           <div class="url">github.com/umage-ai/redline</div>`;
+      card.classList.remove('hidden');
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      card.classList.remove('out');
+    },
+  };
+</script>
+</body>
+</html>

@@ -171,3 +171,8 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** the Node handler answers `POST /__redline/mcp` like .NET (D35): Streamable HTTP, stateless JSON (batches allowed, notifications → 202, GET → 405), the tools of `src/mcp.ts` (`handleMcpMessage`, shared with stdio) on the handler's own store, with its hooks. Without `mcpTokens` only loopback callers are answered; with them every caller needs `Authorization: Bearer` (plain or `sha256:<hex>` entries, compared hashed). A cross-origin `Origin` is refused (DNS rebinding); no `x-redline` header needed.
 - **Why:** an agent can reach the notes with a URL alone (no CLI, no servers.json), including one on another machine when the dev server runs with `--host`. Loopback-only by default keeps `--host` from exposing notes to the LAN.
 - **Revisit if:** per-user tokens are wanted in Node (then share .NET's token store design), or MCP clients need SSE.
+
+## D38 — Promo video: two CDP screencasts composited by ffmpeg (2026-10-16)
+- **Decision:** `promo/record.mjs` records the demo app and `promo/stage.html` (captions, browser frame, panel) as two pages with `Page.startScreencast`, then ffmpeg overlays the app onto the stage, timed by the frames' timestamps. Sources are committed; `promo/out/` is gitignored.
+- **Why:** the overlay never runs inside an iframe, so the app can't be embedded in the stage. Playwright's `recordVideo` is lower quality and can't line two pages up. Generated frames and MP4s are ~160 MB and reproducible.
+- **Revisit if:** the overlay supports iframes (then record one page), or the video needs sound.
