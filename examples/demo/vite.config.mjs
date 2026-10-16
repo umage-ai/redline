@@ -9,6 +9,6 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root,
   cacheDir: '.vite-cache',
-  plugins: [redline({ root }), react()],
+  plugins: [redline({ root, directEdit: true, extensions: ['redline.ext.js'] }), react()],
   optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime'] },
 });
