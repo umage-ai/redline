@@ -35,6 +35,12 @@ public sealed class RedlineOptions
     public Func<IServiceProvider, RedlineContext, INoteStore>? Store { get; set; }
 
     /// <summary>
+    /// The build the pages come from, e.g. a commit hash: recorded on every new note so an agent reads
+    /// the source lines at that revision.
+    /// </summary>
+    public string? Build { get; set; }
+
+    /// <summary>
     /// Text mode can write the change straight into source when the text is static there (D20):
     /// .cshtml/.razor/.html. Default false: text edits are notes only. <see cref="Writers"/> run first.
     /// </summary>
@@ -74,6 +80,16 @@ public sealed class RedlineOptions
     public RedlineOptions UseSqlStore(Func<System.Data.Common.DbConnection> connect, SqlDialect dialect = SqlDialect.SqlServer, string prefix = "Redline")
     {
         Store = (_, _) => new SqlNoteStore(connect, dialect, prefix);
+        return this;
+    }
+
+    /// <summary>
+    /// Keep notes on another server, over the remote store protocol (docs/PROTOCOL.md, D40). The token
+    /// is sent as a bearer header from this server; the browser never sees it.
+    /// </summary>
+    public RedlineOptions UseRemoteStore(string url, string? token = null)
+    {
+        Store = (_, _) => new RemoteNoteStore(url, token);
         return this;
     }
 }

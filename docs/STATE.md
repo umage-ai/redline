@@ -47,6 +47,10 @@ The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore
 | Optimizely CMS 12 (13 compiles): CMS content/property in notes, drafts from text mode, no overlay in edit mode (D33) | ✅ sample on 5212 (LocalDB) | `optimizely.spec.ts` with `REDLINE_E2E_OPTIMIZELY=1` |
 | Online mode: role/policy-gated overlay and API, SQL store with author, remote MCP with site/personal tokens (D34–D36) | ✅ unit (TestServer, SQLite; SQL Server with `REDLINE_TEST_SQLSERVER`); browser on the Optimizely sample (LocalDB, panel token → MCP) | `OnlineTests.cs`, `StoreTests.cs`, `online.spec.ts`; not yet on a deployed site |
 | NuGet packages: `dotnet pack dotnet/Redline.slnx` | ✅ installed into a fresh Razor Pages app (stamps + overlay) | manual; no package test script yet |
+| Remote note store over HTTP (docs/PROTOCOL.md, D40): `remoteStore` / `REDLINE_STORE_URL` (Node), `UseRemoteStore` (.NET), reference server `notesProtocol`; store-only fields stripped from pages and kept out of markdown | ✅ | `remote.test.ts`, `RemoteStoreTests.cs` |
+| Live changes: store feed → `/__redline/events` (SSE) → overlay re-reads at once; polling 30 s meanwhile (D41) | ✅ Node | `remote.test.ts`, `remote.spec.ts` |
+| Resolved notes green with their reply, author on pins and cards, store link, `seen` sent once by the author (D42) | ✅ | `remote.spec.ts` |
+| Source stamps in `vite build` with `buildSource` (JSX, Vue, Svelte) and the `build` option on notes (D43) | ✅ unit | `svelte-source.test.ts`, `remote.test.ts`; not yet in an e2e build fixture |
 | Pixel-perfect tab capture (getDisplayMedia) | ⚠️ manual only | needs a permission prompt, not automatable |
 
 ## Known gaps
@@ -58,6 +62,8 @@ The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore
 - CSS-only `:hover` menus still close when the pointer moves to the toolbar. Workaround: open the menu, then press `C` and click.
 - Pins re-resolve by selector/testid/xpath/text. Heavily dynamic lists can re-pin onto the wrong row.
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
+- Remote stores: the .NET middleware has no change feed yet (the overlay polls); no hosted store implements the protocol in this repo beyond the reference server.
+- `buildSource` output is unit-tested per framework, not yet through a real `vite build` + `redlineMiddleware` fixture.
 - Not supported yet (D23): Nuxt and Next.js (HTML isn't served through a Vite/connect stack we hook), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
 - `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.
 - .NET: apps under a `PathBase` aren't supported (the client calls `/__redline` at the root); hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN.

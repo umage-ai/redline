@@ -7,8 +7,9 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Note, Target } from '../shared/types.ts';
-import { API_BASE } from '../shared/types.ts';
-import { createStore, type NotePatch, type NoteStore } from './store.ts';
+import { API_BASE, STORE_OWNED } from '../shared/types.ts';
+import { cleanPatch, createStore, type NotePatch, type NoteStore } from './store.ts';
+import { remoteStore } from './remote.ts';
 import { appOf, findRoot, real } from './root.ts';
 import { defaultWriters, resolveInside, runWriters, type EditRequest, type EditResult, type SourceWriter } from './writers.ts';
 import { registerServer } from './registry.ts';
@@ -65,6 +66,12 @@ export interface RedlineOptions {
    * reachable from elsewhere (`--host`) and a remote agent should get the notes.
    */
   mcpTokens?: string[];
+  /**
+   * The build the pages come from, e.g. a commit hash: recorded on every new note so an agent
+   * reads the source lines at that revision. Useful when the overlay runs on a deployed build
+   * with source stamps (`buildSource`, D43) rather than on a dev server.
+   */
+  build?: string;
 }
 
 const MARK = 'data-redline-client';
@@ -144,11 +151,16 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const root = opts.root ? path.resolve(opts.root) : findRoot(opts.serverRoot);
   const dir = opts.dir ?? '.redline';
   const app = opts.app ?? appOf(root, opts.serverRoot);
-  const store: NoteStore = typeof opts.store === 'function' ? opts.store({ root, dir, app }) : opts.store ?? createStore({ root, dir });
+  // REDLINE_STORE_URL (+ REDLINE_STORE_TOKEN) picks a remote store without touching the config,
+  // so the token stays in the environment, out of a committed vite.config (D40).
+  const envStore = process.env.REDLINE_STORE_URL
+    ? remoteStore({ url: process.env.REDLINE_STORE_URL, token: process.env.REDLINE_STORE_TOKEN || undefined })
+    : undefined;
+  const store: NoteStore = typeof opts.store === 'function' ? opts.store({ root, dir, app }) : opts.store ?? envStore ?? createStore({ root, dir });
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route' };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);
@@ -156,6 +168,20 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const hook = async <K extends keyof RedlineHooks>(name: K, ...args: Parameters<NonNullable<RedlineHooks[K]>>) => {
     try { await (opts.hooks?.[name] as ((...a: unknown[]) => unknown) | undefined)?.(...args); }
     catch (err) { console.warn(`[redline] hooks.${name} failed:`, err); }
+  };
+
+  // Live changes (D41): one subscription to the store, shared by every open overlay, held only
+  // while at least one is listening. Each gets `event: change` and re-reads /notes.
+  const listeners = new Set<ServerResponse>();
+  let unsubscribe: (() => void) | null = null;
+  const broadcast = () => { for (const r of listeners) r.write('event: change\ndata: {}\n\n'); };
+  const listen = (res: ServerResponse) => {
+    listeners.add(res);
+    if (!unsubscribe && store.subscribe) unsubscribe = store.subscribe(broadcast);
+  };
+  const unlisten = (res: ServerResponse) => {
+    listeners.delete(res);
+    if (!listeners.size && unsubscribe) { unsubscribe(); unsubscribe = null; }
   };
 
   // Let `redline mcp` find this server (D22): registered once per host it is reached on.
@@ -211,6 +237,18 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         res.setHeader('etag', `"${version}"`);
         return json(res, 200, { version, root: store.dir, notes: await store.list() });
       }
+      // Server-sent events (D41): only when the store can tell us about changes; the overlay
+      // falls back to polling on a 404.
+      if (read && p === '/events') {
+        if (!store.subscribe) return json(res, 404, { error: 'this store has no change feed; the overlay polls' });
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+        res.write('retry: 5000\n\n');
+        listen(res);
+        // A comment every 25 s keeps proxies from closing an idle stream.
+        const beat = setInterval(() => res.write(': keep-alive\n\n'), 25_000);
+        req.on('close', () => { clearInterval(beat); unlisten(res); });
+        return;
+      }
 
       // MCP over Streamable HTTP (D37): stateless JSON-RPC, the same tools as `redline mcp`, on this server's store.
       if (p === '/mcp') {
@@ -241,14 +279,17 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         const body = JSON.parse(await readBody(req)) as NewNoteRequest;
         if (!body?.note?.page || !body.note.type) return json(res, 400, { error: 'note.page and note.type are required' });
         fixTarget(body.note.target);
+        // Who wrote it, whether it is resolved, its link: the store's to say, never the page's.
+        for (const k of STORE_OWNED) delete (body.note as Record<string, unknown>)[k];
         body.note.app = app || undefined;   // set here, never by the page
+        body.note.build = opts.build || undefined;
         const note = await store.create(body);
         await hook('onCreate', note);
         return json(res, 200, note);
       }
       const m = /^\/notes\/([a-z0-9]+)$/.exec(p);
       if (m && method === 'PATCH') {
-        const patch = JSON.parse(await readBody(req)) as NotePatch;
+        const patch: NotePatch = cleanPatch(JSON.parse(await readBody(req)));
         const n = await store.update(m[1], patch);
         if (n) await hook('onUpdate', n, patch);
         return n ? json(res, 200, n) : json(res, 404, { error: 'not found' });

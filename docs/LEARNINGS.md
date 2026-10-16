@@ -147,3 +147,14 @@ Prune entries whose cause is gone from the code.
 - **Cause:** `:` in a .NET custom date format is the culture's time separator; on a Danish machine that is `.`.
 - **Fix:** format with `CultureInfo.InvariantCulture` (`ServerRegistry`); every other stamp already did.
 - **Guard:** `MiddlewareTests.Registers_in_servers_json_for_redline_mcp`. Checked by hand: `node dist/cli.js mcp` lists notes from the Razor sample.
+
+## L40 — Every page logged an EventSource error when the store had no change feed
+- **Cause:** the first version opened `/__redline/events` unconditionally; the markdown store answers 404, and Chrome logs the refused stream on every load.
+- **Fix:** `/config` carries `events: !!store.subscribe`, and the overlay opens the stream only then (D41).
+- **Guard:** `remote.spec.ts` "without a change feed the overlay never opens /events"; `remote.test.ts` checks `/config`.
+
+## L41 — A live-update test passed without the live update
+- **Cause:** the overlay's first poll runs about 1 s after load (`lastPoll` starts at 0), so a note served right after load arrived by polling, not by the pushed event.
+- **Fix:** the test waits past the first poll before changing the notes; it was checked to fail with the push removed.
+- **Guard:** `remote.spec.ts` "a pushed change shows a colleague's new note at once".
+
