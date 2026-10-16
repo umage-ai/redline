@@ -1,0 +1,12 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<div class="text-center">
+    <h1 class="display-4" data-testid="title">Welcome</h1>
+    <p data-testid="intro">Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <p data-testid="greeting">Hello @Model.Name, it is @DateTime.Now.DayOfWeek.</p>
+    <p>See the <a asp-page="/Privacy">privacy policy</a> or the <a href="/mvc">MVC page</a>.</p>
+</div>

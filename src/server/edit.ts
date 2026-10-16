@@ -4,18 +4,55 @@
 // on the page. Anything else (expressions, block markup, components, text the runtime or a
 // translation produced) is refused, and the overlay saves a text note instead.
 
+import { LEGACY, PACKED } from './entities.ts';
+
 export interface Range { start: number; innerStart: number; innerEnd: number }
 
-const NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
+/* ---------- character references (D24) ---------- */
 
+let named: Map<string, string> | null = null;
+let legacy: string[] = [];
+/** The full HTML named-reference table, unpacked on first use. Names are case-sensitive. */
+function namedRefs(): Map<string, string> {
+  if (!named) {
+    named = new Map(PACKED.split(';').map(e => {
+      const [name, cps] = e.split(',');
+      return [name, String.fromCodePoint(...cps.split('.').map(h => parseInt(h, 16)))] as [string, string];
+    }));
+    legacy = LEGACY.split(' ').sort((a, b) => b.length - a.length);   // longest prefix first
+  }
+  return named;
+}
+
+const codePoint = (cp: number) => (cp > 0 && cp <= 0x10ffff && (cp < 0xd800 || cp > 0xdfff) ? String.fromCodePoint(cp) : '�');
+const REF = /&(?:#[xX]([0-9a-fA-F]+);?|#(\d+);?|([A-Za-z][A-Za-z0-9]*)(;?))/g;
+
+/** Decode character references the way a browser does in text content. */
 export function decodeEntities(s: string): string {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+\d*);/gi, (m, e: string) => {
-    if (e[0] === '#') {
-      const cp = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-      return Number.isFinite(cp) ? String.fromCodePoint(cp) : m;
-    }
-    return NAMED[e.toLowerCase()] ?? m;
+  if (!s.includes('&')) return s;
+  const table = namedRefs();
+  return s.replace(REF, (m, hex?: string, dec?: string, name?: string, semi?: string) => {
+    if (hex !== undefined) return codePoint(parseInt(hex, 16));
+    if (dec !== undefined) return codePoint(parseInt(dec, 10));
+    if (semi && table.has(name!)) return table.get(name!)!;
+    // Without `;` (or unknown with it), a legacy name at the start still decodes: "&copy2026".
+    const l = legacy.find(x => name!.startsWith(x));
+    return l ? table.get(l)! + m.slice(1 + l.length) : m;
   });
+}
+
+/**
+ * How the source spelled characters as references, e.g. "—" → "&mdash;". A plain edit writes
+ * the same characters the same way, so a file full of `&mdash;` stays that way.
+ */
+export function spellings(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of raw.matchAll(/&(?:#[xX][0-9a-fA-F]+|#\d+|[A-Za-z][A-Za-z0-9]*);/g)) {
+    const ch = decodeEntities(m[0]);
+    // Not ASCII whitespace: a stray `&#32;` must not turn every space into one.
+    if (ch !== m[0] && [...ch].length === 1 && !/^[\t\n\f\r ]$/.test(ch) && !(ch in out)) out[ch] = m[0];
+  }
+  return out;
 }
 
 /** Whitespace-insensitive form used to compare source text with rendered text. */
@@ -92,6 +129,8 @@ export type Token =
 export const INLINE = new Set(('a abbr b bdi bdo br cite code data del dfn em i ins kbd mark q s samp small span strong ' +
   'sub sup time u var wbr').split(' '));
 const VOID = new Set(['br', 'wbr']);
+// Vue / Angular attributes that decide whether an inline element shows, or what it holds.
+const DIRECTIVE = /\s(v-(if|else|else-if|show|for|html|text)|\*[a-zA-Z]+|\[(innerHTML|innerText|textContent|hidden)\]|\[style\.display\])(?=[\s=/>])/;
 /** Tags a reviewer may add while editing (Ctrl+B/I/U, Shift+Enter). */
 const ADDABLE = /^<\/?(b|i|u|s|em|strong)>$|^<br\s*\/?>$/i;
 
@@ -121,6 +160,7 @@ export function tokenize(inner: string, braces: boolean): Tokens {
     if (!m) return fail(braces && /^<[^>]*\{/.test(inner.slice(lt)) ? 'an attribute inside is an expression ({…})' : 'the element holds markup that can\'t be edited inline');
     const [raw, slash, name, , self] = m;
     if (braces && /^[A-Z]/.test(name)) return fail(`the element holds a component (<${name}>)`);
+    if (braces && DIRECTIVE.test(raw)) return fail('inline markup is shown or filled by a directive (v-if, *ngIf, [innerHTML], …)');
     const tag = name.toLowerCase();
     if (!INLINE.has(tag)) return fail(`the element holds a <${tag}>; only inline markup can be edited in place`);
     if (slash) {
@@ -156,15 +196,23 @@ export function checkInner(inner: string, from: string, braces: boolean): { ok: 
   return a.rich ? { ok: false, reason: 'the element holds markup in source, not just text' } : { ok: true };
 }
 
-/** `to` as source text: escaped, and the original's surrounding whitespace kept. */
+/**
+ * `to` as source text: escaped, the original's surrounding whitespace kept, and characters the
+ * original wrote as references (`&mdash;`, `&#8594;`) written the same way again.
+ */
 export function encodeInner(original: string, to: string, braces: boolean): string {
   const lead = /^\s*/.exec(original)![0], trail = /\s*$/.exec(original)![0];
-  return lead + encodeText(to, braces) + (original.trim() ? trail : '');
+  return lead + encodeText(to, braces, spellings(original)) + (original.trim() ? trail : '');
 }
 
-export function encodeText(s: string, braces: boolean): string {
-  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return braces ? s.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;') : s;
+const MUST: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+
+export function encodeText(s: string, braces: boolean, spell: Record<string, string> = {}): string {
+  let out = '';
+  for (const ch of s) {
+    out += spell[ch] ?? MUST[ch] ?? (braces && ch === '{' ? '&#123;' : braces && ch === '}' ? '&#125;' : ch);
+  }
+  return out;
 }
 
 /**
@@ -199,8 +247,18 @@ export function locateAt(src: string, at: { tag: string; line: number; col?: num
   return analysis.ok ? { ok: true, range, analysis, line: lineOf(src, start) } : analysis;
 }
 
-/** The one `<tag>` in the file whose content matches `from` (static HTML, no source location). */
-export function locateUnique(src: string, tag: string, from: string, braces = false): Located {
+/**
+ * Which of several same-tag, same-text elements was edited: its position among them in
+ * document order on the page (`index`, 0-based), and how many the page has (`count`).
+ */
+export interface Nth { index: number; count: number }
+
+/**
+ * The `<tag>` in the file whose content matches `from` (static HTML, no source location).
+ * Several matches: `nth` picks one, but only when the file has exactly as many as the page
+ * (otherwise one of them is rendered or hidden differently, and the index can't be trusted).
+ */
+export function locateUnique(src: string, tag: string, from: string, braces = false, nth?: Nth): Located {
   const re = new RegExp(`<${escapeRe(tag)}(?=[\\s/>])`, 'gi');
   const hits: Located[] = [];
   for (let m; (m = re.exec(src));) {
@@ -210,8 +268,10 @@ export function locateUnique(src: string, tag: string, from: string, braces = fa
     if (analysis.ok) hits.push({ ok: true, range, analysis, line: lineOf(src, m.index) });
   }
   if (!hits.length) return { ok: false, reason: `no <${tag}> with exactly this text in the file (rendered by script?)` };
-  if (hits.length > 1) return { ok: false, reason: `${hits.length} <${tag}> elements have this text; can't tell which one` };
-  return hits[0];
+  if (hits.length === 1) return hits[0];
+  if (nth && nth.count === hits.length && nth.index >= 0 && nth.index < hits.length) return hits[nth.index];
+  const page = nth ? ` (the page shows ${nth.count})` : '';
+  return { ok: false, reason: `${hits.length} <${tag}> elements have this text in the file${page}; can't tell which one` };
 }
 
 /** Replace the located element's content: `html` from the rich editor, else plain `to`. */
@@ -235,8 +295,8 @@ export function editAt(src: string, at: { tag: string; line: number; col?: numbe
   return loc.ok ? apply(src, loc, edit, braces) : loc;
 }
 
-export function editUnique(src: string, tag: string, edit: Edit, braces = false): Planned {
-  const loc = locateUnique(src, tag, edit.from, braces);
+export function editUnique(src: string, tag: string, edit: Edit, braces = false, nth?: Nth): Planned {
+  const loc = locateUnique(src, tag, edit.from, braces, nth);
   return loc.ok ? apply(src, loc, edit, braces) : loc;
 }
 

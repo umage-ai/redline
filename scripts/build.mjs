@@ -1,15 +1,15 @@
-// Builds dist/: Node entries (vite, astro, server, cli) as ESM with deps external,
+// Builds dist/: Node entries (vite, astro, angular, server, cli) as ESM with deps external,
 // the browser overlay as one self-contained ESM file, and type declarations in dist/types.
 import * as esbuild from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const watch = process.argv.includes('--watch');
 rmSync('dist', { recursive: true, force: true });
 
 const node = {
-  entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', server: 'src/server/index.ts', cli: 'src/cli.ts' },
+  entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts' },
   outdir: 'dist', bundle: true, platform: 'node', format: 'esm', target: 'node20',
   packages: 'external', sourcemap: true, logLevel: 'info',
 };
@@ -24,6 +24,18 @@ if (watch) {
 } else {
   await Promise.all([esbuild.build(node), esbuild.build(client)]);
   emitTypes();
+}
+angularManifest();
+
+// Angular CLI builder (D23): package.json "builders" points here. The schema is
+// @angular/build:dev-server's (copied, so `ng serve --port …` flags parse) plus the `redline`
+// block; the builder strips `redline` and validates the rest against Angular's own schema.
+function angularManifest() {
+  mkdirSync('dist', { recursive: true });
+  writeFileSync('dist/builders.json', JSON.stringify({
+    builders: { 'dev-server': { implementation: './angular.js', schema: './angular-schema.json', description: 'Angular dev server with the Redline overlay' } },
+  }, null, 2));
+  copyFileSync('src/angular-schema.json', 'dist/angular-schema.json');
 }
 
 // Declarations for the package exports (dist/types). tsc keeps the `.ts` import specifiers,

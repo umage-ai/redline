@@ -7,21 +7,22 @@ import type { Note, NotesResponse, NoteType } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
 import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
 import type { Token } from '../server/edit.ts';
-import type { RedlineApi, RedlineButton, RedlineEvents, RedlineExtension, RedlinePanelSection } from '../shared/extension.ts';
-import { clip, describe, labelFor, resolve, sourceInfo, textBlockFor } from './anchor.ts';
+import type { RedlineApi, RedlineButton, RedlineEvents, RedlineExtension, RedlinePageKey, RedlinePanelSection, RedlinePanelState } from '../shared/extension.ts';
+import { pageKey, type PageKeyMode } from '../shared/page.ts';
+import { clip, cmsInfo, describe, labelFor, resolve, sourceInfo, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
 import { CSS } from './styles.ts';
 
 type StoredNote = Note & { file?: string };
 type Mode = 'idle' | 'comment' | 'text' | 'sketch';
-interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[] }
+interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[]; pageKey?: PageKeyMode }
 interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
   rich?: Inspection; html?: string;   // rich text edits (D20): the source tokens and the new source content
 }
-interface Inspection { tokens: Token[]; braces: boolean; selfClose: boolean }
+interface Inspection { tokens: Token[]; braces: boolean; selfClose: boolean; spell?: Record<string, string> }
 type EditResult = { ok: true; file: string; line?: number; inspect?: Inspection } | { ok: false; reason: string };
 
 declare global { interface Window { __redline?: boolean; redlineExtensions?: { push(...fns: RedlineExtension[]): unknown } } }
@@ -59,12 +60,22 @@ const ss = {
   set: (v: unknown) => { try { sessionStorage.setItem('redline:state', JSON.stringify(v)); } catch { /* ignore */ } },
 };
 
-export function pageKey(loc: Location = location): string {
-  let p = loc.pathname;
-  try { p = decodeURI(p); } catch { /* keep raw */ }
-  p = p.replace(/\/index\.html?$/, '/').replace(/\/+$/, '') || '/';
-  if (loc.hash.startsWith('#/')) p += loc.hash.split('?')[0];
-  return p;
+/** What text mode reads as an element's text (and sends as `from`). */
+function blockText(el: Element): string {
+  const t = getComputedStyle(el).textTransform === 'none' ? (el as HTMLElement).innerText : el.textContent;
+  return (t ?? '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Several elements with this tag and text (a deck's nine identical <span>s): which one this is,
+ * in document order. The static-HTML writer picks the same one in source when the counts agree.
+ */
+function nthOf(el: Element, from: string): { index: number; count: number } | undefined {
+  const n = (s: string) => s.replace(/[\s ]+/g, ' ').trim();
+  const want = n(from);
+  // textContent too: innerText is '' for hidden elements (Reveal hides every other slide)
+  const same = Array.from(document.getElementsByTagName(el.localName)).filter(x => x === el || n(blockText(x)) === want || n(x.textContent ?? '') === want);
+  return same.length > 1 ? { index: same.indexOf(el), count: same.length } : undefined;
 }
 
 function themeOf(): 'light' | 'dark' {
@@ -176,7 +187,14 @@ async function boot() {
   let notes: StoredNote[] = [];
   let version = '';
   let draft: Draft | null = null;
-  let page = pageKey();
+  // Page key: built-in ('route' or 'path', from the pageKey option), or an extension's function.
+  let customKey: RedlinePageKey | null = null;
+  const keyNow = () => {
+    const builtIn = pageKey(location, config.pageKey);
+    const k = customKey ? safely(() => customKey!(location, builtIn), null) : null;
+    return typeof k === 'string' && k ? k : builtIn;
+  };
+  let page = keyNow();
   let focusId: string | null = null;
   let busy = false;
   const persist = () => ss.set({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone });
@@ -266,7 +284,21 @@ async function boot() {
 
   /* ---------- rendering ---------- */
   function renderAll() {
-    renderLauncher(); renderBar(); renderPanel(); renderPins();
+    renderLauncher(); renderBar(); renderPanel(); renderPins(); syncPanel();
+  }
+
+  // The panel's footprint: the bar and toasts move left of it, and extensions hear about it
+  // (a host page can lay itself out beside the panel).
+  let panelSeen: RedlinePanelState = { open: false, width: 0 };
+  function panelState(): RedlinePanelState {
+    const open = state.open && state.panel;
+    return { open, width: open ? Math.round(panel.getBoundingClientRect().width) : 0 };
+  }
+  function syncPanel() {
+    const s = panelState();
+    // A panel that fills (nearly) the whole width, as on phones, leaves nothing to move beside.
+    ui.style.setProperty('--panel-w', s.open && s.width < innerWidth - 240 ? `${s.width}px` : '0px');
+    if (s.open !== panelSeen.open || s.width !== panelSeen.width) { panelSeen = s; emit('panel', { ...s }); }
   }
 
   function renderLauncher() {
@@ -430,13 +462,13 @@ async function boot() {
   /* ---------- direct source edits (D20) ---------- */
   type Direct = { btn: HTMLButtonElement; why: HTMLElement };
   const editRequest = (d: Draft) => ({
-    from: d.from, to: d.to, html: d.html, tag: d.el!.localName, url: location.href, source: sourceInfo(d.el!).source,
+    from: d.from, to: d.to, html: d.html, tag: d.el!.localName, url: location.href, source: sourceInfo(d.el!).source, nth: nthOf(d.el!, d.from!), cms: cmsInfo(d.el!),
   });
 
   // When text mode opens on an element: is it written in source, and with inline markup?
   // Then the editor shows that markup and keeps it (the presentations editor's approach).
   async function inspectBlock(block: Element, from: string): Promise<Inspection | null> {
-    const req = api<EditResult>('POST', '/edit?inspect=1', { from, tag: block.localName, url: location.href, source: sourceInfo(block).source });
+    const req = api<EditResult>('POST', '/edit?inspect=1', { from, tag: block.localName, url: location.href, source: sourceInfo(block).source, nth: nthOf(block, from), cms: cmsInfo(block) });
     const r = await Promise.race([req.catch(() => null), new Promise<null>(res => setTimeout(() => res(null), 1500))]);
     return r?.ok && r.inspect ? r.inspect : null;
   }
@@ -581,10 +613,14 @@ async function boot() {
     const texts = insp.tokens.filter(t => t.k === 'text') as Extract<Token, { k: 'text' }>[];
     const rawText = new Map(texts.map(t => [t.text, t.raw]));
     const keepNbsp = texts.some(t => t.text.includes('\u00a0'));
+    // Characters the source wrote as references (`&mdash;`) are written the same way again.
+    const spell: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '\u00a0': '&nbsp;',
+      ...(insp.braces ? { '{': '&#123;', '}': '&#125;' } : {}), ...insp.spell };
     const encode = (s: string) => {
       if (!keepNbsp) s = s.replace(/\u00a0/g, ' ');   // Chrome types nbsp at the end of a line
-      s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\u00a0/g, '&nbsp;');
-      return insp.braces ? s.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;') : s;
+      let out = '';
+      for (const ch of s) out += spell[ch] ?? ch;
+      return out;
     };
     const walk = (n: Node): string => {
       if (n.nodeType === Node.TEXT_NODE) { const t = (n as Text).data; return rawText.get(t) ?? encode(t); }
@@ -607,7 +643,7 @@ async function boot() {
   async function startTextEdit(block: Element) {
     const r = block.getBoundingClientRect();
     const cs = getComputedStyle(block);
-    const from = (cs.textTransform === 'none' ? (block as HTMLElement).innerText : block.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
+    const from = blockText(block);
     // Hold the pick while asking the server whether the source has inline markup to keep.
     const pending: Draft = { type: 'text', el: block, x: r.right, y: r.bottom, from };
     draft = pending;
@@ -973,12 +1009,18 @@ async function boot() {
   let raf = 0;
   const reposition = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderPins(); if (draft?.el && !draft.sketch) showHl(draft.el, null, draft.type === 'text' ? 'text' : ''); }); };
   addEventListener('scroll', reposition, true);
-  addEventListener('resize', reposition);
-  setInterval(() => {
-    const p = pageKey();
-    if (p !== page) { page = p; resolved.clear(); if (draft && !draft.sketch) cancelDraft(); renderAll(); }
-    else renderPins();
-  }, 500);
+  addEventListener('resize', () => { reposition(); syncPanel(); });
+  // Route changes (and setPageKey): a new page key means a new notes file and pin set.
+  const checkPage = () => {
+    const p = keyNow();
+    if (p === page) return false;
+    page = p; resolved.clear();
+    if (draft && !draft.sketch) cancelDraft();
+    renderAll();
+    emit('page', page);
+    return true;
+  };
+  setInterval(() => { if (!checkPage()) renderPins(); }, 500);
   let lastPoll = 0;
   setInterval(() => {
     if (document.hidden) return;
@@ -992,7 +1034,7 @@ async function boot() {
 
   /* ---------- extension API (D21) ---------- */
   const rl: RedlineApi = {
-    version: 1,
+    version: 2,
     addButton(b) {
       const key = b.key?.toLowerCase();
       if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
@@ -1000,6 +1042,12 @@ async function boot() {
       if (i >= 0) extButtons[i] = b; else extButtons.push(b);
       renderBar();
     },
+    removeButton(id) {
+      const i = extButtons.findIndex(x => x.id === id);
+      if (i >= 0) { extButtons.splice(i, 1); renderBar(); }
+    },
+    panelState: () => panelState(),
+    setPageKey(fn) { customKey = typeof fn === 'function' ? fn : null; checkPage(); },
     addPanelSection(s) {
       const i = extSections.findIndex(x => x.id === s.id);
       if (i >= 0) extSections[i] = s; else extSections.push(s);

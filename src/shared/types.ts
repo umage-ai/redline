@@ -11,6 +11,16 @@ export interface SourceLoc {
   col?: number;
 }
 
+/** CMS content an element's text comes from (CMS integrations, e.g. Umage.Redline.Optimizely). */
+export interface CmsRef {
+  content?: string;         // content id/reference, e.g. "5" or "5_12"
+  property?: string;        // property name, e.g. "Heading"
+  name?: string;            // content name, filled in by the server integration
+  type?: string;            // content type name
+  lang?: string;
+  edit?: string;            // URL of the content in the CMS editor
+}
+
 export interface Target {
   selector?: string;        // best unique CSS selector we could build
   testid?: string;          // data-testid / data-test / data-cy
@@ -23,6 +33,7 @@ export interface Target {
   html?: string;            // outerHTML excerpt
   source?: SourceLoc;       // where the element is written in source (framework dev metadata)
   components?: string[];    // component chain, innermost first (React/Svelte where available)
+  cms?: CmsRef;             // CMS content and property the element renders (CMS integrations)
   box?: [number, number, number, number]; // document coords x,y,w,h at capture time
   fx?: number;              // pin position as a fraction of the element box
   fy?: number;
@@ -46,6 +57,7 @@ export interface Note {
   screenshot?: string;      // path relative to the page file, e.g. ../assets/<id>.png
   sketch?: string;          // ../assets/<id>.svg
   errors?: string[];        // recent console errors at capture time
+  author?: string;          // signed-in reviewer (online mode of a server integration)
   // markdown-owned
   body: string;
   reply: string;

@@ -2,7 +2,8 @@
 // <script> injection into HTML pages. Works in any Node dev server that accepts
 // (req, res, next) middleware: Vite, Astro, SvelteKit, Express.
 
-import { promises as fs, existsSync } from 'node:fs';
+import { promises as fs, existsSync, readFileSync } from 'node:fs';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Note, Target } from '../shared/types.ts';
@@ -12,6 +13,7 @@ import { appOf, findRoot, real } from './root.ts';
 import { defaultWriters, resolveInside, runWriters, type EditRequest, type EditResult, type SourceWriter } from './writers.ts';
 import { registerServer } from './registry.ts';
 import { GUIDE_PATHS } from '../init.ts';
+import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -51,6 +53,18 @@ export interface RedlineOptions {
    * { url } is loaded from that URL instead (e.g. { url: '/src/redline.ext.ts' } to let Vite compile it).
    */
   extensions?: (string | { url: string })[];
+  /**
+   * What groups notes into pages. 'route' (default): the path, plus the hash when it is a
+   * hash route (`#/settings`). 'path': the path only, so a hash-routed app (a slide deck's
+   * `#/3`) keeps one notes file and one pin set. Extensions can set a function (`rl.setPageKey`).
+   */
+  pageKey?: 'route' | 'path';
+  /**
+   * Bearer tokens for the MCP endpoint (POST /__redline/mcp, D37): plain, or `sha256:<hex>` of one.
+   * Without any, only calls from this machine are answered; set them when the dev server is
+   * reachable from elsewhere (`--host`) and a remote agent should get the notes.
+   */
+  mcpTokens?: string[];
 }
 
 const MARK = 'data-redline-client';
@@ -102,6 +116,30 @@ export function normaliseSource(file: string, root: string, serverRoot: string):
 }
 
 
+const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest();
+const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+
+/** Who may call the MCP endpoint: a configured bearer token, or (no tokens configured) a loopback caller. */
+export function mcpAllowed(req: IncomingMessage, tokens: string[] | undefined): boolean {
+  const auth = String(req.headers.authorization ?? '');
+  const bearer = /^Bearer\s+(\S+)\s*$/i.exec(auth)?.[1];
+  if (tokens?.length) {
+    if (!bearer) return false;
+    const got = sha256(bearer);
+    // Hash both sides, so the comparison is constant-time whatever the token lengths.
+    // A malformed sha256: entry never matches (Buffer.from(hex) would silently shorten it).
+    const want = (t: string) => !t.startsWith('sha256:') ? sha256(t) : /^[0-9a-f]{64}$/i.test(t.slice(7)) ? Buffer.from(t.slice(7), 'hex') : null;
+    return tokens.some(t => { const w = want(t); return !!w && timingSafeEqual(got, w); });
+  }
+  return !bearer && LOOPBACK.test(req.socket.remoteAddress ?? '');
+}
+
+let pkgVersion: string | undefined;
+function versionOf(clientFile: string): string {
+  try { return pkgVersion ??= JSON.parse(readFileSync(path.join(path.dirname(clientFile), '..', 'package.json'), 'utf8')).version ?? '0'; }
+  catch { return '0'; }
+}
+
 export function createHandler(opts: RedlineOptions & { serverRoot: string; clientFile: string }): { api: Middleware; inject: Middleware; store: NoteStore; root: string; register(url: string): void } {
   const root = opts.root ? path.resolve(opts.root) : findRoot(opts.serverRoot);
   const dir = opts.dir ?? '.redline';
@@ -110,7 +148,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route' };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);
@@ -124,23 +162,33 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const hosts = new Set<string>();
   const register = (url: string) => { if (!hosts.has(url)) { hosts.add(url); void registerServer(root, dir, url, app); } };
 
+  // The MCP endpoint's tools read and write this server's own store, with the same hooks as the API.
+  const mcpBackend = (req: IncomingMessage): Backend => ({
+    label: `dev server http://${req.headers.host ?? 'localhost'}${app ? ` (app ${app})` : ''}`,
+    list: () => store.list(),
+    async update(id, patch) { const n = await store.update(id, patch); if (n) await hook('onUpdate', n, patch); return n; },
+    async asset(name) { const a = await store.asset(name); return a ? { type: a.type, data: Buffer.from(a.data) } : null; },
+  });
+
   const api: Middleware = (req, res, next) => {
     const url = req.url ?? '';
     if (!url.startsWith(API_BASE + '/')) return next();
     if (req.headers.host) register(`${(req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${req.headers.host}`);
     const [p] = url.slice(API_BASE.length).split('?');
     const method = req.method ?? 'GET';
+    // HEAD answers like GET (Node drops the body): link checkers and proxies probe with it.
+    const read = method === 'GET' || method === 'HEAD';
 
     (async () => {
-      if (method === 'GET' && p === '/client.js') {
+      if (read && p === '/client.js') {
         res.setHeader('content-type', 'text/javascript; charset=utf-8');
         res.setHeader('cache-control', 'no-store');
         res.end(await fs.readFile(opts.clientFile));
         return;
       }
       // guide: the agent guide `redline init` installed, so the copied prompt can point at it.
-      if (method === 'GET' && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
-      if (method === 'GET' && p.startsWith('/assets/')) {
+      if (read && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
+      if (read && p.startsWith('/assets/')) {
         const a = await store.asset(p.slice(8));
         if (!a) return json(res, 404, { error: 'not found' });
         res.setHeader('content-type', a.type);
@@ -149,7 +197,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return;
       }
       const ext = /^\/ext\/(\d+)\.js$/.exec(p);
-      if (method === 'GET' && ext) {
+      if (read && ext) {
         const file = extFiles[+ext[1]];
         if (!file || !existsSync(file)) return json(res, 404, { error: 'not found' });
         res.setHeader('content-type', 'text/javascript; charset=utf-8');
@@ -157,11 +205,32 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         res.end(await fs.readFile(file));
         return;
       }
-      if (method === 'GET' && p === '/notes') {
+      if (read && p === '/notes') {
         const version = await store.version();
         if (req.headers['if-none-match'] === `"${version}"`) { res.statusCode = 304; res.end(); return; }
         res.setHeader('etag', `"${version}"`);
         return json(res, 200, { version, root: store.dir, notes: await store.list() });
+      }
+
+      // MCP over Streamable HTTP (D37): stateless JSON-RPC, the same tools as `redline mcp`, on this server's store.
+      if (p === '/mcp') {
+        // A browser page on another origin (DNS rebinding included) must not reach the tools.
+        const origin = req.headers.origin;
+        if (origin && origin !== 'null' && (() => { try { return new URL(origin).host !== req.headers.host; } catch { return true; } })()) return json(res, 403, { error: 'cross-origin MCP request' });
+        if (!mcpAllowed(req, opts.mcpTokens)) {
+          res.setHeader('www-authenticate', 'Bearer realm="redline"');
+          return json(res, 401, { error: opts.mcpTokens?.length ? 'a valid bearer token is required' : 'MCP answers local calls only; set mcpTokens to allow remote agents' });
+        }
+        if (method !== 'POST') { res.statusCode = 405; res.setHeader('allow', 'POST'); res.end(); return; }   // no SSE stream: tools are request/response
+        let msg: JsonRpcMessage | JsonRpcMessage[];
+        try { msg = JSON.parse(await readBody(req)); } catch { return json(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
+        const handle = (m: JsonRpcMessage) => handleMcpMessage(m, { backend: async () => mcpBackend(req), version: versionOf(opts.clientFile) });
+        const replies = Array.isArray(msg)
+          ? (await Promise.all(msg.filter(m => m && typeof m === 'object').map(handle))).filter(r => r !== null)
+          : msg && typeof msg === 'object' ? await handle(msg) : undefined;
+        if (replies === undefined) return json(res, 400, { error: 'expected a JSON-RPC message' });
+        if (replies === null || (Array.isArray(replies) && !replies.length)) { res.statusCode = 202; res.end(); return; }
+        return json(res, 200, replies);
       }
 
       // Mutations need the custom header: a cross-site page can't send it without a
@@ -199,6 +268,8 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         const edit: EditRequest = {
           from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
           tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
+          nth: Number.isInteger(body.nth?.index) && Number.isInteger(body.nth?.count) ? { index: body.nth!.index, count: body.nth!.count } : undefined,
+          cms: body.cms && typeof body.cms === 'object' ? { ...body.cms } : undefined,
         };
         if (edit.source) edit.source.file = normaliseSource(edit.source.file, root, opts.serverRoot);
         const dryRun = inspect || /[?&]dry=1/.test(url);

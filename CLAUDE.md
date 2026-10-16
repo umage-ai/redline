@@ -31,22 +31,27 @@ npm run build          # esbuild → dist/ (vite.js, astro.js, server.js, cli.js
 npm run dev            # rebuild on change
 npm run typecheck      # tsc --noEmit (src, test/unit, test/e2e)
 npm test               # unit tests (node:test, runs .ts directly) + docs check
-npm run test:e2e       # build + Playwright against 4 fixture apps (installed Chrome; PW_CHROMIUM=1 for bundled)
+npm run test:e2e       # build + Playwright against 8 fixture apps (installed Chrome; PW_CHROMIUM=1 for bundled; PW_FIXTURES=vue,angular starts only those)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
 npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests (slow; runs on prepublishOnly)
 # Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
-node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22)
+node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22); dev servers also answer POST /__redline/mcp (D37)
 npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
 npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright
 
 node --test --test-name-pattern="round-trips" test/unit/format.test.ts   # one unit test
 npx playwright test -g "disabled"                                         # one e2e test (run `npm run build` first)
 npx playwright test test/e2e/frameworks.spec.ts                           # one spec file
+
+# .NET (dotnet/; needs dist/client.js, which the csproj embeds: run `npm run build` first after client changes)
+dotnet test dotnet/tests/Umage.Redline.Tests            # unit + TestServer tests, net8.0 and net10.0 (incl. test/golden)
+npx playwright test -c dotnet/playwright.config.ts      # browser smoke: Razor/Blazor samples on 5210/5211; REDLINE_E2E_OPTIMIZELY=1 adds Optimizely (LocalDB) on 5212/5213
+dotnet pack dotnet/Redline.slnx                         # the NuGet packages
 ```
 
-The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro}`, ports 5199–5202) load `dist/`, so **rebuild
-before e2e**. Playwright reuses fixture servers that are already running locally, so restart them after
+The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact}`, ports 5199–5206) load `dist/`, so **rebuild
+before e2e**. They use the root `node_modules`, except Angular (own TypeScript major): `serve.mjs` installs its own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
 changing server-side code (handler/store/plugin). Client-only changes just need a rebuild and a page reload.
 
 ## Architecture (the parts that span files)
@@ -75,11 +80,22 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
 `/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`).
 
-**Source location per framework** (`anchor.ts` `sourceInfo`): React through a dev-only JSX transform
-(`src/server/jsx-source.ts` stamps `data-redline-src` on an HTML-tag allowlist), then the fiber chain for components;
-Svelte through `__svelte_meta`; Astro through `data-astro-source-*` (from the snapshot, because Astro's toolbar strips them).
+**Source location per framework** (`anchor.ts` `sourceInfo`, D7/D23): JSX through a dev-only transform
+(`src/server/jsx-source.ts` stamps `data-redline-src="file:line:col Component"` on an HTML-tag allowlist), Vue SFC templates
+likewise (`vue-source.ts`, the app's own `vue/compiler-sfc`). Components: React's fiber chain, Vue's `__vueParentComponent`,
+Solid/Preact from the stamps' component names. Svelte through `__svelte_meta`; Astro through `data-astro-source-*` (from the
+snapshot, because Astro's toolbar strips them); Angular through `data-ng-source-location` (the builder in `src/angular.ts`
+turns on `enableTemplateSourceLocations` in dev) plus the `ng` debug global. One parser reads `data-redline-src`
+(`file:line:col[ Component]`); without a name (Razor/Blazor) the file's base name is the component.
 
-**Consumers** install `@umage.ai/redline` as a devDependency and import `@umage.ai/redline/{vite,astro,server}` (D4).
+**.NET** (`dotnet/`, D30–D36): a C# port of the server (`Umage.Redline.AspNetCore`: API, stores, writers, streaming
+injector, HTTP MCP), Razor/Blazor source stamps from an MSBuild task (`Umage.Redline.Build`, same `data-redline-src` format,
+no component name) and `Umage.Redline.Optimizely`. The browser bundle is shared. `test/golden` fixtures keep the markdown
+byte-identical in both servers: a format change must pass `golden.test.ts` and `GoldenTests.cs`; an edit-guard change goes in
+`test/golden/edit/cases.json` (`edit.test.ts`, `EditGoldenTests.cs`). After changing `src/server/entities.ts`, run `node scripts/entities-cs.mjs`.
+
+**Consumers** install `@umage.ai/redline` as a devDependency and import `@umage.ai/redline/{vite,astro,server}` (D4);
+Angular uses the `@umage.ai/redline:dev-server` builder (package.json `builders` → `dist/builders.json`, D23).
 Exports map to the flat `dist/*.js` plus `dist/types/` (tsc declarations). `dist/cli.js init <repo>`
 (`src/init.ts`) installs the skill for any agent (Agent Skills + AGENTS.md, plus Claude/Gemini/Copilot extras, D16) and gitignores `.redline/`.
 

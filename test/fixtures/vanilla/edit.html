@@ -6,6 +6,8 @@
   <h2 data-testid="edit-heading">Static heading</h2>
   <p data-testid="edit-rich">Fish &amp; <b>chips</b> on the <a class="menu" href="#menu">menu</a> daily</p>
   <p data-testid="edit-dynamic"></p>
+  <!-- same text three times, with an entity: the static writer tells them apart by position (nth) -->
+  <div data-testid="same"><p style="visibility:hidden">Yes &mdash; ok</p><p>Yes &mdash; ok</p><p>Yes &mdash; ok</p></div>
   <script>document.querySelector('[data-testid=edit-dynamic]').textContent = 'Count 2';</script>
 </body>
 </html>

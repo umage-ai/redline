@@ -25,7 +25,7 @@ async function serve(root: string, opts: RedlineOptions = {}) {
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/__redline`;
   const raw = (p: string, init?: RequestInit) => fetch(base + p, { ...init, headers: { 'content-type': 'application/json', 'x-redline': '1' } });
   const call = async (p: string, init?: RequestInit) => (await raw(p, init)).json();
-  return { call, raw, close: () => new Promise(r => server.close(r)) };
+  return { base, call, raw, close: () => new Promise(r => server.close(r)) };
 }
 
 function memoryStore(): NoteStore & { notes: Note[] } {
@@ -138,4 +138,71 @@ test('extensions: files are served under /__redline/ext/, URLs passed through, b
     assert.match(await r.text(), /addButton/);
     assert.equal((await s.raw('/ext/1.js')).status, 404);
   } finally { await s.close(); }
+});
+
+test('HEAD is answered on the GET routes (client.js, config, notes), mutations still need the header', async () => {
+  const root = await tmpRepo();
+  const s = await serve(root);
+  try {
+    for (const p of ['/client.js', '/config', '/notes']) {
+      const r = await fetch(s.base + p, { method: 'HEAD' });
+      assert.equal(r.status, 200, p);
+      assert.equal(await r.text(), '');
+    }
+    assert.match((await fetch(s.base + '/client.js', { method: 'HEAD' })).headers.get('content-type') ?? '', /javascript/);
+    assert.equal((await fetch(s.base + '/notes', { method: 'POST' })).status, 403);
+  } finally { await s.close(); }
+});
+
+test('pageKey option reaches /config (default route)', async () => {
+  const root = await tmpRepo();
+  for (const [opt, want] of [[undefined, 'route'], ['path', 'path']] as const) {
+    const s = await serve(root, { pageKey: opt });
+    try { assert.equal((await s.call('/config')).pageKey, want); } finally { await s.close(); }
+  }
+});
+
+test('direct edit on static .html: nth picks one of several same-text elements; inspect reports entity spellings', async () => {
+  const root = await tmpRepo();
+  const page = '<body>\n<span>Yes &mdash; ok</span>\n<span>Yes &mdash; ok</span>\n</body>';
+  await fs.writeFile(path.join(root, 'index.html'), page);
+  const s = await serve(root, { directEdit: true });
+  const edit = (body: object, q = '') => s.call('/edit' + q, { method: 'POST', body: JSON.stringify({ from: 'Yes — ok', tag: 'span', url: 'http://x/', ...body }) });
+  try {
+    assert.match((await edit({ to: 'No — ok' }, '?dry=1')).reason, /2 <span> elements/);
+    const insp = await edit({ nth: { index: 1, count: 2 } }, '?inspect=1');
+    assert.deepEqual(insp.inspect.spell, { '—': '&mdash;' });
+    assert.deepEqual(await edit({ to: 'No — ok', nth: { index: 1, count: 2 } }), { ok: true, file: 'index.html', line: 3, writer: 'static-html' });
+    assert.equal(await fs.readFile(path.join(root, 'index.html'), 'utf8'), page.replace(/Yes &mdash; ok(?=<\/span>\n<\/body>)/, 'No &mdash; ok'));
+  } finally { await s.close(); }
+});
+
+test('direct edit: Angular templates (templateUrl .html and inline in the component .ts) treat {{ }} as code (D23)', async () => {
+  const root = await tmpRepo();
+  await fs.mkdir(path.join(root, 'src/app'), { recursive: true });
+  const html = path.join(root, 'src/app/x.html'), ts = path.join(root, 'src/app/card.ts');
+  await fs.writeFile(html, '<h2>Title {{ n }}</h2>\n<p>Use &#123;braces&#125;</p>\n<p>Hi <b *ngIf="on">there</b></p>\n');
+  await fs.writeFile(ts, "@Component({\n  selector: 'c',\n  template: `\n    <h2>Card title</h2>\n  `,\n})\nexport class Card {}\n");
+  const at = (file: string, line: number, tag: string, from: string, to: string) =>
+    JSON.stringify({ from, to, tag, url: 'http://x/', source: { file, line, col: 1 } });
+  const s = await serve(root, { directEdit: true });
+  try {
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/x.html', 1, 'h2', 'Title 3', 'x') })).reason, /expression/);
+    assert.equal((await s.call('/edit', { method: 'POST', body: at('src/app/x.html', 2, 'p', 'Use {braces}', 'Use {curly}') })).ok, true);
+    assert.match(await fs.readFile(html, 'utf8'), /<p>Use &#123;curly&#125;<\/p>/);
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/x.html', 3, 'p', 'Hi there', 'Hi you') })).reason, /directive/);
+
+    assert.deepEqual(await s.call('/edit', { method: 'POST', body: at('src/app/card.ts', 4, 'h2', 'Card title', 'Better title') }), { ok: true, file: 'src/app/card.ts', line: 4, writer: 'markup' });
+    assert.match(await fs.readFile(ts, 'utf8'), /<h2>Better title<\/h2>/);
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/card.ts', 4, 'h2', 'Better title', 'A `quote`') })).reason, /inline template/);
+    await fs.writeFile(path.join(root, 'src/app/util.ts'), 'export const x = "<h2>Card</h2>";\n');
+    assert.match((await s.call('/edit?dry=1', { method: 'POST', body: at('src/app/util.ts', 1, 'h2', 'Card', 'y') })).reason, /no writer/);
+  } finally { await s.close(); }
+});
+
+test('Angular builder schema accepts every JSON-safe option (pageKey, mcpTokens were missing after the merge)', async () => {
+  const schema = JSON.parse(await fs.readFile(new URL('../../src/angular-schema.json', import.meta.url), 'utf8'));
+  const keys = Object.keys(schema.properties.redline.properties).sort();
+  assert.deepEqual(keys, ['app', 'dir', 'directEdit', 'extensions', 'hotkey', 'launcher', 'mcpTokens', 'pageKey', 'root', 'templateSourceLocations']);
+  assert.equal(schema.properties.redline.additionalProperties, false);   // so a missing key is an ng serve error, not a silent drop
 });
