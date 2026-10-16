@@ -1,6 +1,8 @@
 // Dev-only transform that stamps intrinsic HTML elements in .jsx/.tsx with
-// data-redline-src="path:line:col". React 19 dropped _debugSource, so this is how a
-// pinned note in a React app learns which file and line rendered the element.
+// data-redline-src="path:line:col Component". React 19 dropped _debugSource, so this is how a
+// pinned note in a React app learns which file and line rendered the element. Solid and
+// Preact have no usable component tree on DOM nodes, so the overlay reads the component
+// chain from these stamps too (the capitalised function or variable the JSX is written in).
 // Only known HTML tags are touched: lowercase JSX is also used by renderers
 // like react-three-fiber (<mesh>, <line>, <audio>), where an unknown prop would break.
 
@@ -8,7 +10,7 @@ import path from 'node:path';
 import { parse } from '@babel/parser';
 import MagicString from 'magic-string';
 
-const HTML_TAGS = new Set((
+export const HTML_TAGS = new Set((
   'a abbr address article aside b bdi bdo blockquote body br button canvas caption cite code col colgroup data datalist dd del ' +
   'details dfn dialog div dl dt em fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr i iframe img input ins ' +
   'kbd label legend li main mark menu meter nav ol optgroup option output p picture pre progress q s samp section select small ' +
@@ -34,26 +36,37 @@ export function stampJsx(code: string, file: string, root: string): { code: stri
   const ms = new MagicString(code);
   let touched = false;
 
-  const visit = (node: unknown): void => {
+  const visit = (node: unknown, comp: string): void => {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { for (const n of node) visit(n); return; }
+    if (Array.isArray(node)) { for (const n of node) visit(n, comp); return; }
     const n = node as AnyNode;
     if (n.type === 'JSXOpeningElement') {
       const name = n.name as AnyNode;
       const attrs = (n.attributes as AnyNode[]) ?? [];
       if (name?.type === 'JSXIdentifier' && HTML_TAGS.has(name.name as string) && n.loc &&
           !attrs.some(a => (a.name as AnyNode)?.name === SRC_ATTR)) {
-        ms.appendLeft(name.end!, ` ${SRC_ATTR}="${rel}:${n.loc.start.line}:${n.loc.start.column + 1}"`);
+        ms.appendLeft(name.end!, ` ${SRC_ATTR}="${rel}:${n.loc.start.line}:${n.loc.start.column + 1}${comp ? ' ' + comp : ''}"`);
         touched = true;
       }
     }
+    const own = componentName(n);
+    if (own) comp = own;
     for (const k in n) {
       if (k === 'loc' || k === 'start' || k === 'end' || k === 'extra' || k === 'leadingComments' || k === 'trailingComments') continue;
       const v = n[k];
-      if (v && typeof v === 'object') visit(v);
+      if (v && typeof v === 'object') visit(v, comp);
     }
   };
-  visit((ast as AnyNode).program);
+  visit((ast as AnyNode).program, '');
   if (!touched) return null;
   return { code: ms.toString(), map: ms.generateMap({ hires: true, source: file, includeContent: true }).toString() };
+}
+
+/** `function Card() {}`, `class Card {}`, `const Card = (…) => …` / `memo(…)`: a capitalised name. */
+function componentName(n: AnyNode): string | null {
+  let id: AnyNode | undefined;
+  if (n.type === 'FunctionDeclaration' || n.type === 'ClassDeclaration') id = n.id as AnyNode;
+  else if (n.type === 'VariableDeclarator' && n.init) id = n.id as AnyNode;
+  const name = id?.type === 'Identifier' ? id.name as string : '';
+  return /^[A-Z]/.test(name) ? name : null;
 }

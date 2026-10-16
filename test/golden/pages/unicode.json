@@ -1,0 +1,24 @@
+{
+  "page": "/da/om-os",
+  "url": "http://localhost:5173/da/om-os?q=1#top",
+  "notes": [
+    {
+      "id": "mg2uni0001", "type": "comment", "page": "/da/om-os", "url": "http://localhost:5173/da/om-os?q=1#top", "at": "2026-10-14 08:30",
+      "target": {
+        "tag": "p", "text": "Ærlig talt — æøå ÆØÅ 😀 emoji, tab\there, a really long paragraph text that goes on and on beyond fifty characters",
+        "html": "<p>Ærlig talt — æøå</p>", "components": ["Om", "Layout"], "fx": 0.123, "fy": 1e-7
+      },
+      "body": "Brug “gåseøjne” og emoji 🎉. Backslash \\ and \"quotes\" and </script> and -->.\n\n- list item\n- another", "reply": "", "done": false
+    },
+    {
+      "id": "mg2uni0002", "type": "comment", "page": "/da/om-os", "url": "http://localhost:5173/da/om-os?q=1#top", "at": "2026-10-14 08:31",
+      "target": { "tag": "div", "source": { "file": "src/components/Card.tsx" }, "html": "control \u0001 char, \u001f, \u007f del and   line sep" },
+      "body": "No line number in the source.", "reply": "Which card? There are three.", "done": false
+    },
+    {
+      "id": "mg2uni0003", "type": "comment", "page": "/da/om-os", "url": "http://localhost:5173/da/om-os?q=1#top", "at": "2026-10-14 08:32",
+      "target": { "tag": "nav", "components": ["Header", "Layout"] },
+      "body": "Component only, no source.", "reply": "", "done": true
+    }
+  ]
+}

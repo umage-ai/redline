@@ -33,8 +33,8 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched. With `directEdit` on, a source writer may write the change to the file instead (D20); the default is unchanged.
 - **Why:** mapping DOM text back to source is unreliable across frameworks and content stores (i18n, CMS). Mutating framework-owned DOM breaks React reconciliation. The agent applies it with full context.
 
-## D7 — Source location via framework dev metadata, plus a JSX stamp for React (2026-10-13)
-- **Decision:** use `__svelte_meta` and `data-astro-source-*` as given. For React, a dev-only transform stamps `data-redline-src` on known HTML tags.
+## D7 — Source location via framework dev metadata, plus a JSX stamp for React (2026-10-13, amended 2026-10-16)
+- **Decision:** use `__svelte_meta` and `data-astro-source-*` as given. For React, a dev-only transform stamps `data-redline-src` on known HTML tags. Extended to Vue, Solid, Preact and Angular in D23.
 - **Why:** React 19 removed `_debugSource`. An allowlist avoids breaking renderers that use lowercase JSX (react-three-fiber).
 
 ## D8 — DOM screenshots by default, tab capture opt-in (2026-10-13)
@@ -108,17 +108,66 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Why:** with a custom store (D19) the files aren't there for the agent. Going through the dev server's API keeps one source of truth for every store, and is the same API a hosted version would expose. The skill (files) stays the zero-setup path; MCP is opt-in.
 - **Revisit if:** agents need notes while no dev server runs and the store isn't markdown (then stores need a CLI-side factory), or MCP gains a standard way to push note changes (subscriptions).
 
+## D23 — More frameworks: Vue, Solid, Preact on the Vite plugin; Angular through a builder (2026-10-16)
+- **Decision:** Vue 3, Solid and Preact use the existing Vite plugin. The JSX stamp now also names the component an element is written in (`file:line:col Card`), which gives Solid and Preact a chain (neither keeps a component tree on DOM nodes); Vue templates get the same stamp from a transform that uses the app's own `vue/compiler-sfc`, and the chain comes from `__vueParentComponent`. Angular (CLI 17+, `@angular/build`) gets `@umage.ai/redline:dev-server`, a builder that wraps `executeDevServerBuilder` with our middleware and, in dev only, a generated tsconfig turning on Angular's own `enableTemplateSourceLocations` (`data-ng-source-location` on every template element); components come from the `ng` debug global. The markup writer treats `.html` with a source location as a template (`{` is code) and edits inline templates in a component `.ts`; directives that decide what inline markup shows (`v-if`, `*ngIf`, `[innerHTML]`…) are refused.
+- **Why the builder:** Angular's dev server takes no Vite plugins; its only supported hook is the experimental `extensions.middleware` of `executeDevServerBuilder` (what `@angular-builders/custom-esbuild` uses too). A builder needs one line in angular.json, no proxy or sidecar, and keeps `ng build` untouched. Its schema is a copy of Angular 22's dev-server schema plus `redline`, so CLI flags parse; Angular validates the rest.
+- **Not done:** Nuxt (HTML is rendered by Nitro, outside Vite's middleware: needs a Nuxt module with a dev handler + `render:html`), Next.js (no Vite and no Babel: needs a dev sidecar for `/__redline` plus a `<Script>`, and React 19 fibers have no source), Qwik (works for loading; its `data-qwik-inspector` stamps would be a small add with a fixture), Lit (no source metadata; shadow roots aren't pickable yet). SolidStart and Analog are Vite apps and should work, untested.
+- **Revisit if:** Angular changes the `extensions` API or adds Vite plugin support; a Nuxt or Next app adopts Redline.
+
 ## D24 — Full HTML entity table in the server bundle; plain edits keep the file's entity spelling (2026-10-16)
 - **Decision:** `decodeEntities` (`src/server/edit.ts`) knows all 2125 WHATWG named references, legacy names without `;`, and numeric ones (invalid → U+FFFD), from a packed table generated once into `src/server/entities.ts` (no runtime dependency). Plain and rich edits write a character the way the element's source already spelled it (`—` → `&mdash;`); `/edit?inspect=1` returns that map as `spell`.
 - **Why:** static decks use `&mdash;`/`&middot;`/`&rarr;` everywhere; with six known names their text never matched the page, and writes turned `&mdash;` into raw `—`. The table is ~29 KB per Node bundle (server/vite/astro), server-only and dev-only; the client bundle doesn't include it.
+- **.NET follows:** `scripts/entities-cs.mjs` writes the same table to `Entities.g.cs` (`WebUtility.HtmlDecode` knows only HTML4 names); `EditGoldenTests.cs` fails while the two differ.
 - **Revisit if:** bundle size matters (ship the HTML4 subset), or the HTML standard adds names.
 
 ## D25 — Same-text elements on static pages: pick by position only when the counts agree (2026-10-16)
 - **Decision:** the overlay sends `nth: { index, count }` (position among same-tag elements with the same text, in document order) when there are several. `staticHtmlWriter` uses it only if the file has exactly `count` matching static elements; otherwise it still refuses.
 - **Why:** a selector path would break on any wrapper the runtime adds; equal counts are a cheap proof that source order and DOM order line up. A mismatch (one copy rendered by script) means the index can't be trusted.
+- **.NET follows:** the static-html writer takes `nth` the same way. The cases are shared in `test/golden/edit/cases.json` (both test suites).
 - **Revisit if:** framework writers need it (they use line:col and don't).
 
 ## D26 — Extension API v2, page key option, toolbar beside the panel (2026-10-16)
 - **Decision:** `RedlineApi.version` is 2 (additive): `removeButton(id)`, `panelState()` and a `panel` event `{ open, width }`, `setPageKey(fn)` (fn gets the location and the built-in key; nullish keeps it) and a `page` event. Option `pageKey: 'route'` (default, unchanged: path + `#/…` routes) or `'path'` reaches the client via `/config`. The toolbar centres in the room left of the open panel (`--panel-w`) and wraps there; phones keep one scrolling row, and a full-width panel doesn't move it.
 - **Why:** a host page (a deck) must lay itself out beside the panel and group all slides as one page; a wide bar with extension buttons sat under the panel.
+- **.NET follows:** `RedlineOptions.PageKey` (`Route` | `Path`) in `/config`; HEAD answers on the GET routes there too.
 - **Revisit if:** route-pattern grouping lands (it could become a third `pageKey` mode).
+
+## D30 — .NET: a C# port of the server, not a proxy to Node (2026-10-16)
+- **Decision:** `dotnet/` holds NuGet packages (`Umage.Redline.AspNetCore`, `.Build`, `.Optimizely`) that reimplement the server side in C#: the `/__redline` API with the same routes and JSON, the markdown store, writers, `servers.json`. The browser bundle is not forked: `dist/client.js` is embedded at build time (the csproj runs `npm run build` if it's missing).
+- **Why:** a .NET team shouldn't need Node at runtime, and Optimizely sites deploy as plain ASP.NET Core. The format is the risky part, so `test/golden` holds fixtures both test suites must reproduce byte for byte (JS `JSON.stringify` escaping, number printing and key order are ported in `Js.cs`).
+- **Revisit if:** the two servers drift in behaviour beyond the format and the edit guards (those share `test/golden/edit`; the API has no shared fixtures yet), or a hosted Redline makes per-stack servers unnecessary.
+
+## D31 — .NET injects the overlay as the response streams, before `</head>` (2026-10-16)
+- **Decision:** the middleware runs first in the pipeline (an `IStartupFilter`; `ManualPlacement` + `app.UseRedline()` to move it) and wraps the body in a stream that inserts the script before the first `</head>` (else `</body>`, else at the end), holding back at most a partial tag between writes. Content-Length is dropped in `OnStarting`.
+- **Why:** Blazor's streaming rendering and enhanced navigation flush the page in parts; buffering whole responses (as the Node injector does) would hold them back. The client already re-mounts its root if a DOM patch removes it, and an ES module runs once, so enhanced navigation keeps one overlay.
+- **Revisit if:** an app compresses responses before Redline sees them (they pass through without the overlay today).
+
+## D32 — Razor source lines: compile stamped copies in Debug builds (2026-10-16)
+- **Decision:** an MSBuild task (`Umage.Redline.Build`) runs after the Razor SDK collects its inputs and swaps each `.cshtml`/`.razor` AdditionalFile for a copy in `obj/…/redline-src/` whose HTML elements carry `data-redline-src="path:line:col"` (repo-relative), keeping all item metadata (TargetPath, CssScope). Lines don't move, and `PathMap` maps the copies back so PDBs name the originals. Only lowercase tags from the same allowlist as the JSX stamp; a conservative scanner follows Razor's `@` transitions and C# strings, and leaves a file it can't follow unstamped. Off in Release, design-time builds and `dotnet watch`.
+- **Why:** Razor has no runtime source metadata (no `__svelte_meta`, no fiber `_debugSource`), and a tag helper can't see line numbers. Rewriting copies needs no change to the app's files, works the same for MVC, Razor Pages and Blazor (also WebAssembly, by referencing the build package in the `.Client` project), and the existing client reads the attribute unchanged.
+- **Revisit if:** the Razor compiler gains a source-mapping hook, or hot reload of stamped files is needed (it compiles the originals).
+
+## D33 — Optimizely: name the CMS content in notes, edit drafts, stay out of edit mode (2026-10-16)
+- **Decision:** `AddRedlineOptimizely()` (CMS 12 on .NET 8, CMS 13 on .NET 10) keeps the overlay out of the CMS UI and edit/preview frames, and on overlay pages only stamps `data-redline-cms="<content>|<property>"` from `PropertyFor` (a `display:contents` wrapper), `epi-property` (tag helper) and content area items. Before a note is stored, a hook adds the content's name, type, language and edit link (`target.cms`); the heading then names the CMS property instead of the template line. Text mode on a plain string property saves a draft via `IContentRepository` (`SaveAction.Default` on the common draft, `AccessLevel.Edit`), never publishes.
+- **Why:** on a CMS page most text is content: a `.cshtml` line sends the agent to the wrong place. Edit mode already has Optimizely's own overlay and `data-epi-*`; running inside it would fight over clicks. View mode has no property markup, so we add our own, only where the reviewer sees the overlay.
+- **Revisit if:** rich text (XhtmlString) edits are wanted (needs an HTML-aware writer), or local blocks need full property paths.
+
+## D34 — Online mode: overlay and API only for authorized reviewers (2026-10-16)
+- **Decision:** `o.Online = true` runs Redline in any environment, but only for users who pass `Policy` (or have one of `Roles`; Optimizely defaults to the editor roles). Everyone else gets no script and 404 from `/__redline` (not 401: the endpoint isn't advertised). The middleware authenticates with the default scheme itself, so it can sit before `UseAuthentication`. Mutations need `x-redline: 1` and a same-origin `Origin` (or `Sec-Fetch-Site`); overlay pages get `Cache-Control: no-store, private`. File writers are off; content writers run under the user's rights. Notes record `author`.
+- **Why:** reviewing a staging or production site is the common CMS workflow. A custom header plus origin check stops cross-site requests under cookie auth without changing the client (no antiforgery token plumbing). Never caching overlay pages keeps a CDN from serving the script to visitors.
+- **Revisit if:** sites need CORS (a separate admin origin) or reviewers outside the site's own login.
+
+## D35 — Remote MCP over HTTP with bearer tokens (2026-10-16)
+- **Decision:** `POST /__redline/mcp` serves the `redline mcp` tools over MCP's Streamable HTTP transport, stateless (JSON responses, no sessions or SSE; GET is 405). Callers need `Authorization: Bearer`: site tokens configured as SHA-256 hashes (`o.Mcp.TokenHashes`), or personal tokens a reviewer creates in the overlay panel (an extension served by the package, D21), stored hashed with the notes and acting as that user. In development, loopback calls need no token unless site tokens are set. The reviewer's cookie never authorizes MCP.
+- **Why:** agents can't read a production database's notes from files, and a bearer header is what Claude Code, Cursor and VS Code send for HTTP MCP servers. Hashes mean a database or config leak doesn't leak tokens.
+- **Revisit if:** clients expect OAuth for remote MCP. The Node handler serves the same endpoint (D37).
+
+## D36 — Online notes in SQL over plain ADO.NET, assets in the database (2026-10-16)
+- **Decision:** `SqlNoteStore` keeps notes, screenshots/sketches, personal tokens and a version counter in four `Redline*` tables, created on first use, through `DbConnection` (SQL Server and SQLite dialects). A note row stores the same JSON the markdown anchor holds. Optimizely uses the CMS database by default.
+- **Why:** an Optimizely site already has SQL Server; EF Core would add a dependency and migrations for four tables, and its `EnsureCreated` does nothing in an existing database. Dynamic Data Store is CMS-only and slow to query. Assets are small PNGs and a review tool's volume is low, so a blob provider isn't worth the setup.
+- **Revisit if:** many reviewers or large screenshots make the database the wrong place for assets (move them to the CMS blob provider behind `AssetAsync`).
+
+## D37 — Node dev servers serve MCP over HTTP too (2026-10-16)
+- **Decision:** the Node handler answers `POST /__redline/mcp` like .NET (D35): Streamable HTTP, stateless JSON (batches allowed, notifications → 202, GET → 405), the tools of `src/mcp.ts` (`handleMcpMessage`, shared with stdio) on the handler's own store, with its hooks. Without `mcpTokens` only loopback callers are answered; with them every caller needs `Authorization: Bearer` (plain or `sha256:<hex>` entries, compared hashed). A cross-origin `Origin` is refused (DNS rebinding); no `x-redline` header needed.
+- **Why:** an agent can reach the notes with a URL alone (no CLI, no servers.json), including one on another machine when the dev server runs with `--host`. Loopback-only by default keeps `--host` from exposing notes to the LAN.
+- **Revisit if:** per-user tokens are wanted in Node (then share .NET's token store design), or MCP clients need SSE.

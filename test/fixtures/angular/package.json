@@ -1,0 +1,23 @@
+{
+  "name": "redline-fixture-angular",
+  "private": true,
+  "description": "Angular CLI fixture for e2e (port 5203). Own install: Angular needs its own TypeScript. test/e2e/fixtures.ts installs it on first run.",
+  "scripts": {
+    "start": "ng serve --port 5203"
+  },
+  "dependencies": {
+    "@angular/common": "22.2.3",
+    "@angular/compiler": "22.2.3",
+    "@angular/core": "22.2.3",
+    "@angular/platform-browser": "22.2.3",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1"
+  },
+  "devDependencies": {
+    "@angular/build": "22.2.3",
+    "@angular/cli": "22.2.3",
+    "@angular/compiler-cli": "22.2.3",
+    "@umage.ai/redline": "file:../../..",
+    "typescript": "~6.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+[
+  { "page": "/settings", "app": "apps/web", "file": "pages/apps-web--settings.md", "open": 2, "done": 1 },
+  { "page": "/", "file": "pages/index.md", "open": 0, "done": 3 },
+  { "page": "/about", "app": "apps/docs", "file": "pages/apps-docs--about.md", "open": 2, "done": 0 },
+  { "page": "/Zebra", "app": "apps/web", "file": "pages/apps-web--zebra.md", "open": 2, "done": 0 },
+  { "page": "/alpha", "app": "apps/web", "file": "pages/apps-web--alpha.md", "open": 2, "done": 0 }
+]

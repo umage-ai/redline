@@ -16,6 +16,10 @@
     "astro-integration",
     "sveltekit",
     "react",
+    "vue",
+    "angular",
+    "solid-js",
+    "preact",
     "feedback",
     "annotation",
     "design-review",
@@ -32,6 +36,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "builders": "dist/builders.json",
   "bin": {
     "redline": "dist/cli.js"
   },
@@ -47,6 +52,10 @@
     "./server": {
       "types": "./dist/types/server/index.d.ts",
       "default": "./dist/server.js"
+    },
+    "./angular": {
+      "types": "./dist/types/angular.d.ts",
+      "default": "./dist/angular.js"
     },
     "./client.js": "./dist/client.js",
     "./package.json": "./package.json"
@@ -89,17 +98,23 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
+    "@preact/preset-vite": "^2.10.6",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-vue": "^6.0.10",
     "astro": "^6.4.8",
     "esbuild": "^0.28.2",
     "modern-screenshot": "^4.7.0",
+    "preact": "^11.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "solid-js": "^1.9.17",
     "svelte": "^5.57.2",
     "typescript": "~5.9.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vite-plugin-solid": "^2.11.14",
+    "vue": "^3.5.44"
   }
 }

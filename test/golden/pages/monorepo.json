@@ -1,0 +1,25 @@
+{
+  "page": "/settings",
+  "url": "http://localhost:5174/settings",
+  "notes": [
+    {
+      "id": "mg3mono001", "type": "comment", "page": "/settings", "app": "apps/web", "url": "http://localhost:5174/settings", "at": "2026-10-15 12:00",
+      "target": { "tag": "label", "testid": "email-label", "text": "E-mail", "source": { "file": "apps/web/src/Settings.vue", "line": 10, "col": 3 } },
+      "author": "anna@example.com",
+      "body": "Say “Email”.", "reply": "", "done": false
+    },
+    {
+      "id": "mg3mono002", "type": "text", "page": "/settings", "app": "apps/web", "url": "http://localhost:5174/settings", "at": "2026-10-15 12:01",
+      "target": { "tag": "h2", "text": "Welcome", "source": { "file": "Views/Home/Index.cshtml", "line": 7, "col": 5 },
+        "cms": { "content": "5_12", "property": "Heading", "name": "Start page", "type": "StartPage", "lang": "en", "edit": "/EPiServer/CMS/#context=epi.cms.contentdata:///5_12" } },
+      "from": "Welcome", "to": "Welcome back",
+      "body": "", "reply": "", "done": false
+    },
+    {
+      "id": "mg3mono003", "type": "comment", "page": "/settings", "app": "apps/web", "url": "http://localhost:5174/settings", "at": "2026-10-15 12:02",
+      "target": { "tag": "p", "cms": { "property": "MainBody" }, "source": { "file": "Views/Shared/Layout.cshtml", "line": 3 } },
+      "extra": { "custom": ["kept", 1, true, null], "big": 12345678901234567890, "neg": -0.5 },
+      "body": "Unknown keys survive.", "reply": "", "done": false
+    }
+  ]
+}

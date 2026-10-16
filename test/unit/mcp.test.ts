@@ -130,3 +130,81 @@ test('init --mcp: registers the server in .mcp.json and per agent, keeping exist
   const again = await initRepo(root, { skill: '# s\n', harnesses: ['claude'], mcp });
   assert.ok(again.includes('· .mcp.json: MCP server up to date'));
 });
+
+/* ---------- HTTP endpoint on the dev server (D37) ---------- */
+
+async function serveHandler(root: string, opts: Parameters<typeof createHandler>[0] extends infer O ? Partial<O> : never = {}) {
+  const { api } = createHandler({ serverRoot: root, clientFile: import.meta.filename, ...opts });
+  const server = http.createServer((req, res) => api(req, res, () => { res.statusCode = 404; res.end(); }));
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/__redline/mcp`;
+  const post = (body: unknown, headers: Record<string, string> = {}) =>
+    fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  return { url, post, close: () => new Promise(r => server.close(r)) };
+}
+
+test('mcp over HTTP: POST /__redline/mcp serves the same tools on the handler\'s store, stateless', async () => {
+  const root = await tmpRepo();
+  const updated: string[] = [];
+  const store = createStore({ root });
+  const a = await store.create({ note: { type: 'comment', page: '/x', url: 'http://x/x', body: 'Bigger.', target: { tag: 'h1', text: 'Hi' } }, screenshot: PNG });
+  const s = await serveHandler(root, { hooks: { onUpdate: n => { updated.push(n.id); } } });
+  try {
+    const init = await (await s.post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } })).json();
+    assert.equal(init.result.protocolVersion, '2025-03-26');
+    assert.equal(init.result.serverInfo.name, 'redline');
+    const note = await s.post({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    assert.equal(note.status, 202);
+    assert.equal(await note.text(), '');
+    const tools = await (await s.post({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json();
+    assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name), ['list_notes', 'get_note', 'update_note']);
+
+    const call = async (name: string, args: object) => (await (await s.post({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: args } })).json()).result;
+    assert.match((await call('list_notes', {})).content[0].text, /^1 open note from dev server http:\/\/127\.0\.0\.1:\d+:/);
+    const got = await call('get_note', { id: a.id });
+    assert.equal(got.content[1].type, 'image');
+    assert.equal((await call('get_note', { id: 'nope' })).isError, true);
+    await call('update_note', { id: a.id, done: true, reply: 'Made it 2rem.' });
+    assert.deepEqual(updated, [a.id]);   // hooks run as for the overlay's PATCH
+    assert.equal((await store.list())[0].done, true);
+
+    // batches answer in one array; unknown methods are JSON-RPC errors; bad JSON is a parse error
+    const batch = await (await s.post([{ jsonrpc: '2.0', id: 'a', method: 'ping' }, { jsonrpc: '2.0', id: 'b', method: 'nope' }, { jsonrpc: '2.0', method: 'notifications/x' }])).json();
+    assert.deepEqual(batch.map((r: { id: string }) => r.id), ['a', 'b']);
+    assert.equal(batch[1].error.code, -32601);
+    assert.equal((await (await s.post('{oops')).json()).error.code, -32700);
+
+    assert.equal((await fetch(s.url)).status, 405);   // no SSE stream
+    // no x-redline header needed, but a page on another origin is refused (DNS rebinding)
+    assert.equal((await s.post({ jsonrpc: '2.0', id: 4, method: 'ping' }, { origin: 'http://evil.example' })).status, 403);
+    assert.equal((await s.post({ jsonrpc: '2.0', id: 4, method: 'ping' }, { origin: new URL(s.url).origin })).status, 200);
+    // without mcpTokens a bearer token is not accepted either (it would mean the caller expects auth)
+    assert.equal((await s.post({ jsonrpc: '2.0', id: 4, method: 'ping' }, { authorization: 'Bearer x' })).status, 401);
+  } finally { await s.close(); }
+});
+
+test('mcp over HTTP: mcpTokens require a bearer token (plain or sha256:), even locally', async () => {
+  const root = await tmpRepo();
+  const { createHash } = await import('node:crypto');
+  const s = await serveHandler(root, { mcpTokens: ['rl_plain', 'sha256:' + createHash('sha256').update('rl_hashed').digest('hex')] });
+  const ping = (auth?: string) => s.post({ jsonrpc: '2.0', id: 1, method: 'ping' }, auth ? { authorization: auth } : {});
+  try {
+    const none = await ping();
+    assert.equal(none.status, 401);
+    assert.match(none.headers.get('www-authenticate') ?? '', /^Bearer/);
+    assert.equal((await ping('Bearer wrong')).status, 401);
+    assert.equal((await ping('Bearer rl_plain')).status, 200);
+    assert.equal((await ping('bearer rl_hashed')).status, 200);
+  } finally { await s.close(); }
+});
+
+test('mcpAllowed: without tokens only loopback callers', async () => {
+  const { mcpAllowed } = await import('../../src/server/handler.ts');
+  const req = (remoteAddress: string, authorization?: string) => ({ headers: { authorization }, socket: { remoteAddress } }) as never;
+  assert.equal(mcpAllowed(req('127.0.0.1'), undefined), true);
+  assert.equal(mcpAllowed(req('::1'), []), true);
+  assert.equal(mcpAllowed(req('::ffff:127.0.0.1'), undefined), true);
+  assert.equal(mcpAllowed(req('192.168.1.20'), undefined), false);   // `vite --host`: LAN callers need a token
+  assert.equal(mcpAllowed(req('192.168.1.20', 'Bearer t'), ['t']), true);
+  assert.equal(mcpAllowed(req('192.168.1.20', 'Bearer t'), ['sha256:zz']), false);   // a malformed hash never matches
+});

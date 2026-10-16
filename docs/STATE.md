@@ -7,6 +7,7 @@ Last updated: 2026-10-16 · Cap: 150 lines · Rewrite sections in place; this is
 v0.1.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
 React + Vite 7, SvelteKit) install it as a devDependency. The tarball ships only `dist/` (JS + `dist/types`), `skill/`,
 README and LICENSE. Later releases go through `.github/workflows/publish.yml` (Trusted Publishing, D13).
+The .NET packages (`dotnet/`, not yet published) are `Umage.Redline.AspNetCore`, `Umage.Redline.Build` and `Umage.Redline.Optimizely` (0.1.0).
 
 ## What works (covered by tests)
 
@@ -14,7 +15,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 |---|---|---|
 | Markdown format round-trip, agent edits kept, slugs | ✅ | `test/unit/format.test.ts` |
 | Store: assets, INDEX.md, update/remove, concurrent agent edits | ✅ | unit |
-| JSX source stamping (HTML tags only) | ✅ | unit |
+| JSX source stamping (HTML tags only, with the enclosing component's name); Vue SFC template stamping | ✅ | `format.test.ts` |
 | Script injection, comment mode, app never sees clicks | ✅ | `overlay.spec.ts` |
 | Disabled controls pickable; autofocus doesn't eat mode keys | ✅ | `overlay.spec.ts` |
 | Monorepos: per-app notes in one root `.redline/`, `init` from any folder (D17) | ✅ | `test/unit/monorepo.test.ts`, `overlay.spec.ts` |
@@ -23,32 +24,43 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
 | Pluggable note store (`store`) and server `hooks`; markdown store is the default (D19) | ✅ | `test/unit/extend.test.ts` |
-| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20); full HTML entity set, source entity spelling kept (D24); same-text elements on static .html picked by position (D25) | ✅ static .html, React, SvelteKit, Astro; Vue unit only | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
-| `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22) | ✅ | `mcp.test.ts` |
+| Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text and directives; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20); full HTML entity set, source entity spelling kept (D24); same-text elements on static .html picked by position (D25) | ✅ static .html, React, SvelteKit, Astro, Vue, Angular (templateUrl; inline templates unit only), Solid, Preact | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
+| `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22). Same tools over HTTP at `POST /__redline/mcp` (loopback, or `mcpTokens` bearer, D37) | ✅ | `mcp.test.ts` |
 | Overlay extensions (`extensions`, `window.redlineExtensions`): buttons + keys, panel sections, events (D21); API v2: `removeButton`, `panelState` + `panel` event, `setPageKey` + `page` event (D26) | ✅ | `extend.test.ts`, `extend.spec.ts` |
 | Page key option `pageKey: 'route' \| 'path'` (hash routes as pages, or not) (D26) | ✅ | `page.test.ts`, `extend.test.ts`, `extend.spec.ts` |
 | Toolbar centred left of the open notes panel, wraps when short of room (phones: one scrolling row); `HEAD` answered on GET routes | ✅ | `extend.spec.ts`, `mobile.spec.ts`, `extend.test.ts` |
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
 | Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
-| Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6 | ✅ | `frameworks.spec.ts` |
+| Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
+| Angular CLI: `@umage.ai/redline:dev-server` builder wraps `ng serve` (middleware + dev-only template source locations); `ng build` untouched | ✅ Angular 22, real `ng serve` | `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
 | Sketch text labels (Enter commits once, Escape drops) | ✅ | `overlay.spec.ts` |
 | Sketch colours: one swatch folds out a palette of six (halos), per shape, `C` cycles, remembered; kept in svg + png | ✅ | `overlay.spec.ts`, `mobile.spec.ts` |
 | Phones/touch (360 px, Pixel 8 Pro at 125%): everything fits, tap to pick, swipe scrolls while picking, tap outside ends a text edit, sketch by finger, full-width panel, pins kept on screen; `examples/demo` is responsive | ✅ emulated | `mobile.spec.ts`; not yet tried on a real device |
 | README screenshots from `examples/demo` | ✅ regenerated by `npm run screenshots` | not a test; rerun after UI changes |
 | Packed tarball installed into fresh React / SvelteKit / Astro / node:http apps, wired as the README says; types (bundler + nodenext); `redline init` | ✅ | `npm run test:package` (also `prepublishOnly`) |
+| Markdown format identical in Node and .NET (escaping, numbers, key order, slugs, INDEX) | ✅ | `test/golden` via `golden.test.ts` and `GoldenTests.cs` |
+| Direct-edit guards identical in Node and .NET (entities D24, spelling, `nth` D25, refusals); .NET also has `PageKey` (D26) and HEAD | ✅ | `test/golden/edit` via `edit.test.ts` and `EditGoldenTests.cs` |
+| .NET (`dotnet/`, D30): API, markdown + SQL stores, hooks, Razor writer, servers.json, streaming injection; .NET 8/9/10 | ✅ | `dotnet test dotnet/tests/Umage.Redline.Tests` (net8.0, net10.0) |
+| Razor Pages, MVC, Blazor Server/WebAssembly/streaming/enhanced nav: source stamps (D32), notes, `.cshtml` direct edits, dev HTTP MCP | ✅ samples on 5210/5211 | `npx playwright test -c dotnet/playwright.config.ts` |
+| Optimizely CMS 12 (13 compiles): CMS content/property in notes, drafts from text mode, no overlay in edit mode (D33) | ✅ sample on 5212 (LocalDB) | `optimizely.spec.ts` with `REDLINE_E2E_OPTIMIZELY=1` |
+| Online mode: role/policy-gated overlay and API, SQL store with author, remote MCP with site/personal tokens (D34–D36) | ✅ unit (TestServer, SQLite; SQL Server with `REDLINE_TEST_SQLSERVER`); browser on the Optimizely sample (LocalDB, panel token → MCP) | `OnlineTests.cs`, `StoreTests.cs`, `online.spec.ts`; not yet on a deployed site |
+| NuGet packages: `dotnet pack dotnet/Redline.slnx` | ✅ installed into a fresh Razor Pages app (stamps + overlay) | manual; no package test script yet |
 | Pixel-perfect tab capture (getDisplayMedia) | ⚠️ manual only | needs a permission prompt, not automatable |
 
 ## Known gaps
 
 - DOM screenshots: WebGL, cross-origin map tiles and video can come out blank; sticky headers are missing when scrolled. Workaround: tab capture.
-- Text mode writes source only with `directEdit` and only static content (D20): text plus inline markup. i18n strings and CMS content stay notes until a writer for them exists. Links can't be added or retargeted in place. Vue has no fixture app.
+- Text mode writes source only with `directEdit` and only static content (D20): text plus inline markup. i18n strings stay notes until a writer for them exists; CMS text has one only for Optimizely (drafts, D33). Links can't be added or retargeted in place.
 - A custom store reaches agents only through `redline mcp` while a dev server runs (D22); SKILL.md describes the markdown files.
 - Notes are keyed by pathname, so `/org/a/agents/1` and `/org/b/agents/1` are separate pages. There's no route-pattern grouping yet.
 - CSS-only `:hover` menus still close when the pointer moves to the toolbar. Workaround: open the menu, then press `C` and click.
 - Pins re-resolve by selector/testid/xpath/text. Heavily dynamic lists can re-pin onto the wrong row.
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
+- Not supported yet (D23): Nuxt and Next.js (HTML isn't served through a Vite/connect stack we hook), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
+- `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.
+- .NET: apps under a `PathBase` aren't supported (the client calls `/__redline` at the root); hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN.
 
 ## Next up
 
@@ -58,4 +70,5 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
    that Redline has the entity set, nth, API v2 and `pageKey` (D24–D26).
 3. Chrome extension reusing `dist/client.js` + `captureVisibleTab`, for non-Vite apps and staging (with a `redline serve` store).
 4. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
-5. Try `redline mcp` with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.
+5. Try `redline mcp` (stdio and HTTP) with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.
+6. .NET: a package test (pack → install → browser) like `test:package`; an Optimizely 13 sample; CI for `dotnet test` and the .NET smoke.

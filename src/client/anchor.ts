@@ -2,7 +2,7 @@
 // chain, test id, selector) and so the overlay can find it again after reloads
 // (selector → test id → id → xpath → tag+text).
 
-import type { SourceLoc, Target } from '../shared/types.ts';
+import type { CmsRef, SourceLoc, Target } from '../shared/types.ts';
 
 const TESTID_ATTRS = ['data-testid', 'data-test-id', 'data-test', 'data-cy', 'data-qa'];
 
@@ -99,11 +99,14 @@ function nameOf(el: Element): string | undefined {
   return undefined;
 }
 
+// Source stamps (ours for JSX/Vue, Angular's template locations): noise for the agent.
+const NOISE = ['data-redline-src', 'data-redline-cms', 'data-ng-source-location'];
+
 function htmlExcerpt(el: Element): string {
   const clone = el.cloneNode(true) as Element;
   // Drop noise the agent can't use.
   clone.querySelectorAll?.('svg *').forEach(n => n.remove());
-  for (const n of [clone, ...Array.from(clone.querySelectorAll?.('[data-redline-src]') ?? [])]) n.removeAttribute?.('data-redline-src');
+  for (const a of NOISE) for (const n of [clone, ...Array.from(clone.querySelectorAll?.(`[${a}]`) ?? [])]) n.removeAttribute?.(a);
   let html = clone.outerHTML.replace(/\s+/g, ' ');
   if (html.length > 400) {
     const open = html.slice(0, html.indexOf('>') + 1);
@@ -117,7 +120,7 @@ function htmlExcerpt(el: Element): string {
 type SvelteMeta = { loc?: { file: string; line: number; column: number }; parent?: SvelteParent };
 type SvelteParent = { type?: string; file?: string; line?: number; column?: number; componentTag?: string; parent?: SvelteParent | null };
 
-const baseName = (f: string) => f.split(/[\\/]/).pop()!.replace(/\.(svelte|astro|tsx|jsx|vue)$/, '');
+const baseName = (f: string) => f.split(/[\\/]/).pop()!.replace(/\.(svelte|astro|tsx|jsx|vue|ts|js|html|razor|cshtml)$/, '');
 
 function svelteInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
   for (let cur: Element | null = el; cur; cur = cur.parentElement) {
@@ -176,22 +179,115 @@ function reactName(type: unknown): string | null {
 const REACT_PLUMBING = /^(Anonymous|Fragment|Suspense|StrictMode|Consumer|Context|Route|Routes|RenderedRoute|Outlet|Router|BrowserRouter|RouterProvider|DataRoutes|Navigate|ErrorBoundary|Hydrate|Portal)$|Provider$|^ForwardRef|^Memo/;
 
 function reactInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
-  let source: SourceLoc | undefined;
-  const stamped = el.closest('[data-redline-src]')?.getAttribute('data-redline-src');
-  if (stamped) {
-    const m = /^(.*):(\d+):(\d+)$/.exec(stamped);
-    if (m) source = { file: m[1], line: +m[2], col: +m[3] };
-  }
   let fiber: Fiber | null = null;
   for (let cur: Element | null = el; cur && !fiber; cur = cur.parentElement) fiber = fiberOf(cur);
-  if (!fiber && !source) return null;
+  if (!fiber) return null;
+  let source = stampOf(el)?.source;
   const comps: string[] = [];
-  for (let f = fiber; f && comps.length < 6; f = f.return ?? null) {
+  for (let f: Fiber | null = fiber; f && comps.length < 6; f = f.return ?? null) {
     if (!source && f._debugSource) source = { file: f._debugSource.fileName, line: f._debugSource.lineNumber, col: f._debugSource.columnNumber };
     const n = reactName(f.type);
     if (n && !REACT_PLUMBING.test(n) && !n.startsWith('_')) comps.push(n);
   }
   return { source, components: dedupe(comps) };
+}
+
+/*
+ * data-redline-src="file:line:col[ Component]": stamped by the dev server into JSX (jsx-source.ts) and Vue
+ * templates (vue-source.ts), or by Umage.Redline.Build into Razor/Blazor markup (no component: the file names it).
+ */
+function parseStamp(s: string | null | undefined): { source: SourceLoc; comp?: string } | null {
+  const m = s ? /^(.*):(\d+):(\d+)(?: (\S+))?$/.exec(s) : null;
+  return m ? { source: { file: m[1], line: +m[2], col: +m[3] }, comp: m[4] } : null;
+}
+const stampOf = (el: Element) => parseStamp(el.closest('[data-redline-src]')?.getAttribute('data-redline-src'));
+
+// Solid, Preact, Razor and Blazor keep no component tree on DOM nodes: the chain is the components
+// the stamped ancestors are written in (the element's own first, then the ones around it).
+function stampInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
+  const own = stampOf(el);
+  if (!own) return null;
+  const comps: string[] = [];
+  for (let cur = el.closest('[data-redline-src]'); cur; cur = cur.parentElement?.closest('[data-redline-src]') ?? null) {
+    const s = parseStamp(cur.getAttribute('data-redline-src'));
+    if (s) comps.push(s.comp ?? baseName(s.source.file));
+  }
+  return { source: own.source, components: dedupe(comps) };
+}
+
+/* Vue 3: elements carry their component instance; the line comes from the template stamp. */
+type VueInstance = { type?: { __name?: string; name?: string; __file?: string }; parent?: VueInstance | null };
+const VUE_PLUMBING = /^(RouterView|RouterLink|Transition|TransitionGroup|BaseTransition|KeepAlive|Teleport|Suspense|NuxtRoot|NuxtPage|NuxtLayout|NuxtLayoutProvider|NuxtPageProvider|RouteProvider|ClientOnly|NuxtErrorBoundary|NuxtLink|Anonymous)$/;
+
+function vueInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
+  let inst: VueInstance | undefined;
+  for (let cur: Element | null = el; cur && !inst; cur = cur.parentElement) inst = (cur as unknown as { __vueParentComponent?: VueInstance }).__vueParentComponent;
+  if (!inst) return null;
+  let source = stampOf(el)?.source;
+  if (!source && inst.type?.__file) source = { file: inst.type.__file };
+  const comps: string[] = [];
+  for (let i: VueInstance | null | undefined = inst; i && comps.length < 6; i = i.parent) {
+    const t = i.type ?? {};
+    const n = t.__name || t.name || (t.__file ? baseName(t.__file) : '');
+    if (n && !VUE_PLUMBING.test(n)) comps.push(n);
+  }
+  return { source, components: dedupe(comps) };
+}
+
+/*
+ * Angular (dev mode): Redline's builder turns on enableTemplateSourceLocations, so template
+ * elements carry data-ng-source-location="src/app/x.html@o:12,l:3,c:4" (0-based line/col).
+ * Components come from the global `ng` debug API: the one whose template holds the element,
+ * then the components it sits in.
+ */
+type NgComponent = { constructor: { name: string; ɵcmp?: { debugInfo?: { className?: string; filePath?: string; lineNumber?: number } } } };
+type NgDebug = { getOwningComponent(el: Element): NgComponent | null; getComponent(el: Element): NgComponent | null };
+const ngName = (c: NgComponent) => c.constructor.ɵcmp?.debugInfo?.className || c.constructor.name.replace(/^_+/, '');
+
+function angularInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
+  const ng = (window as unknown as { ng?: NgDebug }).ng;
+  const loc = el.closest('[data-ng-source-location]')?.getAttribute('data-ng-source-location');
+  const m = loc ? /^(.*)@o:\d+,l:(\d+),c:(\d+)$/.exec(loc) : null;
+  let source: SourceLoc | undefined = m ? { file: m[1], line: +m[2] + 1, col: +m[3] + 1 } : undefined;
+  if (!ng?.getOwningComponent) return source ? { source } : null;
+  const comps: string[] = [];
+  const safe = <T>(f: () => T) => { try { return f(); } catch { return null; } };
+  const owner = safe(() => ng.getOwningComponent(el));
+  if (owner) {
+    comps.push(ngName(owner));
+    const dbg = owner.constructor.ɵcmp?.debugInfo;
+    if (!source && dbg?.filePath) source = { file: dbg.filePath, line: dbg.lineNumber };
+  }
+  for (let cur = el.parentElement; cur; cur = cur.parentElement) {
+    const host = cur;
+    const c = safe(() => ng.getComponent(host));
+    if (c) comps.push(ngName(c));
+  }
+  return source || comps.length ? { source, components: dedupe(comps) } : null;
+}
+
+/**
+ * CMS content behind the element: `data-redline-cms="<content id>|<property>"` (stamped by a CMS
+ * integration such as Umage.Redline.Optimizely), or Optimizely's own edit-mode attributes.
+ * The nearest stamp with a content id decides the content; a property stamp below it names the
+ * property (a block in a content area: the block, not the page's area property). A property
+ * rendered as the element's only child (a wrapper around the value) counts as the element's own.
+ */
+export function cmsInfo(el: Element): CmsRef | undefined {
+  const kid = el.children.length === 1 ? el.firstElementChild! : null;
+  const start = kid?.hasAttribute('data-redline-cms') && clip(kid.textContent, 200) === clip(el.textContent, 200) ? kid : el;
+  let property: string | undefined;
+  for (let cur: Element | null = start.closest('[data-redline-cms]'); cur; cur = cur.parentElement?.closest('[data-redline-cms]') ?? null) {
+    const v = cur.getAttribute('data-redline-cms')!;
+    const i = v.lastIndexOf('|');
+    const content = (i < 0 ? v : v.slice(0, i)) || undefined;
+    property ??= (i < 0 ? '' : v.slice(i + 1)) || undefined;
+    if (content) return { content, property };
+  }
+  if (property) return { property };
+  const epi = el.closest('[data-epi-property-name],[data-epi-edit]');
+  const epiProperty = epi?.getAttribute('data-epi-property-name') ?? epi?.getAttribute('data-epi-edit') ?? undefined;
+  return epiProperty ? { property: epiProperty } : undefined;
 }
 
 function dedupe(a: string[]): string[] | undefined {
@@ -200,7 +296,7 @@ function dedupe(a: string[]): string[] | undefined {
 }
 
 export function sourceInfo(el: Element) {
-  return reactInfo(el) ?? svelteInfo(el) ?? astroInfo(el) ?? {};
+  return reactInfo(el) ?? vueInfo(el) ?? angularInfo(el) ?? svelteInfo(el) ?? astroInfo(el) ?? stampInfo(el) ?? {};
 }
 
 /** The short label shown on hover and in pins: test id, else tag#id.class, plus source. */
@@ -234,6 +330,7 @@ export function describe(el: Element, clickX?: number, clickY?: number): Target 
     html: htmlExcerpt(el),
     source: info.source,
     components: info.components,
+    cms: cmsInfo(el),
     box: [Math.round(r.x + scrollX), Math.round(r.y + scrollY), Math.round(r.width), Math.round(r.height)],
   };
   if (clickX !== undefined && clickY !== undefined && r.width && r.height) {

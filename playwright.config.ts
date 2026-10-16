@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import { FIXTURES } from './test/e2e/fixtures.ts';
+import { FIXTURES, type Fixture } from './test/e2e/fixtures.ts';
 
 // One dev server per fixture app (see test/e2e/fixtures.ts). Run `npm run build` first;
 // `npm run test:e2e` does. Tests share each fixture's .redline/ folder, so run serially.
@@ -19,12 +19,13 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
-  webServer: Object.values(FIXTURES).map(f => ({
+  // PW_FIXTURES=vue,angular starts only those servers (pair it with -g or a spec filter).
+  webServer: Object.values(FIXTURES).filter((f: Fixture) => !process.env.PW_FIXTURES || process.env.PW_FIXTURES.split(',').includes(f.name)).map((f: Fixture) => ({
     command: f.command,
     cwd: f.dir,
     url: `${f.url}/__redline/config`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: f.timeout ?? 120_000,
     env: { ASTRO_TELEMETRY_DISABLED: '1' },
   })),
 });

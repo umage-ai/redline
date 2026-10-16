@@ -1,0 +1,44 @@
+[
+  {
+    "done": true,
+    "body": "Make it green.\nSecond line right after.",
+    "reply": "Done: now uses the success colour.\nSecond reply line without space.",
+    "id": "mg4edit001",
+    "type": "comment",
+    "page": "/checkout",
+    "url": "http://localhost:5173/checkout",
+    "at": "2026-10-15 09:00",
+    "target": {
+      "tag": "button",
+      "text": "Pay",
+      "source": {
+        "file": "src/Checkout.tsx",
+        "line": 20
+      }
+    }
+  },
+  {
+    "done": false,
+    "body": "Indented body line.",
+    "reply": "",
+    "id": "mg4edit002",
+    "type": "text",
+    "page": "/checkout",
+    "url": "http://localhost:5173/checkout",
+    "at": "2026-10-15 09:01",
+    "from": "Totl",
+    "to": "Total"
+  },
+  {
+    "done": false,
+    "body": "Body after.",
+    "reply": "Question back?",
+    "id": "mg4edit003",
+    "type": "sketch",
+    "page": "/checkout",
+    "url": "http://localhost:5173/checkout",
+    "at": "2026-10-15 09:02",
+    "whole": true,
+    "sketch": "../assets/mg4edit003.svg"
+  }
+]

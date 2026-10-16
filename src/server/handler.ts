@@ -2,7 +2,8 @@
 // <script> injection into HTML pages. Works in any Node dev server that accepts
 // (req, res, next) middleware: Vite, Astro, SvelteKit, Express.
 
-import { promises as fs, existsSync } from 'node:fs';
+import { promises as fs, existsSync, readFileSync } from 'node:fs';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Note, Target } from '../shared/types.ts';
@@ -12,6 +13,7 @@ import { appOf, findRoot, real } from './root.ts';
 import { defaultWriters, resolveInside, runWriters, type EditRequest, type EditResult, type SourceWriter } from './writers.ts';
 import { registerServer } from './registry.ts';
 import { GUIDE_PATHS } from '../init.ts';
+import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -57,6 +59,12 @@ export interface RedlineOptions {
    * `#/3`) keeps one notes file and one pin set. Extensions can set a function (`rl.setPageKey`).
    */
   pageKey?: 'route' | 'path';
+  /**
+   * Bearer tokens for the MCP endpoint (POST /__redline/mcp, D37): plain, or `sha256:<hex>` of one.
+   * Without any, only calls from this machine are answered; set them when the dev server is
+   * reachable from elsewhere (`--host`) and a remote agent should get the notes.
+   */
+  mcpTokens?: string[];
 }
 
 const MARK = 'data-redline-client';
@@ -108,6 +116,30 @@ export function normaliseSource(file: string, root: string, serverRoot: string):
 }
 
 
+const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest();
+const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+
+/** Who may call the MCP endpoint: a configured bearer token, or (no tokens configured) a loopback caller. */
+export function mcpAllowed(req: IncomingMessage, tokens: string[] | undefined): boolean {
+  const auth = String(req.headers.authorization ?? '');
+  const bearer = /^Bearer\s+(\S+)\s*$/i.exec(auth)?.[1];
+  if (tokens?.length) {
+    if (!bearer) return false;
+    const got = sha256(bearer);
+    // Hash both sides, so the comparison is constant-time whatever the token lengths.
+    // A malformed sha256: entry never matches (Buffer.from(hex) would silently shorten it).
+    const want = (t: string) => !t.startsWith('sha256:') ? sha256(t) : /^[0-9a-f]{64}$/i.test(t.slice(7)) ? Buffer.from(t.slice(7), 'hex') : null;
+    return tokens.some(t => { const w = want(t); return !!w && timingSafeEqual(got, w); });
+  }
+  return !bearer && LOOPBACK.test(req.socket.remoteAddress ?? '');
+}
+
+let pkgVersion: string | undefined;
+function versionOf(clientFile: string): string {
+  try { return pkgVersion ??= JSON.parse(readFileSync(path.join(path.dirname(clientFile), '..', 'package.json'), 'utf8')).version ?? '0'; }
+  catch { return '0'; }
+}
+
 export function createHandler(opts: RedlineOptions & { serverRoot: string; clientFile: string }): { api: Middleware; inject: Middleware; store: NoteStore; root: string; register(url: string): void } {
   const root = opts.root ? path.resolve(opts.root) : findRoot(opts.serverRoot);
   const dir = opts.dir ?? '.redline';
@@ -129,6 +161,14 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   // Let `redline mcp` find this server (D22): registered once per host it is reached on.
   const hosts = new Set<string>();
   const register = (url: string) => { if (!hosts.has(url)) { hosts.add(url); void registerServer(root, dir, url, app); } };
+
+  // The MCP endpoint's tools read and write this server's own store, with the same hooks as the API.
+  const mcpBackend = (req: IncomingMessage): Backend => ({
+    label: `dev server http://${req.headers.host ?? 'localhost'}${app ? ` (app ${app})` : ''}`,
+    list: () => store.list(),
+    async update(id, patch) { const n = await store.update(id, patch); if (n) await hook('onUpdate', n, patch); return n; },
+    async asset(name) { const a = await store.asset(name); return a ? { type: a.type, data: Buffer.from(a.data) } : null; },
+  });
 
   const api: Middleware = (req, res, next) => {
     const url = req.url ?? '';
@@ -172,6 +212,27 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return json(res, 200, { version, root: store.dir, notes: await store.list() });
       }
 
+      // MCP over Streamable HTTP (D37): stateless JSON-RPC, the same tools as `redline mcp`, on this server's store.
+      if (p === '/mcp') {
+        // A browser page on another origin (DNS rebinding included) must not reach the tools.
+        const origin = req.headers.origin;
+        if (origin && origin !== 'null' && (() => { try { return new URL(origin).host !== req.headers.host; } catch { return true; } })()) return json(res, 403, { error: 'cross-origin MCP request' });
+        if (!mcpAllowed(req, opts.mcpTokens)) {
+          res.setHeader('www-authenticate', 'Bearer realm="redline"');
+          return json(res, 401, { error: opts.mcpTokens?.length ? 'a valid bearer token is required' : 'MCP answers local calls only; set mcpTokens to allow remote agents' });
+        }
+        if (method !== 'POST') { res.statusCode = 405; res.setHeader('allow', 'POST'); res.end(); return; }   // no SSE stream: tools are request/response
+        let msg: JsonRpcMessage | JsonRpcMessage[];
+        try { msg = JSON.parse(await readBody(req)); } catch { return json(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
+        const handle = (m: JsonRpcMessage) => handleMcpMessage(m, { backend: async () => mcpBackend(req), version: versionOf(opts.clientFile) });
+        const replies = Array.isArray(msg)
+          ? (await Promise.all(msg.filter(m => m && typeof m === 'object').map(handle))).filter(r => r !== null)
+          : msg && typeof msg === 'object' ? await handle(msg) : undefined;
+        if (replies === undefined) return json(res, 400, { error: 'expected a JSON-RPC message' });
+        if (replies === null || (Array.isArray(replies) && !replies.length)) { res.statusCode = 202; res.end(); return; }
+        return json(res, 200, replies);
+      }
+
       // Mutations need the custom header: a cross-site page can't send it without a
       // CORS preflight, which we never answer.
       if (req.headers['x-redline'] !== '1') return json(res, 403, { error: 'missing x-redline header' });
@@ -208,6 +269,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
           from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
           tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
           nth: Number.isInteger(body.nth?.index) && Number.isInteger(body.nth?.count) ? { index: body.nth!.index, count: body.nth!.count } : undefined,
+          cms: body.cms && typeof body.cms === 'object' ? { ...body.cms } : undefined,
         };
         if (edit.source) edit.source.file = normaliseSource(edit.source.file, root, opts.serverRoot);
         const dryRun = inspect || /[?&]dry=1/.test(url);
