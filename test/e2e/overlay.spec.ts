@@ -277,3 +277,24 @@ test('sketch colours: the swatch folds out a palette; per shape, C cycles, saved
   await expect(current).toHaveAttribute('aria-label', 'Colour: Green');
   await page.keyboard.press('Escape');
 });
+
+test('the highlight goes away after saving, even if the page scrolls while saving', async ({ page }) => {
+  await openOverlay(page, f);
+  // A slow save (screenshot, network): the reviewer scrolls before it lands.
+  await page.route('**/__redline/notes', async r => {
+    if (r.request().method() === 'POST') await new Promise(res => setTimeout(res, 800));
+    await r.fallback();
+  });
+  await page.keyboard.press('c');
+  await mouseAt(page, page.getByTestId('agent-save'));
+  await page.keyboard.type('Make this secondary.');
+  const saved = waitForSave(page);
+  await page.keyboard.press('Control+Enter');
+  await expect(ui(page, '.pop')).toBeHidden();
+  await page.mouse.wheel(0, 200);
+  await saved;
+  await expect(ui(page, '.bar button.on')).toHaveCount(0);
+  await expect(ui(page, '.hl')).toBeHidden();
+  await page.mouse.wheel(0, 200);
+  await expect(ui(page, '.hl')).toBeHidden();
+});
