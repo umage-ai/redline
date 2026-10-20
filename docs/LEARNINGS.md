@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-10-16 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-10-20 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -152,3 +152,18 @@ Prune entries whose cause is gone from the code.
 - **Cause:** ffmpeg's concat demuxer drops the `duration` of the final entry, so without a fix the end card is cut short.
 - **Fix:** `concatList` in `promo/record.mjs` repeats the last file after its `duration` line.
 - **Guard:** not a test; check the contact sheet (`promo/README.md`, "Changing it") after a change.
+
+## L36 — The red highlight stayed on screen after saving a comment, drifting as the page scrolled
+- **Cause:** the scroll handler (`reposition`) redraws the highlight for `draft.el`, and `draft` is still set while `saveDraft` awaits the screenshot and POST. A scroll then re-showed it; after saving, the mode is idle, so nothing hid it again.
+- **Fix:** `reposition` skips while `busy`; a successful save hides the highlight.
+- **Guard:** `overlay.spec.ts` "the highlight goes away after saving, even if the page scrolls while saving".
+
+## L40 — Every page logged an EventSource error when the store had no change feed
+- **Cause:** the first version opened `/__redline/events` unconditionally; the markdown store answers 404, and Chrome logs the refused stream on every load.
+- **Fix:** `/config` carries `events: !!store.subscribe`, and the overlay opens the stream only then (D41).
+- **Guard:** `remote.spec.ts` "without a change feed the overlay never opens /events"; `remote.test.ts` checks `/config`.
+
+## L41 — A live-update test passed without the live update
+- **Cause:** the overlay's first poll runs about 1 s after load (`lastPoll` starts at 0), so a note served right after load arrived by polling, not by the pushed event.
+- **Fix:** the test waits past the first poll before changing the notes; it was checked to fail with the push removed.
+- **Guard:** `remote.spec.ts` "a pushed change shows a colleague's new note at once".

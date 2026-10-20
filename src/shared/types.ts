@@ -57,7 +57,13 @@ export interface Note {
   screenshot?: string;      // path relative to the page file, e.g. ../assets/<id>.png
   sketch?: string;          // ../assets/<id>.svg
   errors?: string[];        // recent console errors at capture time
-  author?: string;          // signed-in reviewer (online mode of a server integration)
+  author?: string;          // signed-in reviewer (online mode, or whoever a remote store's token belongs to); set by the server
+  build?: string;           // the build the page was served from (the `build` option), so source lines are read at that revision
+  // Set by a remote store (docs/PROTOCOL.md, D40-D42), never by the page, never written to markdown:
+  resolvedAt?: string;      // ISO time it was resolved; the overlay shows it green while the store still lists it
+  mine?: boolean;           // the caller is the note's author
+  seen?: boolean;           // the author has seen it resolved
+  href?: string;            // the note in the store's own UI
   // markdown-owned
   body: string;
   reply: string;
@@ -75,5 +81,8 @@ export interface NotesResponse {
   root: string;             // folder (relative to project root) holding the notes
   notes: Note[];
 }
+
+/** Fields only a store sets: dropped from what a page sends, and never written into markdown. */
+export const STORE_OWNED = ['author', 'resolvedAt', 'mine', 'seen', 'href'] as const;
 
 export const API_BASE = '/__redline';

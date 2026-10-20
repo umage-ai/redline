@@ -56,7 +56,8 @@ Make this secondary; Publish should be the primary action.
    (e.g. Optimizely): `content` id, `property`, `name`, `type`, `lang`, `edit` link. Change it in the
    CMS (or reply that an editor should); change the template only if the note is about layout.
 
-`author` (online mode) is the signed-in reviewer. Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,
+`author` is the reviewer who wrote it (online mode or a shared store). `build`, when set, is the commit the page
+was served from: read `source` at that revision if the file has moved on. Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,
 e.g. a dark-mode-only or mobile-width issue. `errors` lists console errors seen on the page
 when the note was written; they may or may not be related. `at` is when the note was written;
 on an old note, check the UI still looks like the screenshot before changing anything.

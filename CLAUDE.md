@@ -13,6 +13,7 @@ AI agent applies them using `skill/SKILL.md`. Product overview and setup: `READM
 | [docs/STATE.md](docs/STATE.md) | What works, consumer integrations, known gaps, next steps | 150 lines |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Numbered decisions (D1…) with the why and when to revisit | 200 lines |
 | [docs/LEARNINGS.md](docs/LEARNINGS.md) | Numbered gotchas (L1…): symptom → cause → fix → guarding test | 200 lines |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | The remote note store protocol (HTTP calls, store-only fields, visibility, change feed) | 200 lines |
 | [skill/SKILL.md](skill/SKILL.md) | The agent-facing contract for `.redline/` notes (copied into consumer repos) | 120 lines |
 
 **Keep docs current. This is part of "done", in the same change as the code:**
@@ -77,6 +78,9 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
   and resolves a stored target back to an element.
 - `capture.ts`: screenshots (DOM render via modern-screenshot, or tab capture). `sketch.ts`: the SVG drawing layer.
 
+**Remote stores** (D40–D42, docs/PROTOCOL.md): `src/server/remote.ts` (client), `protocol.ts` (reference server),
+`/__redline/events` fans one store feed out to every overlay (D41); .NET: `Notes/RemoteNoteStore.cs`.
+
 **Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
 `/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`).
@@ -103,6 +107,8 @@ Exports map to the flat `dist/*.js` plus `dist/types/` (tsc declarations). `dist
 ## Invariants (break these and consumers or agents break)
 
 - Nothing runs outside dev: plugins use `apply: 'serve'`, return `[]` under `VITEST`, and Astro only adds the plugin for `command === 'dev'`.
+  The one exception is opt-in: `buildSource` keeps the source-stamp transform in builds (attributes only, D43).
+- A page never sets `author`, `mine`, `resolvedAt`, `seen` or `href` (`STORE_OWNED`); only the last four never reach markdown (D42).
 - Markdown round-trips: `parsePage(serializePage(x))` must deep-equal `x`. Agent-written `[x]` and `> ` lines must survive overlay writes.
 - The injector must restore `res.writeHead/write` before its final `end()` (L1). Picking happens on `pointerup`, not `click` (L3).
 - The overlay must never let pointer or key events through to the app while picking or typing in the overlay.

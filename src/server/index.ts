@@ -11,7 +11,11 @@ export function redlineMiddleware(opts: RedlineOptions & { serverRoot?: string }
   return createHandler({ ...opts, serverRoot: opts.serverRoot ?? process.cwd(), clientFile });
 }
 
-export { createStore, newId, stamp, validId } from './store.ts';
+export { createStore, newId, stamp, validId, cleanPatch } from './store.ts';
+export { remoteStore } from './remote.ts';
+export type { RemoteStoreOptions, RemoteStore } from './remote.ts';
+export { notesProtocol } from './protocol.ts';
+export type { ProtocolOptions } from './protocol.ts';
 export { parsePage, serializePage } from './format.ts';
 export { defaultWriters, markupWriter, staticHtmlWriter } from './writers.ts';
 export { decodeEntities, editAt, editUnique, tokenize } from './edit.ts';

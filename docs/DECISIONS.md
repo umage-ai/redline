@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-10-16 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-10-20 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -176,3 +176,24 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** `promo/record.mjs` records the demo app and `promo/stage.html` (captions, browser frame, panel) as two pages with `Page.startScreencast`, then ffmpeg overlays the app onto the stage, timed by the frames' timestamps. Sources are committed; `promo/out/` is gitignored.
 - **Why:** the overlay never runs inside an iframe, so the app can't be embedded in the stage. Playwright's `recordVideo` is lower quality and can't line two pages up. Generated frames and MP4s are ~160 MB and reproducible.
 - **Revisit if:** the overlay supports iframes (then record one page), or the video needs sound.
+
+## D40 — A remote note store over plain HTTP, called by the server (2026-10-16)
+- **Decision:** a documented protocol (docs/PROTOCOL.md) mirroring `NoteStore`: `version`, `notes`, `assets`, create/patch/delete, bearer token. Clients: `remoteStore` (Node, or `REDLINE_STORE_URL`/`_TOKEN`) and `RemoteNoteStore` (.NET); reference server `notesProtocol`. The dev server makes the calls; the browser still only talks to `/__redline`.
+- **Why:** teams want one set of notes, not one per checkout, and a hosted store must stay any vendor's to build. Plain HTTP + JSON is implementable in any stack; calling from the server keeps the token out of the page and needs no CORS.
+- **Revisit if:** stores want OAuth instead of bearer tokens, or uploads outgrow one JSON body.
+
+## D41 — Live changes as server-sent events, polling as the fallback (2026-10-16)
+- **Decision:** optional `GET /events` (SSE, `event: change`) on the store; the middleware holds one feed and fans it out on `/__redline/events`; the overlay opens it only when `/config` says `events`, re-reads `/notes` on each change, and polls every 30 s meanwhile.
+- **Why:** a colleague's note should appear at once, and idle overlays shouldn't poll a hosted store every 2 s. SSE is plain HTTP that passes proxies, `EventSource` reconnects by itself, and the change is only a hint, so a lost event costs one poll. WebSockets or gRPC streams would tie every store and proxy to one transport for a one-way signal.
+- **Revisit if:** the .NET middleware needs the feed (it polls today), or stores want to push the changed notes rather than a hint.
+
+## D42 — Resolved notes show green until their author has seen them; the store decides visibility (2026-10-16)
+- **Decision:** a store sets `author`, `mine`, `resolvedAt`, `seen` and `href`; pages can't. The overlay shows a note with `resolvedAt` as a green pin with its reply even with "show done" off, and the author's overlay sends `seen` once. What disappears and when is the store's choice: it stops listing the note. These fields never go into markdown.
+- **Why:** reviewers want to see their fix land, then not have it clutter the page; how long is a product decision of each store, not the overlay's.
+- **Revisit if:** reviewers want a "hide resolved" switch in the overlay itself.
+
+## D43 — Source stamps in a build, on request (2026-10-16)
+- **Decision:** `buildSource: true` keeps the JSX/Vue stamping in `vite build` and adds Svelte stamping (the app's own `svelte/compiler`), so a deployed review build run through `redlineMiddleware` gets file:line and component names. `build` records the build (e.g. a commit) on each note.
+- **Why:** reviewing a deployed app should give an agent the same context as a dev server without serving the dev server (source files, HMR) from production. Stamps carry paths and names, never code.
+- **Revisit if:** a framework's own build metadata makes the stamps unnecessary.
+

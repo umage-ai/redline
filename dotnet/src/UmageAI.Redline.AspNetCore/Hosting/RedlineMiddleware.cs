@@ -179,8 +179,11 @@ public sealed class RedlineMiddleware
             // set here, never by the page
             noteObj.Remove("app");
             if (_rt.Context.App.Length > 0) noteObj["app"] = _rt.Context.App;
-            noteObj.Remove("author");
+            // Who wrote it, whether it is resolved, its link: the store's to say, never the page's.
+            foreach (var k in Note.StoreOwned) noteObj.Remove(k);
             if (_rt.Options.Online && reviewer.Identity?.Name is { } who) noteObj["author"] = who;
+            noteObj.Remove("build");
+            if (!string.IsNullOrEmpty(_rt.Options.Build)) noteObj["build"] = _rt.Options.Build;
             var draft = new Note(noteObj);
             await _rt.Hook(h => h.OnCreatingAsync(draft, http), "onCreating");
             var req = new NewNoteRequest(noteObj, Str(body!["screenshot"]), Str(body["sketch"]));

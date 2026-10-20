@@ -11,6 +11,14 @@ public sealed class Note
 {
     static readonly HashSet<string> MarkdownOwned = new() { "body", "reply", "done" };
 
+    /// <summary>
+    /// Fields only a store sets (STORE_OWNED in src/shared/types.ts): dropped from what a page sends.
+    /// All but <c>author</c> describe the note in a remote store (resolved, seen, its link, whether it
+    /// is the caller's) and are never written into markdown (D42).
+    /// </summary>
+    public static readonly IReadOnlyList<string> StoreOwned = new[] { "author", "resolvedAt", "mine", "seen", "href" };
+    internal static readonly HashSet<string> RemoteOnly = new() { "resolvedAt", "mine", "seen", "href" };
+
     public Note(JsonObject? data = null, string body = "", string reply = "", bool done = false)
     {
         Data = data ?? new JsonObject();
@@ -100,20 +108,24 @@ public sealed class NotePatch
     public string? Reply { get; set; }
     public bool? Done { get; set; }
     public string? To { get; set; }
+    /// <summary>The author has seen the note resolved (remote stores, D42); the markdown and SQL stores ignore it.</summary>
+    public bool? Seen { get; set; }
 
     public static NotePatch FromJson(JsonObject? o)
     {
         static string? S(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+        static bool? B(JsonNode? n) => n is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
         return new NotePatch
         {
             Body = S(o?["body"]),
             Reply = S(o?["reply"]),
-            Done = o?["done"] is JsonValue d && d.TryGetValue<bool>(out var b) ? b : null,
+            Done = B(o?["done"]),
             To = S(o?["to"]),
+            Seen = B(o?["seen"]),
         };
     }
 
-    public bool IsEmpty => Body is null && Reply is null && Done is null && To is null;
+    public bool IsEmpty => Body is null && Reply is null && Done is null && To is null && Seen is null;
 
     public JsonObject ToJson()
     {
@@ -122,6 +134,7 @@ public sealed class NotePatch
         if (Reply is not null) o["reply"] = Reply;
         if (Done is not null) o["done"] = Done;
         if (To is not null) o["to"] = To;
+        if (Seen is not null) o["seen"] = Seen;
         return o;
     }
 

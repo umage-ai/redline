@@ -14,7 +14,17 @@ export interface StoreOptions {
   dir?: string;     // folder for notes, relative to root (default .redline)
 }
 
-export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to'>>;
+/** `seen`: the author has seen the note resolved (remote stores, D42); the markdown store ignores it. */
+export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen'>>;
+
+/** Keep only the fields a patch may carry, with the right types (the API takes them from the page). */
+export function cleanPatch(p: unknown): NotePatch {
+  const src = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
+  const out: NotePatch = {};
+  for (const k of ['body', 'reply', 'to'] as const) if (typeof src[k] === 'string') out[k] = src[k] as string;
+  for (const k of ['done', 'seen'] as const) if (typeof src[k] === 'boolean') out[k] = src[k] as boolean;
+  return out;
+}
 
 /**
  * Where notes are kept. The markdown store below is the default; pass your own as the
@@ -33,6 +43,12 @@ export interface NoteStore {
   remove(id: string): Promise<boolean>;
   /** A note's screenshot (`<id>.png`) or sketch (`<id>.svg`) by file name, or null. */
   asset(name: string): Promise<{ type: string; data: Buffer | string } | null>;
+  /**
+   * Optional (D41): call `onChange` whenever a note changes, for as long as the subscription
+   * lasts; return the unsubscribe. With it the overlay hears about changes at once instead of
+   * on its next poll. Without it nothing changes: the overlay polls.
+   */
+  subscribe?(onChange: () => void): () => void;
 }
 
 /** Note ids are lowercase base36, 4–24 chars; custom stores should keep to it (the API routes on it). */

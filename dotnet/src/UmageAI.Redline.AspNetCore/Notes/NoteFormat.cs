@@ -114,7 +114,7 @@ public static class NoteFormat
         if (id is not null) meta["id"] = id.DeepClone();
         foreach (var kv in n.Data)
         {
-            if (kv.Key == "id") continue;
+            if (kv.Key == "id" || Note.RemoteOnly.Contains(kv.Key)) continue;   // a remote store's view of the note, never markdown's (D42)
             var v = kv.Value;
             if (v is null) continue;
             if (v is JsonValue jv && jv.GetValueKind() == JsonValueKind.String && jv.GetValue<string>().Length == 0) continue;
