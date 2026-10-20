@@ -53,10 +53,12 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   box-shadow: 0 2px 8px rgba(0,0,0,.35), 0 0 0 2px #fff; pointer-events: auto; cursor: pointer; transition: transform .12s; }
 .pin:hover { transform: scale(1.15); }
 .pin.done { background: #6e6e78; }
+.pin.resolved { background: var(--ok); color: #0b2a1c; }
 .pin.text::after { content: 'T'; position: absolute; right: -7px; bottom: -6px; font-size: 9px; background: #fff; color: var(--ink); border-radius: 4px; padding: 0 3px; }
 .pin.sketch::after { content: '✎'; position: absolute; right: -7px; bottom: -6px; font-size: 9px; background: #fff; color: var(--ink); border-radius: 4px; padding: 0 3px; }
 .tip { position: fixed; max-width: 300px; padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line);
   box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; white-space: pre-wrap; }
+.tip .by { margin-bottom: 3px; color: var(--fg-3); font-size: 11px; }
 .tip .re { margin-top: 6px; padding-left: 8px; border-left: 2px solid var(--ok); color: var(--fg-2); }
 
 /* popover */
@@ -132,6 +134,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .card .top { display: flex; align-items: center; gap: 8px; }
 .card .num { width: 20px; height: 20px; flex: none; border-radius: 10px 10px 10px 2px; background: var(--ink); color: #fff; font-size: 10.5px; font-weight: 750; display: grid; place-items: center; }
 .card.done .num { background: #6e6e78; }
+.card.resolved { border-color: rgba(62,207,142,.45); }
+.card.resolved .num { background: var(--ok); color: #0b2a1c; }
+.card .acts a.out { padding: 2px 6px; border-radius: 5px; color: var(--fg-2); font-size: 12px; text-decoration: none; }
+.card .acts a.out:hover { background: var(--bg-3); color: var(--fg); }
 .card .loc { flex: 1; min-width: 0; font: 11.5px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .acts { display: flex; gap: 2px; opacity: 0; transition: opacity .1s; }
 .card:hover .acts, .card.focus .acts { opacity: 1; }

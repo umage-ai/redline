@@ -16,7 +16,7 @@ import { CSS } from './styles.ts';
 
 type StoredNote = Note & { file?: string };
 type Mode = 'idle' | 'comment' | 'text' | 'sketch';
-interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[]; pageKey?: PageKeyMode }
+interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[]; pageKey?: PageKeyMode; events?: boolean }
 interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
@@ -249,6 +249,19 @@ async function boot() {
       if (changed) emit('notes', notes);
     } catch { /* dev server restarting */ }
   }
+
+  // A remote store keeps listing a note for a while after it is resolved (D42): it stays on the
+  // page, green, whatever "show done" says. Once its author has seen it, the overlay tells the
+  // store, which then stops listing it soon after.
+  const isResolved = (n: Note) => n.done && !!n.resolvedAt;
+  const seenSent = new Set<string>();
+  function markSeen(n: Note) {
+    if (!isResolved(n) || !n.mine || n.seen || seenSent.has(n.id) || document.hidden) return;
+    seenSent.add(n.id);
+    api('PATCH', `/notes/${n.id}`, { seen: true }).catch(() => seenSent.delete(n.id));
+  }
+  // Only links into the store's own UI over http(s); anything else from a store is dropped.
+  const safeHref = (u?: string) => { try { return u && /^https?:$/.test(new URL(u).protocol) ? u : null; } catch { return null; } };
 
   // Monorepos: every app's notes come back from /notes; this app only pins and numbers its own.
   const app = config.app ?? '';
@@ -779,7 +792,7 @@ async function boot() {
 
   function renderPins() {
     const show = state.open || config.launcher;
-    const list = show ? pageNotes().filter(n => !n.whole && n.target && (!n.done || state.showDone)) : [];
+    const list = show ? pageNotes().filter(n => !n.whole && n.target && (!n.done || state.showDone || isResolved(n))) : [];
     const keep = new Set<string>();
     for (const n of list) {
       const el = targetOf(n);
@@ -796,7 +809,7 @@ async function boot() {
         pins.append(pin);
         pinEls.set(n.id, pin);
       }
-      pin.className = `pin ${n.type}${n.done ? ' done' : ''}`;
+      pin.className = `pin ${n.type}${isResolved(n) ? ' resolved' : n.done ? ' done' : ''}`;
       pin.textContent = String(numberOf(n));
       const fx = Math.min(Math.max(n.target!.fx ?? 1, 0), 1), fy = Math.min(Math.max(n.target!.fy ?? 0, 0), 1);
       // Kept on screen: full-width targets on a phone would put the pin past the right edge.
@@ -804,6 +817,7 @@ async function boot() {
       pin.style.left = `${Math.min(r.x + fx * r.width, innerWidth - size - 4)}px`;
       pin.style.top = `${Math.max(r.y + fy * r.height, size + 4)}px`;
       pin.style.display = r.bottom < 0 || r.top > innerHeight ? 'none' : '';
+      if (pin.style.display !== 'none') markSeen(n);
     }
     for (const [id, el] of pinEls) if (!keep.has(id)) { el.remove(); pinEls.delete(id); }
   }
@@ -814,9 +828,9 @@ async function boot() {
     const el = targetOf(n);
     if (el && !draft) showHl(el, null);
     const pin = pinEls.get(id)!.getBoundingClientRect();
-    tip.innerHTML = n.type === 'text'
+    tip.innerHTML = (n.author ? `<div class="by">${esc(n.author)}</div>` : '') + (n.type === 'text'
       ? `<div style="color:#ff8a9d;text-decoration:line-through">${esc(clip(n.from, 140))}</div><div style="color:#7ee2b0">${esc(clip(n.to, 140))}</div>${n.body ? '<div style="margin-top:4px">' + esc(n.body) + '</div>' : ''}`
-      : esc(n.body || (n.type === 'sketch' ? 'See the sketch.' : ''));
+      : esc(n.body || (n.type === 'sketch' ? 'See the sketch.' : '')));
     if (n.reply) tip.innerHTML += `<div class="re">${esc(n.reply)}</div>`;
     tip.style.display = '';
     tip.style.left = `${Math.min(pin.right + 8, innerWidth - 310)}px`;
@@ -837,12 +851,15 @@ async function boot() {
     const loc = n.whole || !t ? 'whole page'
       : `${t.tag ?? ''}${t.text ? ` “${clip(t.text, 28)}”` : ''}${t.source ? ` · ${t.source.file.split('/').pop()}:${t.source.line ?? ''}` : ''}`;
     let delArmed = false;
-    const c = h('div', { class: `card${n.done ? ' done' : ''}${focusId === n.id ? ' focus' : ''}`, 'data-id': n.id },
+    const href = safeHref(n.href);
+    if (here) markSeen(n);
+    const c = h('div', { class: `card${isResolved(n) ? ' resolved' : n.done ? ' done' : ''}${focusId === n.id ? ' focus' : ''}`, 'data-id': n.id },
       h('div', { class: 'top' },
         h('span', { class: 'num', title: n.type }, String(numberOf(n))),
         h('span', { class: 'loc', title: t?.selector ?? '' }, `${TYPE_ICON[n.type]}  ${loc}`),
         h('span', { class: 'acts' },
           h('button', { title: here ? 'Show on page' : 'Open page', onclick: () => goTo(n, here) }, here ? '◎' : '↗'),
+          href ? h('a', { href, target: '_blank', rel: 'noopener noreferrer', title: `Open in ${config.dir}`, class: 'out' }, '⧉') : null,
           h('button', { title: n.done ? 'Reopen' : 'Mark done', onclick: () => patch(n.id, { done: !n.done }) }, n.done ? '↺' : '✓'),
           h('button', { title: 'Edit', onclick: () => editCard(c, n) }, '✎'),
           h('button', { title: 'Delete', onclick: (e: Event) => {
@@ -860,7 +877,7 @@ async function boot() {
         !n.done && isStale(n.at)
           ? h('span', { class: 'age stale', title: `${n.at} · open for over ${STALE_DAYS} days; the UI may have changed since` }, `⏱ ${relativeAge(n.at)}`)
           : h('span', { class: 'age', title: n.at }, relativeAge(n.at) ?? n.at),
-        `${n.viewport ? ` · ${n.viewport[0]}×${n.viewport[1]}` : ''}${n.theme ? ` · ${n.theme}` : ''}${here && n.target && !targetOf(n) ? ' · ⚠ element not found on page' : ''}`),
+        `${n.author ? ` · ${n.author}` : ''}${n.viewport ? ` · ${n.viewport[0]}×${n.viewport[1]}` : ''}${n.theme ? ` · ${n.theme}` : ''}${here && n.target && !targetOf(n) ? ' · ⚠ element not found on page' : ''}`),
     );
     c.addEventListener('mouseenter', () => { const el = here ? targetOf(n) : null; if (el && !draft) showHl(el, null); });
     c.addEventListener('mouseleave', () => { if (!draft) hideHl(); });
@@ -906,7 +923,7 @@ async function boot() {
     if (!state.open || !state.panel) return;
     if (!force && panel.contains(shadow.activeElement) && shadow.activeElement?.tagName === 'TEXTAREA') return; // don't clobber an edit
     const listEl = h('div', { class: 'list' });
-    const visible = (n: Note) => state.showDone || !n.done;
+    const visible = (n: Note) => state.showDone || !n.done || isResolved(n);
     const here = pageNotes().filter(visible) as StoredNote[];
     if (state.scope === 'page') {
       if (!here.length) listEl.append(h('div', { class: 'empty' }, pageNotes().length ? 'All notes on this page are done.' : 'No notes on this page yet. Press C to comment.'));
@@ -1022,10 +1039,19 @@ async function boot() {
     return true;
   };
   setInterval(() => { if (!checkPage()) renderPins(); }, 500);
+  // Live (D41): when the store has a change feed, the server pushes "change" and the overlay
+  // re-reads at once; polling then only backs it up. Without one, nothing is opened.
+  let live = false;
+  if (config.events && typeof EventSource === 'function') {
+    const es = new EventSource(`${API_BASE}/events`);
+    es.addEventListener('open', () => { live = true; });
+    es.addEventListener('change', () => { void poll(); });
+    es.addEventListener('error', () => { live = false; });
+  }
   let lastPoll = 0;
   setInterval(() => {
     if (document.hidden) return;
-    const every = state.open ? 2000 : 6000;
+    const every = live ? 30_000 : state.open ? 2000 : 6000;
     if (Date.now() - lastPoll >= every) { lastPoll = Date.now(); poll(); }
   }, 1000);
 

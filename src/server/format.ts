@@ -12,9 +12,12 @@
 //
 //   > Agent's one-line reply.
 
-import type { Note } from '../shared/types.ts';
+import { STORE_OWNED, type Note } from '../shared/types.ts';
 
-const MARKDOWN_OWNED = new Set(['body', 'reply', 'done']);
+// Body, reply and done live in the markdown itself; what a remote store reports about a note
+// (resolved, seen, its link) belongs to that store and is never written here. `author` stays:
+// an online-mode store (D34) writes it into its JSON like any other field.
+const MARKDOWN_OWNED = new Set<string>(['body', 'reply', 'done', ...STORE_OWNED.filter(k => k !== 'author')]);
 const ANCHOR_RE = /^<!--\s*redline\s+(\{.*\})\s*-->\s*$/;
 const HEAD_RE = /^###\s+\[([ xX])\]/;
 const ASSET_RE = /^!\[(screenshot|sketch)\]\(.*\)\s*$/;

@@ -94,15 +94,15 @@ hides the round button (hotkey only). `app` names the app in a monorepo (default
 
 ### Extending
 
-All optional and dev-only; without them Redline behaves as described above. Types (`RedlineApi`, `NoteStore`,
-`SourceWriter`, …) come from `@umage.ai/redline/server`.
+All optional; without them Redline behaves as described above. Types come from `@umage.ai/redline/server`.
 
 - **`directEdit: true`**: the text popover gets **Apply to file** when the edited text is static in source (Astro,
   Svelte, JSX, Vue, Angular templates, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it. Entities stay as the file wrote them (`&mdash;`); repeated text on a static page is told apart by position.
   Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
   save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
-- **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`), or `({ root, dir, app }) => store`,
-  to keep notes elsewhere than markdown. **`hooks`**: `onCreate`, `onUpdate`, `onRemove`, `onSourceWrite`, run after each change.
+- **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`, optional `subscribe`) or `({ root, dir, app }) => store`. **`remoteStore({ url, token })`**
+  (or `REDLINE_STORE_URL`/`_TOKEN`) shares notes through a hosted store, live, with authors and resolved notes in green ([docs/PROTOCOL.md](docs/PROTOCOL.md)). **`hooks`**: `onCreate`, `onUpdate`,
+  `onRemove`, `onSourceWrite`. **`buildSource: true`** keeps source stamps in `vite build` (a review build behind `redlineMiddleware`); **`build`** records the commit.
 - **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
   A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto
   `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event.
