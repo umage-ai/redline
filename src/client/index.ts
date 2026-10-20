@@ -588,6 +588,7 @@ async function boot() {
       d.editor?.remove(); d.sketch?.destroy();
       draft = null;
       popLayer.replaceChildren();
+      hideHl();   // a scroll while saving may have redrawn it (L36)
       toast(`Saved → ${saved.file ?? config.dir}`);
       state.mode = 'idle'; persist();   // one note per pick: the next tap goes to the app again (D15)
       emit('noteCreated', saved);
@@ -1024,7 +1025,7 @@ async function boot() {
 
   /* ---------- loop: route changes, pin positions, polling ---------- */
   let raf = 0;
-  const reposition = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderPins(); if (draft?.el && !draft.sketch) showHl(draft.el, null, draft.type === 'text' ? 'text' : ''); }); };
+  const reposition = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderPins(); if (draft?.el && !draft.sketch && !busy) showHl(draft.el, null, draft.type === 'text' ? 'text' : ''); }); };
   addEventListener('scroll', reposition, true);
   addEventListener('resize', () => { reposition(); syncPanel(); });
   // Route changes (and setPageKey): a new page key means a new notes file and pin set.
