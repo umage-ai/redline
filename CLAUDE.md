@@ -40,6 +40,7 @@ npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app,
 node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22); dev servers also answer POST /__redline/mcp (D37)
 npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
 npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright
+npm run promo          # record the LinkedIn promo video from the demo (needs ffmpeg; PROMO_FORMAT=web for 16:9) → promo/out/ (gitignored)
 
 node --test --test-name-pattern="round-trips" test/unit/format.test.ts   # one unit test
 npx playwright test -g "disabled"                                         # one e2e test (run `npm run build` first)

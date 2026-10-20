@@ -8,3 +8,4 @@ test/fixtures/astro/.astro
 .vite-cache
 .local
 test/fixtures/angular/.angular
+promo/out

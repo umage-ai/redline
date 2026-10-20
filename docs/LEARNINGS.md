@@ -148,6 +148,11 @@ Prune entries whose cause is gone from the code.
 - **Fix:** format with `CultureInfo.InvariantCulture` (`ServerRegistry`); every other stamp already did.
 - **Guard:** `MiddlewareTests.Registers_in_servers_json_for_redline_mcp`. Checked by hand: `node dist/cli.js mcp` lists notes from the Razor sample.
 
+## L35 — Promo video: the last screencast frame's duration was ignored
+- **Cause:** ffmpeg's concat demuxer drops the `duration` of the final entry, so without a fix the end card is cut short.
+- **Fix:** `concatList` in `promo/record.mjs` repeats the last file after its `duration` line.
+- **Guard:** not a test; check the contact sheet (`promo/README.md`, "Changing it") after a change.
+
 ## L36 — The red highlight stayed on screen after saving a comment, drifting as the page scrolled
 - **Cause:** the scroll handler (`reposition`) redraws the highlight for `draft.el`, and `draft` is still set while `saveDraft` awaits the screenshot and POST. A scroll then re-showed it; after saving, the mode is idle, so nothing hid it again.
 - **Fix:** `reposition` skips while `busy`; a successful save hides the highlight.
