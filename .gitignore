@@ -9,3 +9,5 @@ test/fixtures/astro/.astro
 .local
 test/fixtures/angular/.angular
 promo/out
+redline-hub.db*
+test/fixtures/vanilla/.vite-cache-hub

@@ -1,6 +1,6 @@
 # Remote store protocol
 
-Last updated: 2026-10-16 · Cap: 200 lines · The contract a hosted note store implements (D40–D42).
+Last updated: 2026-10-26 · Cap: 200 lines · The contract a hosted note store implements (D40–D42).
 
 Redline keeps notes as markdown in the repo by default. A **remote store** keeps them on another
 server instead, so everyone reviewing the same app sees the same notes, live. The dev server (or the
@@ -12,18 +12,25 @@ reaches the page and no CORS is needed.
 browser ──/__redline/*──▶ your server (Redline middleware) ──HTTPS + Bearer──▶ remote store
 ```
 
+Which setup needs a remote store, and when to build your own: [SETUPS.md](SETUPS.md) (setups 2–4).
+
 Use one:
 
 - Node: `redline({ store: remoteStore({ url, token }) })` (from `@umage.ai/redline/server`), or set
   `REDLINE_STORE_URL` and `REDLINE_STORE_TOKEN` in the dev server's environment and change nothing else.
 - .NET: `o.UseRemoteStore(url, token)`.
-- Reference server: `notesProtocol(store, { base, authorize })` serves this protocol over any
-  `NoteStore` (the tests run against it; it also shares one markdown store between dev servers).
+- Reference server: `notesProtocol(store, { base, authorize, unauthorized })` serves this protocol over
+  any `NoteStore` (the tests run against it; it also shares one markdown store between dev servers).
+  A store refuses with its own words by throwing an error with a 4xx `status`.
+- Ready to run: `npx @umage.ai/redline-hub` ([hub/README.md](../hub/README.md), D44): projects,
+  personal tokens, MCP per project and a UI, on `notesProtocol`. The store URL is `<hub>/p/<project>`.
 
 ## Calls
 
 All under the store's base URL. JSON in and out (`application/json`), except assets and events.
-Every call carries `Authorization: Bearer <token>`.
+Every call carries `Authorization: Bearer <token>`, or whatever the client forwards for the person behind
+the request (`remoteStore({ headers: ctx => … })`, D45): on a site many reviewers share, their own session
+or personal token, so the store knows who is asking.
 
 | Call | Answer |
 |---|---|
@@ -74,6 +81,7 @@ The store decides; this is the behaviour the overlay is built for (D42):
 - **Resolved** notes (`done: true`, `resolvedAt` set): for a while, so the reviewer sees the fix
   land. When the author's overlay shows one, it sends `PATCH {"seen": true}` once; stop listing the
   note soon after that (minutes). Stop after a fixed window (e.g. 24 h) if the author never looks.
+  Ignore `seen` from anyone but the author (`notesProtocol` drops it).
 - **Dismissed** or older resolved notes: never. They live on in the store's own UI.
 
 Listing fewer notes is how a note disappears from the page: the overlay drops pins it is no longer given.

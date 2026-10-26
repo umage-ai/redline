@@ -16,10 +16,15 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "paths": {
+      "@umage.ai/redline/server": ["./src/server/index.ts"]
+    }
   },
   "include": [
     "src",
+    "hub/src",
+    "examples/review-frontend",
     "test/unit",
     "test/e2e",
     "test/package",

@@ -214,3 +214,54 @@ test('markdown never holds what a remote store reports (resolved, seen, mine, li
   assert.equal(back.author, 'alice@example.com');
   assert.equal(back.build, 'abc1234');
 });
+
+// D45: a deployed review server has many reviewers, so one token per server can't say who wrote
+// a note. The store gets the request on every call and forwards each reviewer's own session.
+test('per reviewer: remoteStore forwards the caller\'s session, so author and mine follow the person, not the server', async () => {
+  const SESSIONS: Record<string, string> = { 's-alice': 'alice@example.com', 's-bob': 'bob@example.com' };
+  const bySession = (req: http.IncomingMessage) => SESSIONS[/(?:^|;\s*)session=([^;]+)/.exec(req.headers.cookie ?? '')?.[1] ?? ''] ?? null;
+  const backend = liveStore();
+  const srv = await listen(notesProtocol(backend, { authorize: bySession, unauthorized: 'Your session has ended. Sign in again.' }));
+  const store = remoteStore({ url: srv.url, headers: ctx => ({ cookie: ctx?.req.headers.cookie }) });
+  const root = await tmpRepo();
+  const site = await listen(createHandler({ store, serverRoot: root, clientFile: import.meta.filename }).api);
+  const as = (session: string) => (p: string, init?: RequestInit) =>
+    fetch(`${site.url}/__redline${p}`, { ...init, headers: { 'content-type': 'application/json', 'x-redline': '1', cookie: `theme=dark; session=${session}` } });
+  try {
+    const alice = as('s-alice'), bob = as('s-bob');
+    const n = await (await alice('/notes', { method: 'POST', body: JSON.stringify({ note: { type: 'comment', page: '/', url: 'http://app/', body: 'Too tight' } }) })).json();
+    assert.equal(n.author, 'alice@example.com');
+    assert.equal(backend.notes[0].author, 'alice@example.com');
+    assert.equal((await (await alice('/notes')).json()).notes[0].mine, true);
+    assert.equal((await (await bob('/notes')).json()).notes[0].mine, false);
+    // Without a session the store refuses, in its own words.
+    const anon = await fetch(`${site.url}/__redline/notes`);
+    assert.match((await anon.json()).error, /Your session has ended/);
+  } finally { await site.close(); await srv.close(); }
+});
+
+test('per reviewer: every store call through the dev server API carries the request', async () => {
+  const seen: string[] = [];
+  const inner = liveStore();
+  const tag = (name: string, ctx?: { req: http.IncomingMessage }) => { seen.push(`${name}:${ctx?.req.headers['x-who'] ?? '-'}`); };
+  const store: NoteStore = {
+    dir: 'spy',
+    async version(ctx) { tag('version', ctx); return inner.version(); },
+    async list(ctx) { tag('list', ctx); return inner.list(); },
+    async create(req, ctx) { tag('create', ctx); return inner.create(req); },
+    async update(id, patch, ctx) { tag('update', ctx); return inner.update(id, patch); },
+    async remove(id, ctx) { tag('remove', ctx); return inner.remove(id); },
+    async asset(name, ctx) { tag('asset', ctx); return null; },
+  };
+  const root = await tmpRepo();
+  const site = await listen(createHandler({ store, serverRoot: root, clientFile: import.meta.filename }).api);
+  const call = (p: string, init?: RequestInit) => fetch(`${site.url}/__redline${p}`, { ...init, headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-who': 'carol' } });
+  try {
+    const n = await (await call('/notes', { method: 'POST', body: JSON.stringify({ note: { type: 'comment', page: '/', url: 'http://app/', body: 'x' } }) })).json();
+    await call('/notes');
+    await call(`/notes/${n.id}`, { method: 'PATCH', body: JSON.stringify({ done: true }) });
+    await call(`/assets/${n.id}.png`);
+    await call(`/notes/${n.id}`, { method: 'DELETE' });
+    assert.deepEqual(seen, ['create:carol', 'version:carol', 'list:carol', 'update:carol', 'asset:carol', 'remove:carol']);
+  } finally { await site.close(); }
+});

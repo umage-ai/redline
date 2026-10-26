@@ -13,11 +13,12 @@ AI agent applies them using `skill/SKILL.md`. Product overview and setup: `READM
 | [docs/STATE.md](docs/STATE.md) | What works, consumer integrations, known gaps, next steps | 150 lines |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Numbered decisions (D1…) with the why and when to revisit | 200 lines |
 | [docs/LEARNINGS.md](docs/LEARNINGS.md) | Numbered gotchas (L1…): symptom → cause → fix → guarding test | 200 lines |
+| [docs/SETUPS.md](docs/SETUPS.md) | The four ways to run Redline (local dev, shared dev, deployed review, own backend), status of each | 200 lines |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | The remote note store protocol (HTTP calls, store-only fields, visibility, change feed) | 200 lines |
 | [skill/SKILL.md](skill/SKILL.md) | The agent-facing contract for `.redline/` notes (copied into consumer repos) | 120 lines |
 
 **Keep docs current. This is part of "done", in the same change as the code:**
-- Behaviour, feature or integration status changed → update `docs/STATE.md` (and `README.md` if user-facing: keys, options, setup).
+- Behaviour, feature or integration status changed → update `docs/STATE.md` (and `README.md` if user-facing: keys, options, setup; `docs/SETUPS.md` if it changes which setup fits or its status).
 - Chose between real alternatives, or reversed a choice → add or amend a `D<n>` in `docs/DECISIONS.md`.
 - Hit a non-obvious bug or tool quirk → add an `L<n>` to `docs/LEARNINGS.md`, naming the test that now guards it.
 - Changed the markdown format or note fields → update `skill/SKILL.md`, the preamble in `src/server/format.ts`, and the unit tests together.
@@ -38,6 +39,7 @@ npm run test:package   # pack → install the tarball into temp React/SvelteKit/
 # Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
 node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22); dev servers also answer POST /__redline/mcp (D37)
+npm run hub            # build + start @umage.ai/redline-hub (hub/, D44) on 127.0.0.1:4780, data in ./redline-hub.db
 npm run demo           # the fictional demo app (examples/demo, React) on :5173 with Redline loaded
 npm run screenshots    # regenerate the README images (docs/images) by driving the demo with Playwright
 npm run promo          # record the LinkedIn promo video from the demo (needs ffmpeg; PROMO_FORMAT=web for 16:9) → promo/out/ (gitignored)
@@ -78,8 +80,9 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
   and resolves a stored target back to an element.
 - `capture.ts`: screenshots (DOM render via modern-screenshot, or tab capture). `sketch.ts`: the SVG drawing layer.
 
-**Remote stores** (D40–D42, docs/PROTOCOL.md): `src/server/remote.ts` (client), `protocol.ts` (reference server),
-`/__redline/events` fans one store feed out to every overlay (D41); .NET: `Notes/RemoteNoteStore.cs`.
+**Remote stores** (D40–D45, docs/PROTOCOL.md, docs/SETUPS.md): `src/server/remote.ts` (client), `protocol.ts` (reference
+server), `/__redline/events` fans one feed out to every overlay; .NET `Notes/RemoteNoteStore.cs`. Store methods take an
+optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`; `examples/review-frontend`: deployed review, shapes A–C.
 
 **Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);

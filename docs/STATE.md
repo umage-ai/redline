@@ -1,13 +1,13 @@
 # State
 
-Last updated: 2026-10-16 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-10-26 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
-v0.1.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
+v0.4.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
 React + Vite 7, SvelteKit) install it as a devDependency. The tarball ships only `dist/` (JS + `dist/types`), `skill/`,
 README and LICENSE. Later releases go through `.github/workflows/publish.yml` (Trusted Publishing, D13).
-The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore`, `UmageAI.Redline.Build` and `UmageAI.Redline.Optimizely` (0.1.0).
+`@umage.ai/redline-hub` (`hub/`, D44) is at 0.1.0, not yet published. The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore`, `UmageAI.Redline.Build` and `UmageAI.Redline.Optimizely` (0.1.0).
 
 ## What works (covered by tests)
 
@@ -51,6 +51,8 @@ The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore
 | Remote note store over HTTP (docs/PROTOCOL.md, D40): `remoteStore` / `REDLINE_STORE_URL` (Node), `UseRemoteStore` (.NET), reference server `notesProtocol`; store-only fields stripped from pages and kept out of markdown | ✅ | `remote.test.ts`, `RemoteStoreTests.cs` |
 | Live changes: store feed → `/__redline/events` (SSE) → overlay re-reads at once; polling 30 s meanwhile (D41) | ✅ Node | `remote.test.ts`, `remote.spec.ts` |
 | Resolved notes green with their reply, author on pins and cards, store link, `seen` sent once by the author (D42) | ✅ | `remote.spec.ts` |
+| Redline hub (`hub/`, D44): projects, personal member/agent tokens, protocol + live feed at `/p/<project>`, MCP per project, allowed sites, D42 visibility (5 min after seen, 24 h max), UI (notes with screenshots, reply/resolve/archive, tokens with setup snippets), SQLite persistence, localhost default + `--host` warning | ✅ overlay → dev server → hub → green pin, in Chrome | `hub.test.ts`, `hub.spec.ts`, `scripts/test-hub-package.mjs` (in `test:package`) |
+| Store calls carry the request (`ctx.req`) and `remoteStore` forwards per-reviewer `headers(ctx)`, so a shared site's notes carry each reviewer's name (D45); `examples/review-frontend`: shapes A (two images + gateway rule + reviewer switch), B (`reviewersOnly` in one server), C (review environment); store acting as the reviewer | ✅ unit; the pattern runs in production in a closed-source app, the example itself is not deployed here | `remote.test.ts`, `review-frontend.test.ts`, typecheck |
 | Source stamps in `vite build` with `buildSource` (JSX, Vue, Svelte) and the `build` option on notes (D43) | ✅ unit | `svelte-source.test.ts`, `remote.test.ts`; not yet in an e2e build fixture |
 | Pixel-perfect tab capture (getDisplayMedia) | ⚠️ manual only | needs a permission prompt, not automatable |
 
@@ -63,7 +65,7 @@ The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore
 - CSS-only `:hover` menus still close when the pointer moves to the toolbar. Workaround: open the menu, then press `C` and click.
 - Pins re-resolve by selector/testid/xpath/text. Heavily dynamic lists can re-pin onto the wrong row.
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
-- Remote stores: the .NET middleware has no change feed yet (the overlay polls); no hosted store implements the protocol in this repo beyond the reference server.
+- Remote stores: the .NET middleware has no change feed yet (the overlay polls). The hub is a reference for teams on a private network: plain HTTP, no SSO, rate limits or backups (D44); the .NET client is unit-tested against a stub, not yet against the hub.
 - `buildSource` output is unit-tested per framework, not yet through a real `vite build` + `redlineMiddleware` fixture.
 - Not supported yet (D23): Nuxt and Next.js (HTML isn't served through a Vite/connect stack we hook), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
 - `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.

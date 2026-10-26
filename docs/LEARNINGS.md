@@ -167,3 +167,13 @@ Prune entries whose cause is gone from the code.
 - **Cause:** the overlay's first poll runs about 1 s after load (`lastPoll` starts at 0), so a note served right after load arrived by polling, not by the pushed event.
 - **Fix:** the test waits past the first poll before changing the notes; it was checked to fail with the push removed.
 - **Guard:** `remote.spec.ts` "a pushed change shows a colleague's new note at once".
+
+## L42 — `SyntaxError: TypeScript parameter property is not supported in strip-only mode`, though `tsc` passed
+- **Cause:** node:test runs `.ts` through Node's type stripping, which can't compile `constructor(public status: number)`.
+- **Fix:** declare the field and assign it in the constructor (`HubError`, `hub/src/store.ts`). No enums, namespaces or parameter properties in code the tests load.
+- **Guard:** `hub.test.ts` (any test importing the file fails to load).
+
+## L43 — The hub printed SQLite's ExperimentalWarning despite the filter
+- **Cause:** the Node-version check (`process.getBuiltinModule('node:sqlite')`) loaded the module, and with it the warning, before `quietSqliteWarning()` ran.
+- **Fix:** install the filter first; `db.ts` takes the module through `getBuiltinModule`, so a static import can't hoist it above the filter.
+- **Guard:** `scripts/test-hub-package.mjs` fails when stderr contains ExperimentalWarning.
