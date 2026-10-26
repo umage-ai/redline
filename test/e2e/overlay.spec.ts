@@ -298,3 +298,57 @@ test('the highlight goes away after saving, even if the page scrolls while savin
   await page.mouse.wheel(0, 200);
   await expect(ui(page, '.hl')).toBeHidden();
 });
+
+test('labels: one row of chips; a click or a leading #tag labels the note, shown on its card (D46)', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  await mouseAt(page, page.getByTestId('agent-save'));
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  const chips = ui(page, '.pop .chip');
+  await expect(chips).toHaveText(['Bug', 'UX', 'Idea', 'Copy']);
+  const tops = await chips.evaluateAll(els => els.map(e => (e as HTMLElement).offsetTop));
+  expect(new Set(tops).size).toBe(1);   // never wrapped onto a second line
+  await chips.filter({ hasText: 'Bug' }).click();
+  await expect(chips.filter({ hasText: 'Bug' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  await page.keyboard.type('Charges twice on double click.');
+  let saved = waitForSave(page);
+  await page.keyboard.press('Control+Enter');
+  expect((await saved).label).toBe('Bug');
+  expect(await readPage(f)).toMatch(/^### \[ \] Bug · Comment · `button` “Save draft”/m);
+  await expect(ui(page, '.pin')).toHaveCount(1);
+
+  await page.keyboard.press('c');
+  await expect(ui(page, '.bar button.on')).toContainText('Comment');
+  await mouseAt(page, page.getByTestId('agent-name'));
+  await expect(ui(page, '.pop textarea')).toBeFocused();
+  await page.keyboard.type('#ux Too far from its label.');
+  await expect(chips.filter({ hasText: 'UX' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(ui(page, '.pop textarea')).toHaveValue('Too far from its label.');
+  saved = waitForSave(page);
+  await page.keyboard.press('Control+Enter');
+  const ux = await saved;
+  expect([ux.label, ux.body]).toEqual(['UX', 'Too far from its label.']);
+
+  await page.keyboard.press('n');
+  await expect(ui(page, '.card .tag')).toHaveText(['Bug', 'UX']);
+});
+
+test('a server can hide the copy prompt or give its own text (D47)', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  let prompt: string | false = false;
+  await page.route('**/__redline/config', async r => r.fulfill({ json: { ...(await (await r.fetch()).json()), prompt } }));
+  await openOverlay(page, f);
+  await comment(page, page.getByTestId('agent-save'), 'Bigger.');
+  await page.keyboard.press('n');
+  await expect(ui(page, '.card')).toHaveCount(1);
+  await expect(ui(page, '.panel footer .btn.primary')).toHaveCount(0);
+  await expect(ui(page, '.panel footer .file')).toHaveCount(0);
+
+  prompt = 'Use the redline MCP tools: {open} open on {page}.';
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(ui(page, '.panel footer .file')).toHaveCount(0);
+  await ui(page, '.panel footer .btn.primary').click();
+  await expect(ui(page, '.toast')).toContainText('coding agent');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Use the redline MCP tools: 1 open on /.');
+});

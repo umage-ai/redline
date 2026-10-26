@@ -40,6 +40,8 @@ Make this secondary; Publish should be the primary action.
   `+` wanted text; the body, if any, adds context), **Sketch** (a drawing; read the
   screenshot, which has the sketch drawn on top).
 - `whole page` in the heading = the note is about the page, not one element.
+- A word before the type (`### [ ] Bug · Comment · …`) is the reviewer's label (`label` in the
+  anchor): Bug, UX, Idea, Copy, or the team's own. It says what kind of change they mean.
 
 ## Finding the code — in this order
 

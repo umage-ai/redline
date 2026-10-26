@@ -23,6 +23,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Open dropdowns/popovers survive the overlay: toolbar, picking, typing, Escape, hotkey (D14) | ✅ fixture menu; try in `examples/demo` (Export, ⋯, driver filter) | `overlay.spec.ts`; not yet tried against real Radix/Headless UI/MUI |
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
+| Note labels (D46): chips above the text (Bug, UX, Idea, Copy; `labels` option, .NET `Labels`), one row that scrolls sideways, `#bug` shortcut; leads the heading, shown on cards and in the hub; same bytes in .NET | ✅ | `labels.test.ts`, `overlay.spec.ts`, golden `labels`, `MiddlewareTests.cs` |
+| Labels from a function of the request (Node `labels`, .NET `LabelsFrom`); copy-prompt button hidden with non-markdown stores / online, or custom text via `prompt` (D47) | ✅ | `labels.test.ts`, `overlay.spec.ts`, `MiddlewareTests.cs` |
 | Pluggable note store (`store`) and server `hooks`; markdown store is the default (D19) | ✅ | `test/unit/extend.test.ts` |
 | Direct source edits (`directEdit`, opt-in): dry run, **Apply to file**, refusals for computed text and directives; rich editor keeps inline markup (`<b>`, `<a …>`, entities) byte for byte, Ctrl+B/I add tags (D20); full HTML entity set, source entity spelling kept (D24); same-text elements on static .html picked by position (D25) | ✅ static .html, React, SvelteKit, Astro, Vue, Angular (templateUrl; inline templates unit only), Solid, Preact | `edit.test.ts`, `extend.test.ts`, `extend.spec.ts` |
 | `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22). Same tools over HTTP at `POST /__redline/mcp` (loopback, or `mcpTokens` bearer, D37) | ✅ | `mcp.test.ts` |
@@ -80,4 +82,5 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 3. Chrome extension reusing `dist/client.js` + `captureVisibleTab`, for non-Vite apps and staging (with a `redline serve` store).
 4. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
 5. Try `redline mcp` (stdio and HTTP) with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.
-6. .NET: a package test (pack → install → browser) like `test:package`; an Optimizely 13 sample; CI for `dotnet test` and the .NET smoke.
+6. Labels (D46): change one after saving, filter the panel by label, colour the pins; see how long lists feel.
+7. .NET: a package test (pack → install → browser) like `test:package`; an Optimizely 13 sample; CI for `dotnet test` and the .NET smoke.

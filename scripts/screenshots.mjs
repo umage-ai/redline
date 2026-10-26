@@ -40,6 +40,7 @@ try {
   // 1. Comment on the primary button.
   await page.keyboard.press('c');
   await pick(page.getByTestId('new-route'));
+  await ui('.pop .chip').filter({ hasText: 'UX' }).click();   // a label (D46)
   await typeNote('Make this the only purple button on the page, and add a "+" icon.');
   await shot('comment');
   await save('Control+Enter');
@@ -52,6 +53,7 @@ try {
   await page.keyboard.type('Every route, every driver, live. Updated every 30 seconds.');
   await page.keyboard.press('Enter');
   await ui('.pop .diff').waitFor();
+  await ui('.pop .chip').filter({ hasText: 'Copy' }).click();
   await shot('text');
   await save('Enter');
 
@@ -70,7 +72,7 @@ try {
   await page.mouse.move(chart.x + chart.width / 2, chart.y + 60);
   await shot('sketch');
   await page.keyboard.press('Enter');
-  await typeNote('Switch this to a line chart with last week as a dashed comparison.');
+  await typeNote('#idea Switch this to a line chart with last week as a dashed comparison.');
   await save('Control+Enter');
 
   // 4. An agent ticks the first note off and replies, then the panel shows it live.

@@ -26,7 +26,8 @@ public static class NoteFormat
 <!--
   Written by the Redline overlay (dev only) for a coding agent. The full guide is the
   redline skill (.agents/skills/redline/SKILL.md, installed by `npx redline init`).
-  Each note: a "### [ ]" heading naming the element and where it lives in source,
+  Each note: a "### [ ]" heading naming the reviewer's label if any (Bug, UX, …), the
+  element and where it lives in source,
   an anchor comment (JSON: url, selector, xpath, source file:line, component chain,
   CMS content and property, viewport, app folder in a monorepo, …; paths are repo-relative), the instruction, optional screenshot/sketch images, and an optional
   "> " reply. Screenshots mark the target with a red box.
@@ -81,6 +82,7 @@ public static class NoteFormat
         var parts = new List<string>();
         var type = n.Data["type"];
         parts.Add(type is null ? "" : TypeLabel.TryGetValue(Js.Str(type), out var label) ? label : Js.Str(type));
+        if (Js.Truthy(n.Data["label"])) parts.Insert(0, Clip(Js.Str(n.Data["label"]), 30));
         var t = n.Data["target"];
         if (Js.Truthy(n.Data["whole"]) || !Js.Truthy(t)) parts.Add("whole page");
         else

@@ -48,6 +48,7 @@ export interface Note {
   title?: string;           // document.title
   at: string;               // 'YYYY-MM-DD HH:MM'
   whole?: boolean;          // note about the whole page, no element
+  label?: string;           // the reviewer's tag, e.g. "Bug" or "UX" (the `labels` option, D46)
   target?: Target;
   viewport?: [number, number, number]; // width, height, devicePixelRatio
   scroll?: [number, number];

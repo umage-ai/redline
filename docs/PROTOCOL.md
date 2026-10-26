@@ -54,7 +54,7 @@ keep a valid `note.id` the client sends, or assign its own.
 The same object the markdown anchor holds (`Note` in `src/shared/types.ts`): `id`, `type`
 (`comment` / `text` / `sketch`), `page`, `app`, `url`, `title`, `at`, `whole`, `target` (selector,
 xpath, test id, text, **source file:line**, **components**, box), `viewport`, `scroll`, `theme`,
-`from`/`to` (text notes), `errors`, `build`, plus `body`, `reply` and `done`. Keep fields you don't
+`from`/`to` (text notes), `errors`, `build`, `label` (D46), plus `body`, `reply` and `done`. Keep fields you don't
 know: newer clients add them.
 
 `screenshot` and `sketch` on a stored note are asset names (`<id>.png`), or paths ending in one; the

@@ -9,6 +9,7 @@ import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
 import type { Token } from '../server/edit.ts';
 import type { RedlineApi, RedlineButton, RedlineEvents, RedlineExtension, RedlinePageKey, RedlinePanelSection, RedlinePanelState } from '../shared/extension.ts';
 import { pageKey, type PageKeyMode } from '../shared/page.ts';
+import type { LabelDef } from '../shared/labels.ts';
 import { clip, cmsInfo, describe, labelFor, resolve, sourceInfo, textBlockFor } from './anchor.ts';
 import { screenshot, startTabCapture, stopTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, COLORS, sketchFile, SketchLayer, type Tool } from './sketch.ts';
@@ -16,11 +17,12 @@ import { CSS } from './styles.ts';
 
 type StoredNote = Note & { file?: string };
 type Mode = 'idle' | 'comment' | 'text' | 'sketch';
-interface Config { hotkey: string; launcher: boolean; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[]; pageKey?: PageKeyMode; events?: boolean }
+interface Config { hotkey: string; launcher: boolean; labels?: LabelDef[]; prompt?: string | false; dir: string; guide?: string | null; app?: string; directEdit?: boolean; extensions?: string[]; pageKey?: PageKeyMode; events?: boolean }
 interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
   rich?: Inspection; html?: string;   // rich text edits (D20): the source tokens and the new source content
+  label?: string;                     // the chip picked in the popover (D46)
 }
 interface Inspection { tokens: Token[]; braces: boolean; selfClose: boolean; spell?: Record<string, string> }
 type EditResult = { ok: true; file: string; line?: number; inspect?: Inspection } | { ok: false; reason: string };
@@ -447,6 +449,15 @@ async function boot() {
       else if (e.key === 'Enter' && !e.shiftKey && d.type !== 'comment' && !ta.value.trim()) { e.preventDefault(); saveDraft(''); }
       else if (e.key === 'Escape') { e.preventDefault(); cancelDraft(); }
     });
+    const chips = labelChips(d, ta);
+    // "#bug " at the start of the text picks that label, so it can be chosen without the mouse.
+    ta.addEventListener('input', () => {
+      const tag = takeTag(ta.value, true);
+      if (!tag) return;
+      d.label = tag.label;
+      ta.value = tag.rest;
+      chips?.sync();
+    });
     const pop = h('div', { class: 'pop' },
       h('header', {},
         h('span', { class: 'what', title: what }, (d.type === 'text' ? '✎ ' : d.type === 'sketch' ? '' : '💬 ') + what),
@@ -455,21 +466,54 @@ async function boot() {
         d.type === 'comment' && !d.whole ? h('button', { title: 'Comment on the whole page', onclick: () => { d.el = null; d.whole = true; renderPop(); } }, 'Page') : null,
       ),
       d.type === 'text' ? h('div', { class: 'diff', html: `<div class="del">${esc(d.from ?? '')}</div><div class="ins">${esc(d.to ?? '')}</div>` }) : null,
+      chips?.el ?? null,
       ta,
       direct ? direct.why : null,
       h('footer', {},
         h('label', { title: 'Attach a screenshot with the target outlined' }, shot, 'Screenshot'),
-        h('span', { class: 'grow' }),
-        h('button', { class: 'btn', onclick: cancelDraft }, 'Cancel'),
-        save,
-        direct ? direct.btn : null,
+        // The buttons stay together; short of room (Save note + Apply to file) they wrap below, right-aligned.
+        h('span', { class: 'btns' },
+          h('button', { class: 'btn', onclick: cancelDraft }, 'Cancel'),
+          save,
+          direct ? direct.btn : null,
+        ),
       ),
     );
     (pop as HTMLElement & { _shot?: HTMLInputElement })._shot = shot;
     popLayer.replaceChildren(pop);
+    chips?.fit();
     placePop();
     setTimeout(() => ta.focus());
     if (direct) void checkDirect(d, direct, save);
+  }
+
+  /* ---------- labels (D46) ---------- */
+  const labels = (): LabelDef[] => config.labels ?? [];
+  const labelDef = (name?: string) => name ? labels().find(l => l.name.toLowerCase() === name.toLowerCase()) : undefined;
+  const tinted = <T extends HTMLElement>(el: T, color?: string) => { if (color) el.style.setProperty('--c', color); return el; };
+
+  // One row of chips, never wrapped: when they don't fit it scrolls sideways, faded at the edge.
+  function labelChips(d: Draft, ta: HTMLTextAreaElement) {
+    if (!labels().length) return null;
+    const btns = labels().map(l => tinted(h('button', {
+      class: 'chip', type: 'button', title: `Label: ${l.name} (or type #${l.name.toLowerCase()} )`,
+      onclick: () => { d.label = d.label === l.name ? undefined : l.name; sync(); ta.focus(); },
+    }, l.name), l.color));
+    const el = h('div', { class: 'chips', role: 'group', 'aria-label': 'Label' }, ...btns);
+    const sync = () => btns.forEach((b, i) => { const on = labels()[i].name === d.label; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    const fit = () => el.classList.toggle('more', el.scrollWidth > el.clientWidth + 1 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    el.addEventListener('scroll', fit, { passive: true });
+    // A mouse wheel scrolls the row sideways when it overflows.
+    el.addEventListener('wheel', e => { if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+    sync();
+    return { el, sync, fit };
+  }
+
+  /** "#bug rest…" → the Bug label and "rest…", when Bug is a label. While typing, only once a space follows. */
+  function takeTag(text: string, typing = false): { label: string; rest: string } | null {
+    const m = (typing ? /^#([^\s#]+)\s+/ : /^#([^\s#]+)(\s+|$)/).exec(text);
+    const l = m && labelDef(m[1]);
+    return l ? { label: l.name, rest: text.slice(m![0].length) } : null;
   }
 
   /* ---------- direct source edits (D20) ---------- */
@@ -548,6 +592,8 @@ async function boot() {
   async function saveDraft(text: string) {
     const d = draft!;
     let body = text.trim();
+    const tag = takeTag(body);
+    if (tag) { d.label = tag.label; body = tag.rest.trim(); }
     if (d.type === 'comment' && !body) { toast('Write a comment first', true); return; }
     // A rich edit saved as a note: the diff shows text only, so give the agent the wanted markup too.
     if (d.type === 'text' && d.rich && d.html) body = [body, 'Wanted source (keeps the markup): `' + d.html.replace(/\s+/g, ' ').trim() + '`'].filter(Boolean).join('\n\n');
@@ -580,7 +626,7 @@ async function boot() {
           whole: !el || undefined, target,
           viewport: [innerWidth, innerHeight, Math.round(devicePixelRatio * 100) / 100],
           scroll: [Math.round(scrollX), Math.round(scrollY)], theme: themeOf(),
-          from: d.from, to: d.to, errors: errors.length ? errors.slice(-5) : undefined, body,
+          from: d.from, to: d.to, errors: errors.length ? errors.slice(-5) : undefined, body, label: d.label,
         },
         screenshot: png,
         sketch: d.sketch ? sketchFile(d.sketch.shapes, innerWidth, innerHeight, document.title) : undefined,
@@ -856,6 +902,7 @@ async function boot() {
     const c = h('div', { class: `card${isResolved(n) ? ' resolved' : n.done ? ' done' : ''}${focusId === n.id ? ' focus' : ''}`, 'data-id': n.id },
       h('div', { class: 'top' },
         h('span', { class: 'num', title: n.type }, String(numberOf(n))),
+        n.label ? tinted(h('span', { class: 'tag', title: 'Label' }, n.label), labelDef(n.label)?.color) : null,
         h('span', { class: 'loc', title: t?.selector ?? '' }, `${TYPE_ICON[n.type]}  ${loc}`),
         h('span', { class: 'acts' },
           h('button', { title: here ? 'Show on page' : 'Open page', onclick: () => goTo(n, here) }, here ? '◎' : '↗'),
@@ -947,7 +994,10 @@ async function boot() {
     const how = config.guide
       ? `Follow ${config.guide} (the redline skill).`
       : 'For each open "### [ ]" note: make the change, tick it "### [x]" and add a one-line "> " reply saying what changed (or a question, leaving it open). Never edit the <!-- redline … --> lines.';
-    const prompt = state.scope === 'page' && file
+    // The server's own text (a remote store, D47): {open} and {page} filled in. Unset: the markdown store's files.
+    const custom = typeof config.prompt === 'string';
+    const prompt = custom ? (config.prompt as string).replace(/\{open\}/g, String(open)).replace(/\{page\}/g, page)
+      : state.scope === 'page' && file
       ? `Apply the open Redline notes in ${file} (${open} open). ${how}`
       : `Apply the open Redline UI feedback in ${config.dir}/INDEX.md (${openCount()} open). ${how}`;
     panel.replaceChildren(
@@ -966,8 +1016,8 @@ async function boot() {
       }),
       listEl,
       h('footer', {},
-        h('div', { class: 'file' }, file && state.scope === 'page' ? file : `${config.dir}/INDEX.md`),
-        h('div', { class: 'row' },
+        config.prompt !== false && !custom && h('div', { class: 'file' }, file && state.scope === 'page' ? file : `${config.dir}/INDEX.md`),
+        config.prompt !== false && h('div', { class: 'row' },
           h('button', { class: 'btn primary', disabled: !open, onclick: async () => {
             try { await navigator.clipboard.writeText(prompt); toast('Prompt copied — paste it into your coding agent'); }
             catch { toast(prompt, false, 8000); }

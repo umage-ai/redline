@@ -71,6 +71,10 @@ export const newId = () => Date.now().toString(36) + crypto.randomBytes(2).toStr
 export { stamp };
 
 /** The default store: markdown under <root>/.redline/ (D2). */
+const markdownStores = new WeakSet<object>();
+/** Whether a store is the markdown store (`createStore`), whose files the copied agent prompt can name (D47). */
+export const isMarkdownStore = (store: NoteStore): boolean => markdownStores.has(store);
+
 export function createStore(opts: StoreOptions) {
   const dirRel = opts.dir ?? '.redline';
   const base = path.resolve(opts.root, dirRel);
@@ -137,7 +141,7 @@ export function createStore(opts: StoreOptions) {
     }
   }
 
-  return {
+  const store = {
     dir: dirRel,
     base,
 
@@ -215,6 +219,8 @@ export function createStore(opts: StoreOptions) {
       catch { return null; }
     },
   } satisfies NoteStore & Record<string, unknown>;
+  markdownStores.add(store);
+  return store;
 }
 
 export type Store = ReturnType<typeof createStore>;

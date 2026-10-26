@@ -25,4 +25,5 @@ export type { RedlineHooks } from './handler.ts';
 export type { NoteStore, NotePatch, StoreContext } from './store.ts';
 export type { SourceWriter, EditRequest, EditResult, WriterContext, Inspection } from './writers.ts';
 export type { Note, NewNoteRequest, Target, SourceLoc } from '../shared/types.ts';
+export type { LabelDef, LabelsOption, LabelsSource } from '../shared/labels.ts';
 export type { RedlineApi, RedlineButton, RedlinePanelSection, RedlinePanelState, RedlinePageKey, RedlineEvents, RedlineExtension, RedlineMode } from '../shared/extension.ts';

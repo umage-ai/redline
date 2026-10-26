@@ -123,7 +123,7 @@ public sealed class RedlineMiddleware
         var read = HttpMethods.IsGet(method) || HttpMethods.IsHead(method);
 
         if (read && p == "/client.js") { await Bytes(http, "text/javascript; charset=utf-8", _rt.ClientJs); return; }
-        if (read && p == "/config") { await Json(http, 200, Config(reviewer.Identity?.Name)); return; }
+        if (read && p == "/config") { var config = Config(reviewer.Identity?.Name); config["labels"] = await LabelsFor(http); await Json(http, 200, config); return; }
         if (read && p.StartsWith("/assets/", StringComparison.Ordinal))
         {
             var a = await store.AssetAsync(p.Substring(8), http.RequestAborted);
@@ -184,6 +184,8 @@ public sealed class RedlineMiddleware
             if (_rt.Options.Online && reviewer.Identity?.Name is { } who) noteObj["author"] = who;
             noteObj.Remove("build");
             if (!string.IsNullOrEmpty(_rt.Options.Build)) noteObj["build"] = _rt.Options.Build;
+            var label = Labels.Clean(noteObj["label"]);
+            if (label.Length > 0) noteObj["label"] = label; else noteObj.Remove("label");
             var draft = new Note(noteObj);
             await _rt.Hook(h => h.OnCreatingAsync(draft, http), "onCreating");
             var req = new NewNoteRequest(noteObj, Str(body!["screenshot"]), Str(body["sketch"]));
@@ -250,7 +252,17 @@ public sealed class RedlineMiddleware
             ["pageKey"] = _rt.Options.PageKey == RedlinePageKey.Path ? "path" : "route",
         };
         if (_rt.Options.Online) { o["online"] = true; o["user"] = user; }
+        // The copy-prompt button (D47): absent = the markdown store's own prompt, false = hidden, text = the prompt.
+        if (_rt.Options.Prompt is { Length: > 0 } prompt) o["prompt"] = prompt;
+        else if (_rt.Options.Prompt is not null || _rt.Options.Online || _rt.Store is not MarkdownNoteStore) o["prompt"] = false;
         return o;
+    }
+
+    async Task<JsonArray> LabelsFor(HttpContext http)
+    {
+        if (_rt.Options.LabelsFrom is not { } from) return Labels.ToConfig(_rt.Options.Labels);
+        try { return Labels.ToConfig(await from(http)); }
+        catch (Exception e) { _log.LogWarning(e, "Redline LabelsFrom failed"); return new JsonArray(); }
     }
 
     void FixTarget(JsonObject? target)

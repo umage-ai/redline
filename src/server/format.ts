@@ -3,7 +3,7 @@
 // replies), and every write re-reads the file first so neither side loses edits.
 //
 // One note:
-//   ### [ ] Comment · `button` “Save draft” · [data-testid="save"] · src/Form.svelte:42
+//   ### [ ] Bug · Comment · `button` “Save draft” · [data-testid="save"] · src/Form.svelte:42
 //   <!-- redline {"id":"…", …anchor json…} -->
 //
 //   The instruction, as typed.
@@ -25,7 +25,8 @@ const ASSET_RE = /^!\[(screenshot|sketch)\]\(.*\)\s*$/;
 export const PAGE_PREAMBLE = `<!--
   Written by the Redline overlay (dev only) for a coding agent. The full guide is the
   redline skill (.agents/skills/redline/SKILL.md, installed by \`npx redline init\`).
-  Each note: a "### [ ]" heading naming the element and where it lives in source,
+  Each note: a "### [ ]" heading naming the reviewer's label if any (Bug, UX, …), the
+  element and where it lives in source,
   an anchor comment (JSON: url, selector, xpath, source file:line, component chain,
   CMS content and property, viewport, app folder in a monorepo, …; paths are repo-relative), the instruction, optional screenshot/sketch images, and an optional
   "> " reply. Screenshots mark the target with a red box.
@@ -43,6 +44,7 @@ const TYPE_LABEL: Record<Note['type'], string> = { comment: 'Comment', sketch: '
 
 export function headingFor(n: Note): string {
   const parts: string[] = [TYPE_LABEL[n.type] ?? n.type];
+  if (n.label) parts.unshift(clip(String(n.label), 30));
   const t = n.target;
   if (n.whole || !t) parts.push('whole page');
   else {
