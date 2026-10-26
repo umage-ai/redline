@@ -5,8 +5,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
 - **Decision:** ship as a Vite plugin (plus an Astro wrapper and a generic connect middleware) that serves the client and writes files.
-- **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process.
-- **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
+- **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process. **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
 
 ## D2 — Markdown is the source of truth, with JSON anchors in HTML comments (2026-10-13)
 - **Decision:** one `.md` per page; each note is a `### [ ]` heading, a `<!-- redline {json} -->` anchor, the body and a `> ` reply. No separate JSON store.
@@ -15,14 +14,11 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Revisit if:** concurrent multi-user editing is needed (it would want a real store or a CRDT).
 
 ## D3 — `.redline/` is gitignored (2026-10-13)
-- **Decision:** `redline init` adds `.redline/` to `.gitignore`.
-- **Why:** user call. Feedback is a local work queue, merge collisions on shared markdown would be painful, and team knowledge belongs elsewhere.
+- **Decision:** `redline init` adds `.redline/` to `.gitignore`. **Why:** user call. Feedback is a local work queue, merge collisions on shared markdown would be painful, and team knowledge belongs elsewhere.
 
 ## D4 — Distribute as the public npm package `@umage.ai/redline` (2026-10-13, amended)
 - **Decision:** publish to npmjs under MIT; apps add it as a normal devDependency and import `@umage.ai/redline/vite` (or `/astro`, `/server`).
-- **Before:** consumers dynamically imported `<REDLINE_PATH | ../redline>/dist/...` from a sibling checkout and skipped it if absent,
-  because a `file:` devDependency breaks `npm ci` on CI runners without the sibling. That still works for hacking on Redline itself.
-- **Why changed:** more than one team and app want it, and a registry package needs no sibling checkout. The unscoped name `redline` is taken; the npm org is `umage.ai`, hence the dotted scope.
+- **Before:** consumers imported `dist/` from a sibling checkout (a `file:` devDependency breaks `npm ci` without it). **Why changed:** more teams want it, and a registry package needs no checkout. `redline` is taken; the npm org is `umage.ai`.
 
 ## D5 — Inject via HTTP response buffering, not framework hooks (2026-10-13)
 - **Decision:** a middleware buffers `text/html` responses and inserts the script before `</body>`.
@@ -44,13 +40,12 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D9 — Mutations require an `x-redline: 1` header, not an Origin check (2026-10-13)
 - **Why:** behind a reverse proxy (e.g. YARP) the Host doesn't match the browser Origin. A custom header forces a CORS preflight from other sites, which we never answer.
 
-## D10 — Single package, flat `dist/`, client served by the middleware (2026-10-13)
-- **Decision:** one package with subpath entries (`vite`, `astro`, `server`, `client.js`). The client is a prebuilt bundle read from disk by the handler.
+## D10 — Single package, flat `dist/`, client served by the middleware (2026-10-13, amended 2026-10-20)
+- **Decision:** one package with subpath entries (`vite`, `astro`, `server`, `client.js`). The client is a prebuilt bundle read from disk by the handler. The one other package is the hub (D44), a standalone server, not something apps import.
 - **Why:** linking by path is trivial, and the consumer's bundler never resolves Redline's client deps.
 
 ## D11 — Tests: node:test for logic, Playwright with one fixture app per framework (2026-10-13)
-- **Why:** node:test runs `.ts` with no extra tooling. Fixture apps (vanilla, React, SvelteKit, Astro) catch framework-specific breakage that unit tests can't. They run serially because each fixture owns one `.redline/`.
-- **Versions:** the fixtures track the apps we use it on: Vite 8 (7 also in use), SvelteKit pinned to 2.x (3.x exists), Svelte 5, React 19, Astro 6.
+- **Why:** node:test runs `.ts` with no extra tooling. Fixture apps (vanilla, React, SvelteKit, Astro) catch framework-specific breakage that unit tests can't. They run serially because each fixture owns one `.redline/`. **Versions:** the fixtures track the apps we use it on: Vite 8 (7 also in use), SvelteKit pinned to 2.x (3.x exists), Svelte 5, React 19, Astro 6.
 
 ## D12 — Toggle with Alt+Shift+R; single-letter keys only while the overlay is open (2026-10-13)
 - **Decision:** a global chord opens and closes the overlay. `C`/`T`/`S`/`N`/`Esc` work only while it's open and focus isn't in a field. The hotkey is configurable (`hotkey` option).
@@ -58,8 +53,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D13 — Release from GitHub Actions with npm Trusted Publishing (2026-10-13, amended 2026-10-15)
 - **Decision:** `npm run release -- patch|minor|major` on an up-to-date main (`scripts/release.mjs`) bumps the version, commits "Release vX.Y.Z", tags `vX.Y.Z` and pushes. The tag runs `.github/workflows/publish.yml`: tag = package.json and on main, `npm run check`, `npm run test:package`, `npm publish` authenticated by OIDC, then a GitHub release with generated notes. A manual run defaults to `--dry-run`.
-- **Amended:** releases used to be triggered by publishing a GitHub release by hand; one command on main is less to forget and keeps version, tag and notes in step.
-- **Why:** no long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package.
+- **Why:** one command on main (it used to be a hand-made GitHub release) keeps version, tag and notes in step. No long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package.
 - **Revisit if:** releases need to come from somewhere other than this repo's workflow.
 
 ## D14 — Shield the app from the overlay's own events (2026-10-15)
@@ -68,8 +62,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Revisit if:** an app listens on `window` in the capture phase before Redline loads, or a kit dismisses on `click` in the capture phase without a preceding pointerdown.
 
 ## D15 — Saving a note returns to idle (2026-10-15)
-- **Decision:** after a comment or text note is saved, the mode goes back to idle (sketch already did). Cancelling a draft keeps the mode, since that usually means re-picking.
-- **Why:** staying in comment mode surprised reviewers: the next tap made another note instead of using the app, which is what you want between notes (open a menu, navigate). `C` or one tap on **Comment** starts the next one.
+- **Decision:** after saving a comment or text note the mode goes back to idle (sketch already did); cancelling keeps the mode, which usually means re-picking. **Why:** staying in comment mode made the next tap another note instead of using the app (open a menu, navigate); `C` starts the next one.
 - **Revisit if:** people batch many comments in a row and ask for a "keep mode" option.
 
 ## D16 — Agent-neutral: open standards first, per-agent extras on top (2026-10-15)
@@ -83,9 +76,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Revisit if:** two dev servers serve the same app folder (e.g. Storybook + app) and should be told apart; set `app` explicitly meanwhile.
 
 ## D18 — No hint line above the toolbar; extras in tooltips (2026-10-15)
-- **Decision:** the per-mode hint above the bottom bar is gone. Buttons show their keys; the non-obvious bits (Alt+click = parent, Shift+click = whole page, Ctrl+Z, Esc) are in the button tooltips, and the popover's **↑ Parent** / **Page** buttons cover touch.
-- **Why:** it mostly repeated the visible key labels and sat over the page. Less chrome over the app being reviewed.
-- **Revisit if:** new users miss the modifiers; then a one-time first-run tip, not a permanent line.
+- **Decision:** no per-mode hint over the page; buttons show their keys, tooltips carry Alt+click = parent, Shift+click = whole page, Ctrl+Z, Esc, and the popover's **↑ Parent** / **Page** cover touch. **Why:** it repeated the key labels and sat over the app. **Revisit if:** new users miss the modifiers (then a one-time tip).
 
 ## D19 — Pluggable note store and server hooks; markdown stays the default (2026-10-15)
 - **Decision:** the handler talks to a `NoteStore` (`version/list/create/update/remove/asset`, `src/server/store.ts`). Option `store` takes one, or a factory that gets `{ root, dir, app }`; default `createStore` (markdown, D2). `hooks` (`onCreate/onUpdate/onRemove/onSourceWrite`) run after a change is stored; their errors are logged, never returned.
@@ -197,3 +188,12 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Why:** reviewing a deployed app should give an agent the same context as a dev server without serving the dev server (source files, HMR) from production. Stamps carry paths and names, never code.
 - **Revisit if:** a framework's own build metadata makes the stamps unnecessary.
 
+## D44 — `@umage.ai/redline-hub`: a small shared store as its own package (2026-10-20)
+- **Decision:** `hub/` is a second npm package: one bundled file (`redline-hub` bin) on Node's built-in `node:sqlite`, no dependencies. Projects, personal tokens (member or agent, hashed), the protocol at `/p/<project>` through `notesProtocol`, MCP per project, a nonce-CSP web UI behind a session cookie. Binds to 127.0.0.1; any other `--host` warns. Published by the same workflow when `hub/package.json` has a new version.
+- **Why:** shows the remote store (D40–D42) working end to end without a vendor. Personal tokens rather than one secret per project, because `author`, `mine` and `seen` hang on the person. Allowed sites per project are a guard against filing from the wrong place, not access control: the browser never calls the store, so there is no origin to allowlist. `seen` from anyone but the author is dropped in `notesProtocol` itself.
+- **Revisit if:** teams run it on the internet (then SSO, rate limits, backups: a product, not a reference), or Node's sqlite API changes (it is still flagged experimental; the CLI hides the warning).
+
+## D45 — Store calls carry the request; a shared site forwards each reviewer's credentials (2026-10-26)
+- **Decision:** every `NoteStore` method takes an optional last `ctx: { req }` (not the change feed), and `remoteStore` takes `headers(ctx)` to forward, say, the reviewer's session cookie. For deployed review in Node, `examples/review-frontend` offers shapes, none required: two images and a gateway (A), reviewers-only middleware in one server (B), a review environment (C). .NET needs nothing: `IHttpContextAccessor`, and online mode stamps the author.
+- **Why:** a deployed site serves many reviewers, and one token per server would put one name on every note. A production integration had to carry the session through `AsyncLocalStorage` to its store; an argument is plainer and keeps old stores working (they ignore it).
+- **Revisit if:** the change feed needs per-person scoping (it carries no data today, so one server credential is enough).

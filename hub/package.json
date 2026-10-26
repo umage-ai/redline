@@ -1,0 +1,28 @@
+{
+  "name": "@umage.ai/redline-hub",
+  "version": "0.1.0",
+  "description": "A small shared store for Redline notes: projects, personal tokens, MCP per project and a web UI, in one SQLite file. Localhost by default.",
+  "type": "module",
+  "license": "MIT",
+  "author": "umage.ai <morten@umage.ai>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umage-ai/redline.git",
+    "directory": "hub"
+  },
+  "homepage": "https://github.com/umage-ai/redline/tree/main/hub#readme",
+  "bugs": "https://github.com/umage-ai/redline/issues",
+  "keywords": ["redline", "design-review", "feedback", "mcp", "ai-agent", "sqlite"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "redline-hub": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  }
+}

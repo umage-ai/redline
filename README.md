@@ -18,7 +18,7 @@ dev server as markdown under `.redline/` with everything an agent needs to find 
 Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with the bundled
 `redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
 
-It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`, Debug builds).
+It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`, Debug builds), unless you opt in for a review site. Local, shared, deployed or wired into your own systems: [docs/SETUPS.md](docs/SETUPS.md) says which setup fits.
 
 ## Modes
 
@@ -101,7 +101,7 @@ All optional; without them Redline behaves as described above. Types come from `
   Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
   save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
 - **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`, optional `subscribe`) or `({ root, dir, app }) => store`. **`remoteStore({ url, token })`**
-  (or `REDLINE_STORE_URL`/`_TOKEN`) shares notes through a hosted store, live, with authors and resolved notes in green ([docs/PROTOCOL.md](docs/PROTOCOL.md)). **`hooks`**: `onCreate`, `onUpdate`,
+  (or `REDLINE_STORE_URL`/`_TOKEN`) shares notes through a hosted store, live, with authors and resolved notes in green ([docs/PROTOCOL.md](docs/PROTOCOL.md)); `npx @umage.ai/redline-hub` runs one, with projects, tokens, MCP and a UI ([hub/README.md](hub/README.md)). **`hooks`**: `onCreate`, `onUpdate`,
   `onRemove`, `onSourceWrite`. **`buildSource: true`** keeps source stamps in `vite build` (a review build behind `redlineMiddleware`); **`build`** records the commit.
 - **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
   A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto

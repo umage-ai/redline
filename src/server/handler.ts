@@ -191,9 +191,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   // The MCP endpoint's tools read and write this server's own store, with the same hooks as the API.
   const mcpBackend = (req: IncomingMessage): Backend => ({
     label: `dev server http://${req.headers.host ?? 'localhost'}${app ? ` (app ${app})` : ''}`,
-    list: () => store.list(),
-    async update(id, patch) { const n = await store.update(id, patch); if (n) await hook('onUpdate', n, patch); return n; },
-    async asset(name) { const a = await store.asset(name); return a ? { type: a.type, data: Buffer.from(a.data) } : null; },
+    list: () => store.list({ req }),
+    async update(id, patch) { const n = await store.update(id, patch, { req }); if (n) await hook('onUpdate', n, patch); return n; },
+    async asset(name) { const a = await store.asset(name, { req }); return a ? { type: a.type, data: Buffer.from(a.data) } : null; },
   });
 
   const api: Middleware = (req, res, next) => {
@@ -215,7 +215,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       // guide: the agent guide `redline init` installed, so the copied prompt can point at it.
       if (read && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
       if (read && p.startsWith('/assets/')) {
-        const a = await store.asset(p.slice(8));
+        const a = await store.asset(p.slice(8), { req });
         if (!a) return json(res, 404, { error: 'not found' });
         res.setHeader('content-type', a.type);
         res.setHeader('cache-control', 'no-store');
@@ -232,10 +232,10 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return;
       }
       if (read && p === '/notes') {
-        const version = await store.version();
+        const version = await store.version({ req });
         if (req.headers['if-none-match'] === `"${version}"`) { res.statusCode = 304; res.end(); return; }
         res.setHeader('etag', `"${version}"`);
-        return json(res, 200, { version, root: store.dir, notes: await store.list() });
+        return json(res, 200, { version, root: store.dir, notes: await store.list({ req }) });
       }
       // Server-sent events (D41): only when the store can tell us about changes; the overlay
       // falls back to polling on a 404.
@@ -283,19 +283,19 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         for (const k of STORE_OWNED) delete (body.note as Record<string, unknown>)[k];
         body.note.app = app || undefined;   // set here, never by the page
         body.note.build = opts.build || undefined;
-        const note = await store.create(body);
+        const note = await store.create(body, { req });
         await hook('onCreate', note);
         return json(res, 200, note);
       }
       const m = /^\/notes\/([a-z0-9]+)$/.exec(p);
       if (m && method === 'PATCH') {
         const patch: NotePatch = cleanPatch(JSON.parse(await readBody(req)));
-        const n = await store.update(m[1], patch);
+        const n = await store.update(m[1], patch, { req });
         if (n) await hook('onUpdate', n, patch);
         return n ? json(res, 200, n) : json(res, 404, { error: 'not found' });
       }
       if (m && method === 'DELETE') {
-        const ok = await store.remove(m[1]);
+        const ok = await store.remove(m[1], { req });
         if (ok) await hook('onRemove', m[1]);
         return ok ? json(res, 200, { ok: true }) : json(res, 404, { error: 'not found' });
       }

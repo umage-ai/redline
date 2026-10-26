@@ -6,6 +6,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
 import type { Note, NewNoteRequest } from '../shared/types.ts';
 import { pageFile, parsePage, serializeIndex, serializePage } from './format.ts';
 
@@ -27,6 +28,13 @@ export function cleanPatch(p: unknown): NotePatch {
 }
 
 /**
+ * Who a store call is for (D45): the request that caused it, so a store can act as the signed-in
+ * reviewer (forward their session, read a header) instead of as the server. Absent where there is
+ * no request (the change feed, `redline mcp` reading files).
+ */
+export interface StoreContext { req: IncomingMessage }
+
+/**
  * Where notes are kept. The markdown store below is the default; pass your own as the
  * `store` option to keep notes elsewhere (D19). `file` on a note is optional: it is only
  * shown to the reviewer and named in the copied agent prompt.
@@ -35,14 +43,14 @@ export interface NoteStore {
   /** Shown to the reviewer as where notes go (".redline", a URL, a CMS name). */
   dir: string;
   /** Changes whenever any note changes; the overlay polls with it as an ETag, so keep it cheap. */
-  version(): Promise<string>;
-  list(): Promise<(Note & { file?: string })[]>;
+  version(ctx?: StoreContext): Promise<string>;
+  list(ctx?: StoreContext): Promise<(Note & { file?: string })[]>;
   /** Assign `id` (keep a valid `req.note.id`) and `at`, keep the screenshot/sketch, return the note. */
-  create(req: NewNoteRequest): Promise<Note & { file?: string }>;
-  update(id: string, patch: NotePatch): Promise<Note | null>;
-  remove(id: string): Promise<boolean>;
+  create(req: NewNoteRequest, ctx?: StoreContext): Promise<Note & { file?: string }>;
+  update(id: string, patch: NotePatch, ctx?: StoreContext): Promise<Note | null>;
+  remove(id: string, ctx?: StoreContext): Promise<boolean>;
   /** A note's screenshot (`<id>.png`) or sketch (`<id>.svg`) by file name, or null. */
-  asset(name: string): Promise<{ type: string; data: Buffer | string } | null>;
+  asset(name: string, ctx?: StoreContext): Promise<{ type: string; data: Buffer | string } | null>;
   /**
    * Optional (D41): call `onChange` whenever a note changes, for as long as the subscription
    * lasts; return the unsubscribe. With it the overlay hears about changes at once instead of

@@ -22,7 +22,7 @@ export { decodeEntities, editAt, editUnique, tokenize } from './edit.ts';
 export type { Token, Edit, Nth } from './edit.ts';
 export type { RedlineOptions };
 export type { RedlineHooks } from './handler.ts';
-export type { NoteStore, NotePatch } from './store.ts';
+export type { NoteStore, NotePatch, StoreContext } from './store.ts';
 export type { SourceWriter, EditRequest, EditResult, WriterContext, Inspection } from './writers.ts';
 export type { Note, NewNoteRequest, Target, SourceLoc } from '../shared/types.ts';
 export type { RedlineApi, RedlineButton, RedlinePanelSection, RedlinePanelState, RedlinePageKey, RedlineEvents, RedlineExtension, RedlineMode } from '../shared/extension.ts';

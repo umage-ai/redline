@@ -1,4 +1,6 @@
 # Publishes @umage.ai/redline to npm through Trusted Publishing (OIDC): no npm token is stored anywhere.
+# Also @umage.ai/redline-hub (hub/, D44) whenever hub/package.json carries a version npm doesn't have yet;
+# it needs its own Trusted Publisher entry on npm (same repo and workflow).
 # npm side: package settings → Trusted Publisher → GitHub Actions, repo umage-ai/redline, workflow publish.yml,
 # no environment, and "Allow npm publish" ticked (only `npm stage publish` is allowed by default → 403, L20).
 #
@@ -77,6 +79,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
 
+      # After the main package and its release, so a hub problem never holds those up.
+      - name: Publish @umage.ai/redline-hub (when its version is new)
+        if: github.event_name == 'push' || !inputs.dry_run
+        working-directory: hub
+        run: |
+          spec="$(node -p "const p = require('./package.json'); p.name + '@' + p.version")"
+          if npm view "$spec" version > /dev/null 2>&1; then
+            echo "::notice::$spec is already on npm; bump hub/package.json to publish the hub."
+          else
+            npm publish --ignore-scripts
+          fi
+
       # npm refuses even a dry run for a version that is already published, so between releases show the tarball instead.
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
@@ -88,6 +102,7 @@ jobs:
           else
             npm publish --ignore-scripts --dry-run
           fi
+          (cd hub && npm pack --dry-run --ignore-scripts)
 
       - name: Upload Playwright results
         if: failure()

@@ -23,6 +23,8 @@ export interface ProtocolOptions {
    * anonymously (notes then have no author). Read the bearer token from `req.headers.authorization`.
    */
   authorize?(req: IncomingMessage): string | null | Promise<string | null>;
+  /** What a refused caller (401) is told; it reaches the reviewer as written. */
+  unauthorized?: string;
   /** Largest request body, in bytes (screenshots travel inside it). Default 30 MiB. */
   maxBody?: number;
 }
@@ -62,29 +64,32 @@ export function notesProtocol(store: NoteStore, opts: ProtocolOptions = {}): Mid
       const user = opts.authorize ? await opts.authorize(req) : undefined;
       if (user === null) {
         res.setHeader('www-authenticate', 'Bearer realm="redline"');
-        return send(res, 401, { error: 'a valid bearer token is required' });
+        return send(res, 401, { error: opts.unauthorized ?? 'a valid bearer token is required' });
       }
 
-      if (method === 'GET' && p === '/version') return send(res, 200, { version: await store.version() });
+      if (method === 'GET' && p === '/version') return send(res, 200, { version: await store.version({ req }) });
       if (method === 'GET' && p === '/notes') {
-        const notes = (await store.list()).map(n => ({ ...n, file: undefined, mine: user !== undefined && n.author === user }));
-        return send(res, 200, { version: await store.version(), notes });
+        const notes = (await store.list({ req })).map(n => ({ ...n, file: undefined, mine: user !== undefined && n.author === user }));
+        return send(res, 200, { version: await store.version({ req }), notes });
       }
       if (method === 'POST' && p === '/notes') {
         const body = await readJson(req, max) as NewNoteRequest | null;
         if (!body?.note?.page || !body.note.type) return send(res, 400, { error: 'note.page and note.type are required' });
         for (const k of STORE_OWNED) delete (body.note as Record<string, unknown>)[k];
         if (user) body.note.author = user;
-        return send(res, 200, { ...(await store.create(body)), file: undefined, mine: !!user });
+        return send(res, 200, { ...(await store.create(body, { req })), file: undefined, mine: !!user });
       }
       const m = /^\/notes\/([a-z0-9]{4,24})$/.exec(p);
       if (m && method === 'PATCH') {
-        const n = await store.update(m[1], cleanPatch(await readJson(req, max)));
+        const patch = cleanPatch(await readJson(req, max));
+        // `seen` means the author has seen it resolved (D42): from anyone else it is dropped.
+        if (patch.seen !== undefined && (await store.list({ req })).find(x => x.id === m[1])?.author !== user) delete patch.seen;
+        const n = await store.update(m[1], patch, { req });
         return n ? send(res, 200, { ...n, mine: user !== undefined && n.author === user }) : send(res, 404, { error: 'not found' });
       }
-      if (m && method === 'DELETE') return (await store.remove(m[1])) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'not found' });
+      if (m && method === 'DELETE') return (await store.remove(m[1], { req })) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'not found' });
       if (method === 'GET' && p.startsWith('/assets/')) {
-        const a = await store.asset(p.slice(8));
+        const a = await store.asset(p.slice(8), { req });
         if (!a) return send(res, 404, { error: 'not found' });
         res.setHeader('content-type', a.type);
         res.setHeader('cache-control', 'no-store');
@@ -101,6 +106,11 @@ export function notesProtocol(store: NoteStore, opts: ProtocolOptions = {}): Mid
         return;
       }
       send(res, 404, { error: 'unknown endpoint' });
-    })().catch(err => { if (!res.headersSent) send(res, 500, { error: String(err?.message ?? err) }); });
+    })().catch(err => {
+      if (res.headersSent) return;
+      // A store refuses with its own status and words (`err.status` 4xx), e.g. 403 for a site it takes no notes from.
+      const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+      send(res, status, { error: String(err?.message ?? err) });
+    });
   };
 }

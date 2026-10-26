@@ -1,5 +1,6 @@
 // Builds dist/: Node entries (vite, astro, angular, server, cli) as ESM with deps external,
 // the browser overlay as one self-contained ESM file, and type declarations in dist/types.
+// Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44).
 import * as esbuild from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -7,6 +8,7 @@ import path from 'node:path';
 
 const watch = process.argv.includes('--watch');
 rmSync('dist', { recursive: true, force: true });
+rmSync('hub/dist', { recursive: true, force: true });
 
 const node = {
   entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts' },
@@ -19,10 +21,16 @@ const client = {
   minify: !watch, sourcemap: 'inline', logLevel: 'info', legalComments: 'none',
 };
 
+const hub = {
+  entryPoints: { cli: 'hub/src/cli.ts' },
+  outdir: 'hub/dist', bundle: true, platform: 'node', format: 'esm', target: 'node22',
+  sourcemap: true, logLevel: 'info',
+};
+
 if (watch) {
-  for (const o of [node, client]) await (await esbuild.context(o)).watch();
+  for (const o of [node, client, hub]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(client)]);
+  await Promise.all([esbuild.build(node), esbuild.build(client), esbuild.build(hub)]);
   emitTypes();
 }
 angularManifest();
