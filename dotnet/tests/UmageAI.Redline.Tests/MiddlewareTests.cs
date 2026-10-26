@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Nodes;
+using UmageAI.Redline.Notes;
 
 namespace UmageAI.Redline.Tests;
 
@@ -121,6 +122,63 @@ public class MiddlewareTests
         var plain = await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/edit", """{"from":"Slides — part one","to":"Deck — part two","tag":"p","url":"http://localhost/deck.html"}""")));
         Assert.True(plain["ok"]!.GetValue<bool>(), plain.ToJsonString());
         Assert.Equal("<ul>\n<li><span>Yes</span></li>\n<li><span>No</span></li>\n</ul>\n<p>Deck &mdash; part two</p>\n", await File.ReadAllTextAsync(file));
+    }
+
+    [Fact]
+    public async Task Labels_are_in_the_config_and_a_notes_label_is_cleaned_into_its_heading()
+    {
+        await using (var t = await TestApp.StartAsync())
+        {
+            var labels = (await JsonOf(await t.Client.GetAsync("/__redline/config")))["labels"]!.AsArray();
+            Assert.Equal(new[] { "Bug", "UX", "Idea", "Copy" }, labels.Select(l => l!["name"]!.GetValue<string>()));
+            Assert.Equal("#ff5c5c", labels[0]!["color"]!.GetValue<string>());
+
+            async Task<JsonNode> Post(string label) => await JsonOf(await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/notes",
+                """{"note":{"type":"comment","page":"/","url":"http://localhost/","body":"Hi","label":""" + label + "}}")));
+            Assert.Equal("Bug", (await Post("\"  Bug \\n\""))["label"]!.GetValue<string>());
+            Assert.Null((await Post("42"))["label"]);
+            Assert.Null((await Post("\"   \""))["label"]);
+            var md = await File.ReadAllTextAsync(Path.Combine(t.Root, ".redline", "pages", "index.md"));
+            Assert.Contains("### [ ] Bug · Comment · whole page\n", md);
+        }
+        await using (var t = await TestApp.StartAsync(o => { o.Labels.Clear(); }))
+            Assert.Empty((await JsonOf(await t.Client.GetAsync("/__redline/config")))["labels"]!.AsArray());
+        await using (var t = await TestApp.StartAsync(o => o.Labels = new() { new(" Bug "), new("Perf", "teal"), new("bug"), new("") }))
+            Assert.Equal("""[{"name":"Bug"},{"name":"Perf","color":"teal"}]""", (await JsonOf(await t.Client.GetAsync("/__redline/config")))["labels"]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Labels_can_come_from_a_function_per_request_and_a_failure_shows_none()
+    {
+        await using (var t = await TestApp.StartAsync(o => o.LabelsFrom = async http =>
+        {
+            await Task.Yield();
+            return http.Request.Headers["x-team"] == "cms" ? new[] { new RedlineLabel("Content"), new RedlineLabel("Layout", "#f80") } : new[] { new RedlineLabel("Bug") };
+        }))
+        {
+            Assert.Equal("""[{"name":"Bug"}]""", (await JsonOf(await t.Client.GetAsync("/__redline/config")))["labels"]!.ToJsonString());
+            var req = new HttpRequestMessage(HttpMethod.Get, "/__redline/config");
+            req.Headers.Add("x-team", "cms");
+            Assert.Equal("""[{"name":"Content"},{"name":"Layout","color":"#f80"}]""", (await JsonOf(await t.Client.SendAsync(req)))["labels"]!.ToJsonString());
+        }
+        await using (var t = await TestApp.StartAsync(o => o.LabelsFrom = _ => throw new InvalidOperationException("backend down")))
+            Assert.Empty((await JsonOf(await t.Client.GetAsync("/__redline/config")))["labels"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task Copy_prompt_shows_for_the_markdown_store_and_is_hidden_or_replaced_otherwise()
+    {
+        async Task<JsonNode?> Prompt(Action<RedlineOptions> configure)
+        {
+            await using var t = await TestApp.StartAsync(configure);
+            return (await JsonOf(await t.Client.GetAsync("/__redline/config")))["prompt"];
+        }
+        Assert.Null(await Prompt(_ => { }));
+        Assert.Equal("Use the MCP tools ({open} open).", (await Prompt(o => o.Prompt = "Use the MCP tools ({open} open)."))!.GetValue<string>());
+        Assert.False((await Prompt(o => o.Prompt = ""))!.GetValue<bool>());
+        var remote = new RemoteNoteStore("https://notes.example/redline/", null, new HttpClient());
+        Assert.False((await Prompt(o => o.Store = (_, _) => remote))!.GetValue<bool>());
+        Assert.Equal("Ask the team.", (await Prompt(o => { o.Store = (_, _) => remote; o.Prompt = "Ask the team."; }))!.GetValue<string>());
     }
 
     [Fact]

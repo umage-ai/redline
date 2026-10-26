@@ -7,13 +7,9 @@
 Redline is a dev-only overlay for any web app. Press **Alt+Shift+R** in the browser, then pin
 comments on elements, rewrite text in place, or sketch on the page. Each note is saved by the
 dev server as markdown under `.redline/` with everything an agent needs to find the code:
-- the URL
-- a CSS selector and XPath
-- the test id
+- the URL, a CSS selector and XPath, and the test id
 - the **source file:line** and the **component chain**
-- the viewport and theme
-- recent console errors
-- a screenshot with the target outlined
+- the viewport and theme, recent console errors, and a screenshot with the target outlined
 
 Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with the bundled
 `redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
@@ -34,6 +30,9 @@ Saving a note returns to idle; press `C` (or tap **Comment**) for the next one. 
 you're picking, and the app never sees you using the overlay, so an open dropdown, popover or combobox stays open:
 open it, press `C` and click the item (try the **Export** menu, **⋯** row menus and driver filter in `npm run demo`).
 Notes show as numbered pins that follow their element; hovering a pin shows the note and the agent's reply.
+
+Tag a note with a **label** from the chips above the text box (**Bug**, **UX**, **Idea**, **Copy**), or start it with `#bug`. The label
+leads the note's heading, so the agent sees it first. Your own: `labels: ['Bug', { name: 'Perf', color: '#0c0' }]`; none: `labels: false`.
 
 **Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then the mode buttons.
 Toolbars grow their targets, a tap picks an element while a swipe still scrolls, the popover stays above the keyboard
@@ -83,10 +82,11 @@ Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serve
 **Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
 **Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import its `dist/vite.js` directly.
 
-Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, jsxSource: true, vueSource: true })`.
+Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, labels: [...], jsxSource: true, vueSource: true })`.
 `root` is where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false`
 hides the round button (hotkey only). `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`).
-`pageKey: 'path'` makes hash routes (a deck's `#/3`) share one notes file.
+`pageKey: 'path'` makes hash routes (a deck's `#/3`) share one notes file. `labels` may also be a function of the request. `prompt`
+replaces the **Copy prompt** text (`{open}`, `{page}`), or `false` hides it; it is hidden by default with a remote store.
 
 **Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one
 `.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's

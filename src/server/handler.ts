@@ -8,11 +8,12 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Note, Target } from '../shared/types.ts';
 import { API_BASE, STORE_OWNED } from '../shared/types.ts';
-import { cleanPatch, createStore, type NotePatch, type NoteStore } from './store.ts';
+import { cleanPatch, createStore, isMarkdownStore, type NotePatch, type NoteStore } from './store.ts';
 import { remoteStore } from './remote.ts';
 import { appOf, findRoot, real } from './root.ts';
 import { defaultWriters, resolveInside, runWriters, type EditRequest, type EditResult, type SourceWriter } from './writers.ts';
 import { registerServer } from './registry.ts';
+import { cleanLabel, normalizeLabels, type LabelDef, type LabelsSource } from '../shared/labels.ts';
 import { GUIDE_PATHS } from '../init.ts';
 import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
 
@@ -36,6 +37,18 @@ export interface RedlineOptions {
   hotkey?: string;
   /** Show the small launcher button when the overlay is closed. Default true. */
   launcher?: boolean;
+  /**
+   * The labels a reviewer can tag a note with (chips in the popover, D46): names, or { name, color }.
+   * Default Bug, UX, Idea and Copy; false turns labels off. A function is asked on every /config
+   * request (`{ req }`), e.g. to load them from a backend; if it throws, the overlay shows none.
+   */
+  labels?: LabelsSource<IncomingMessage>;
+  /**
+   * The panel's "Copy prompt for your agent" button (D47). Default: shown with the markdown store (`createStore`),
+   * whose files the prompt names; hidden with any other store (remote, custom), where those files don't exist.
+   * A string replaces the copied text ({open} = open notes in view, {page} = the page); false or '' hides it.
+   */
+  prompt?: string | false;
   /** Monorepos: the app's name in notes. Default: the dev server's folder relative to root ("apps/web"); "" at the root. */
   app?: string;
   /** Where notes go. Default: markdown in <root>/<dir> (createStore). A function gets the resolved root. */
@@ -160,7 +173,14 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
+  const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
+  const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);
+  const labelsFor = async (req: IncomingMessage): Promise<LabelDef[]> => {
+    if (fixedLabels) return fixedLabels;
+    try { return normalizeLabels(await (opts.labels as Extract<LabelsSource<IncomingMessage>, Function>)({ req })); }
+    catch (e) { console.warn('[redline] labels() failed:', e); return []; }
+  };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);
@@ -213,7 +233,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return;
       }
       // guide: the agent guide `redline init` installed, so the copied prompt can point at it.
-      if (read && p === '/config') return json(res, 200, { ...config, guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
+      if (read && p === '/config') return json(res, 200, { ...config, labels: await labelsFor(req), guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
       if (read && p.startsWith('/assets/')) {
         const a = await store.asset(p.slice(8), { req });
         if (!a) return json(res, 404, { error: 'not found' });
@@ -283,6 +303,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         for (const k of STORE_OWNED) delete (body.note as Record<string, unknown>)[k];
         body.note.app = app || undefined;   // set here, never by the page
         body.note.build = opts.build || undefined;
+        body.note.label = cleanLabel(body.note.label) || undefined;
         const note = await store.create(body, { req });
         await hook('onCreate', note);
         return json(res, 200, note);

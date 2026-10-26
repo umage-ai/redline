@@ -66,6 +66,8 @@ REDLINE_STORE_TOKEN=rht_…                              # this person's token
 ```
 
   .NET: `o.UseRemoteStore(url, token)`. In code (Node): `redline({ store: remoteStore({ url, token }) })`.
+  The panel's **Copy prompt** names `.redline/` files, so with a remote store it is hidden; set `prompt` (.NET `Prompt`)
+  to your own text, e.g. `'Apply the open Redline notes with the redline MCP tools ({open} open on {page}).'` (D47).
 - **Status:** ✅ Node, live updates included. 🟡 .NET client: unit-tested, polls (no live feed yet). 🟡 Hub:
   tested end to end (overlay → hub → green pin), version 0.1.0, not on npm yet.
 - **Not for:** reviewers without a dev server. That is setup 3.
@@ -114,6 +116,8 @@ services.AddRedline(o => { o.Online = true; o.Policy = "Reviewers"; o.UseSqlStor
   On .NET, an `INoteStore` reads the user through `IHttpContextAccessor`.
 - **Start from:** `notesProtocol(store, { authorize })` (Node) to serve the protocol over your own `NoteStore`,
   or copy the hub (`hub/src/`, about 1 000 lines): projects, tokens, the D42 rules for resolved notes, MCP, UI.
+- **Labels from your backend:** `labels` can be a function (`({ req }) => …`, may be async; .NET `LabelsFrom`),
+  asked on every `/config` request, so the chips can come from your system or depend on the reviewer (D46).
 - **Lighter option:** keep the default store and react to events with `hooks`
   (`onCreate`, `onUpdate`, `onRemove`), e.g. to post each new note to a chat channel.
 - **Status:** ✅ the protocol, the Node and .NET clients, and the reference server are tested (`remote.test.ts`,

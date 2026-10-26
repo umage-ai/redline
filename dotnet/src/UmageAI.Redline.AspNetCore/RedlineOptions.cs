@@ -17,6 +17,22 @@ public sealed class RedlineOptions
     /// <summary>Show the small launcher button when the overlay is closed.</summary>
     public bool Launcher { get; set; } = true;
     /// <summary>
+    /// The labels a reviewer can tag a note with (chips in the popover, D46). Default Bug, UX, Idea and Copy;
+    /// replace or add to the list, or <c>Labels.Clear()</c> to turn labels off.
+    /// </summary>
+    public List<RedlineLabel> Labels { get; set; } = RedlineLabel.Defaults();
+    /// <summary>
+    /// Labels from somewhere else (a backend, per reviewer), asked on every /config request instead of
+    /// <see cref="Labels"/>. If it throws, the overlay shows none.
+    /// </summary>
+    public Func<HttpContext, Task<IEnumerable<RedlineLabel>>>? LabelsFrom { get; set; }
+    /// <summary>
+    /// The panel's "Copy prompt for your agent" button (D47). null (default): shown with the markdown store, whose files
+    /// the prompt names; hidden with any other store and in online mode. Text replaces the copied prompt
+    /// ({open} = open notes in view, {page} = the page); "" hides it.
+    /// </summary>
+    public string? Prompt { get; set; }
+    /// <summary>
     /// What groups notes into one page (one notes file and one pin set), D26. <see cref="RedlinePageKey.Route"/>
     /// (default): the path plus a hash route (<c>#/settings</c>). <see cref="RedlinePageKey.Path"/>: the path only, so
     /// a page with hash-addressed views (a slide deck's <c>#/3</c>) keeps one notes file.

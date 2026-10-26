@@ -207,7 +207,7 @@ function card(p, n, reload, focus) {
   const shot = n.screenshot ? '/api/projects/' + p.slug + '/assets/' + n.screenshot.split('/').pop() : null;
   return h('div', { class: 'card note' + (focus ? ' focus' : ''), id: 'n-' + n.id },
     h('div', {},
-      h('div', { class: 'meta' }, state, ' ', n.type, ' on ', h('a', { href: n.url, target: '_blank', rel: 'noopener noreferrer' }, n.page), ' · ', where),
+      h('div', { class: 'meta' }, state, ' ', n.label ? [h('span', { class: 'pill' }, n.label), ' '] : null, n.type, ' on ', h('a', { href: n.url, target: '_blank', rel: 'noopener noreferrer' }, n.page), ' · ', where),
       n.type === 'text' ? [h('div', { class: 'from' }, n.from || ''), h('div', { class: 'to' }, n.to || '')] : null,
       n.body ? h('div', { class: 'body' }, n.body) : null,
       n.reply ? h('div', { class: 'reply' }, n.reply) : null,

@@ -32,6 +32,9 @@ folder with `.git`); add `.redline/` to `.gitignore` and install the agent guide
 `npx @umage.ai/redline init`. Settings can also come from configuration (`"Redline": { "Dir": … }`).
 `o.PageKey = RedlinePageKey.Path` groups notes by path only, so a page whose views are hash links
 (a slide deck's `#/3`) keeps one notes file; the default `Route` also splits by `#/…` routes.
+`o.Labels` is the list of note labels (chips in the popover; default Bug, UX, Idea, Copy):
+`o.Labels.Add(new("Perf", "#0c0"))`, or `o.Labels.Clear()` to turn them off; `o.LabelsFrom` reads them per request.
+`o.Prompt` replaces the panel's **Copy prompt** text, or `""` hides it (hidden by default with a non-markdown store or online).
 
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:
 `<PackageReference Include="UmageAI.Redline.Build" Version="…" PrivateAssets="all" />`.

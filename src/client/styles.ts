@@ -78,6 +78,16 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .pop footer label { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 12px; cursor: pointer; }
 .pop footer .grow { flex: 1; }
 .pop footer .btn { white-space: nowrap; }
+.pop .chips { display: flex; flex-wrap: nowrap; gap: 6px; padding: 10px 12px 0; overflow-x: auto; scrollbar-width: none; }
+.pop .chips::-webkit-scrollbar { display: none; }
+.pop .chips.more { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.chip { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--fg-2); font-size: 12px; line-height: 18px; white-space: nowrap; }
+.chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--fg-3)); }
+.chip:hover { background: var(--bg-3); color: var(--fg); }
+.chip.on { color: var(--fg); border-color: var(--c, var(--ink)); background: color-mix(in srgb, var(--c, var(--ink)) 20%, transparent); }
+.card .tag { flex: none; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 650; line-height: 17px;
+  color: var(--fg); border: 1px solid var(--c, var(--line)); background: color-mix(in srgb, var(--c, var(--fg-3)) 18%, transparent); }
 .pop .why { margin: 8px 12px 0; color: var(--fg-3); font-size: 11.5px; }
 .panel .ext { padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .panel .ext h3 { margin: 0 0 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3); }

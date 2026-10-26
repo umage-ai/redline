@@ -1,0 +1,25 @@
+{
+  "page": "/checkout",
+  "url": "http://localhost:5173/checkout",
+  "notes": [
+    {
+      "id": "mh1lab1bug", "type": "comment", "page": "/checkout", "url": "http://localhost:5173/checkout", "at": "2026-10-26 09:00",
+      "label": "Bug",
+      "target": { "tag": "button", "text": "Pay now", "testid": "pay", "source": { "file": "src/Checkout.tsx", "line": 18 } },
+      "body": "Double-clicking charges twice.", "reply": "", "done": false
+    },
+    {
+      "id": "mh1lab2cpy", "type": "text", "page": "/checkout", "url": "http://localhost:5173/checkout", "at": "2026-10-26 09:02",
+      "label": "Copy",
+      "target": { "tag": "h1", "text": "Check out" },
+      "from": "Check out", "to": "Checkout",
+      "body": "", "reply": "Fixed in src/Checkout.tsx:4.", "done": true
+    },
+    {
+      "id": "mh1lab3idea", "type": "sketch", "page": "/checkout", "url": "http://localhost:5173/checkout", "at": "2026-10-26 09:05",
+      "whole": true, "label": "Needs a design review · “later”, or never",
+      "sketch": "../assets/mh1lab3idea.svg",
+      "body": "", "reply": "", "done": false
+    }
+  ]
+}

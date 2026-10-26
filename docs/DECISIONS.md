@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-10-20 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-10-26 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -10,8 +10,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D2 — Markdown is the source of truth, with JSON anchors in HTML comments (2026-10-13)
 - **Decision:** one `.md` per page; each note is a `### [ ]` heading, a `<!-- redline {json} -->` anchor, the body and a `> ` reply. No separate JSON store.
 - **Why:** agents read, grep, diff and edit it directly; humans can read it. The format is modelled on an earlier in-house
-  slide-review tool (a REVIEW.md checklist with sketches, applied by an agent skill), where it had already proven itself.
-- **Revisit if:** concurrent multi-user editing is needed (it would want a real store or a CRDT).
+  slide-review tool (a REVIEW.md checklist with sketches, applied by an agent skill), where it had already proven itself. **Revisit if:** concurrent multi-user editing is needed (D40 added remote stores).
 
 ## D3 — `.redline/` is gitignored (2026-10-13)
 - **Decision:** `redline init` adds `.redline/` to `.gitignore`. **Why:** user call. Feedback is a local work queue, merge collisions on shared markdown would be painful, and team knowledge belongs elsewhere.
@@ -53,35 +52,29 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D13 — Release from GitHub Actions with npm Trusted Publishing (2026-10-13, amended 2026-10-15)
 - **Decision:** `npm run release -- patch|minor|major` on an up-to-date main (`scripts/release.mjs`) bumps the version, commits "Release vX.Y.Z", tags `vX.Y.Z` and pushes. The tag runs `.github/workflows/publish.yml`: tag = package.json and on main, `npm run check`, `npm run test:package`, `npm publish` authenticated by OIDC, then a GitHub release with generated notes. A manual run defaults to `--dry-run`.
-- **Why:** one command on main (it used to be a hand-made GitHub release) keeps version, tag and notes in step. No long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package.
-- **Revisit if:** releases need to come from somewhere other than this repo's workflow.
+- **Why:** one command on main (it used to be a hand-made GitHub release) keeps version, tag and notes in step. No long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package. **Revisit if:** releases need to come from somewhere other than this repo's workflow.
 
 ## D14 — Shield the app from the overlay's own events (2026-10-15)
 - **Decision:** `shieldApp` in `src/client/index.ts` hides overlay input from the app: bubble listeners are cut at the host, document capture listeners at `window` (our pointerdown/pointerup/keydown are re-dispatched as non-composed copies inside the shadow root), and app blur/focusout/pointerout towards the overlay are hidden. Opening the overlay only blurs text fields, quietly.
-- **Why:** dropdowns, popovers and comboboxes close on any outside press, focus move or Escape, so reviewers couldn't comment on them. Alternatives: an iframe toolbar (window blur still closes Headless UI menus) or a "comment in 3 s" timer (clumsy; still a fallback for CSS `:hover` menus, which no event shield can keep open).
-- **Revisit if:** an app listens on `window` in the capture phase before Redline loads, or a kit dismisses on `click` in the capture phase without a preceding pointerdown.
+- **Why:** dropdowns, popovers and comboboxes close on any outside press, focus move or Escape, so reviewers couldn't comment on them. Alternatives: an iframe toolbar (window blur still closes Headless UI menus) or a "comment in 3 s" timer (clumsy; still a fallback for CSS `:hover` menus, which no event shield can keep open). **Revisit if:** an app listens on `window` in the capture phase before Redline loads, or a kit dismisses on `click` in the capture phase without a preceding pointerdown.
 
 ## D15 — Saving a note returns to idle (2026-10-15)
-- **Decision:** after saving a comment or text note the mode goes back to idle (sketch already did); cancelling keeps the mode, which usually means re-picking. **Why:** staying in comment mode made the next tap another note instead of using the app (open a menu, navigate); `C` starts the next one.
-- **Revisit if:** people batch many comments in a row and ask for a "keep mode" option.
+- **Decision:** after saving a comment or text note the mode goes back to idle (sketch already did); cancelling keeps the mode, which usually means re-picking. **Why:** staying in comment mode made the next tap another note instead of using the app (open a menu, navigate); `C` starts the next one. **Revisit if:** people batch many comments in a row and ask for a "keep mode" option.
 
 ## D16 — Agent-neutral: open standards first, per-agent extras on top (2026-10-15)
 - **Decision:** `redline init` always writes the skill to `.agents/skills/redline/SKILL.md` (Agent Skills) and a section to `AGENTS.md`; Claude (skill + CLAUDE.md), Gemini CLI (GEMINI.md + `/redline` command) and Copilot (`/redline` prompt file) are added when detected or asked for with `--agents`. Cursor, Codex, Windsurf, Zed, Amp, Jules… need nothing extra. The panel's prompt names the installed guide (`/config` → `guide`) or spells out the contract inline.
-- **Why:** teams use different agents. Those two files are read natively by most of them; per-agent files only where they add a command or the agent ignores AGENTS.md. One guide file avoids drift; new CLAUDE.md files import AGENTS.md.
-- **Revisit if:** Claude Code or Gemini CLI read `.agents/skills` and AGENTS.md by default (drop the extras), or an MCP server becomes worth it (STATE next-up).
+- **Why:** teams use different agents. Those two files are read natively by most of them; per-agent files only where they add a command or the agent ignores AGENTS.md. One guide file avoids drift; new CLAUDE.md files import AGENTS.md. **Revisit if:** Claude Code or Gemini CLI read `.agents/skills` and AGENTS.md by default (drop the extras), or an MCP server becomes worth it (STATE next-up).
 
 ## D17 — Monorepos: one `.redline/` at the repo root, notes tagged per app (2026-10-15)
 - **Decision:** root stays the nearest `.git`. Each handler derives `app` = its dev server folder relative to root (`apps/web`; option `app` overrides). The server stamps it on new notes, page files get an app prefix (`apps-web--index.md`), INDEX.md gains an App column, and the overlay pins/numbers only its own app's notes. `init` installs at the repo root unless `--here`.
-- **Why:** agents usually run at the repo root and need one inbox; repo-relative source paths also cover shared packages. A `.redline/` per app would split the inbox and need per-app guides. Single-app repos keep `app: ""` and their old file names.
-- **Revisit if:** two dev servers serve the same app folder (e.g. Storybook + app) and should be told apart; set `app` explicitly meanwhile.
+- **Why:** agents usually run at the repo root and need one inbox; repo-relative source paths also cover shared packages. A `.redline/` per app would split the inbox and need per-app guides. Single-app repos keep `app: ""` and their old file names. **Revisit if:** two dev servers serve the same app folder (e.g. Storybook + app) and should be told apart; set `app` explicitly meanwhile.
 
 ## D18 — No hint line above the toolbar; extras in tooltips (2026-10-15)
 - **Decision:** no per-mode hint over the page; buttons show their keys, tooltips carry Alt+click = parent, Shift+click = whole page, Ctrl+Z, Esc, and the popover's **↑ Parent** / **Page** cover touch. **Why:** it repeated the key labels and sat over the app. **Revisit if:** new users miss the modifiers (then a one-time tip).
 
 ## D19 — Pluggable note store and server hooks; markdown stays the default (2026-10-15)
 - **Decision:** the handler talks to a `NoteStore` (`version/list/create/update/remove/asset`, `src/server/store.ts`). Option `store` takes one, or a factory that gets `{ root, dir, app }`; default `createStore` (markdown, D2). `hooks` (`onCreate/onUpdate/onRemove/onSourceWrite`) run after a change is stored; their errors are logged, never returned.
-- **Why:** lets notes land elsewhere (a CMS, a DB, a hosted service later) and lets teams log or notify without forking a store. `asset()` replaced the file path the handler used to read, so stores needn't be files.
-- **Revisit if:** a remote store needs concurrency control: add a version precondition to `update` rather than a second interface. The agent contract (SKILL.md) assumes markdown; other stores reach agents through `redline mcp` (D22).
+- **Why:** lets notes land elsewhere (a CMS, a DB, a hosted service later) and lets teams log or notify without forking a store. `asset()` replaced the file path the handler used to read, so stores needn't be files. **Revisit if:** a remote store needs concurrency control: add a version precondition to `update` rather than a second interface. The agent contract (SKILL.md) assumes markdown; other stores reach agents through `redline mcp` (D22).
 
 ## D20 — Direct source edits: opt-in writers, dry run first, refuse anything not static (2026-10-15)
 - **Decision:** `directEdit: true` (or a `SourceWriter[]`) adds **Apply to file** to the text popover. The overlay sends `POST /__redline/edit?dry=1` first and offers the button only if a writer accepts; otherwise it says why and the edit stays a note. Built-ins: `markupWriter` (element at the framework's `file:line:col` in .astro/.svelte/.jsx/.tsx/.vue/.html) and `staticHtmlWriter` (plain .html served from disk: the one element of that tag whose text matches). A write needs the element's source content to be static and its text equal to what the page showed: no `{…}` (in text or attributes), no comments, components or block elements; the file must be unchanged since the check and inside the root (not node_modules/.git/notes).
@@ -165,8 +158,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D38 — Promo video: two CDP screencasts composited by ffmpeg (2026-10-16)
 - **Decision:** `promo/record.mjs` records the demo app and `promo/stage.html` (captions, browser frame, panel) as two pages with `Page.startScreencast`, then ffmpeg overlays the app onto the stage, timed by the frames' timestamps. Sources are committed; `promo/out/` is gitignored.
-- **Why:** the overlay never runs inside an iframe, so the app can't be embedded in the stage. Playwright's `recordVideo` is lower quality and can't line two pages up. Generated frames and MP4s are ~160 MB and reproducible.
-- **Revisit if:** the overlay supports iframes (then record one page), or the video needs sound.
+- **Why:** the overlay never runs inside an iframe, so the app can't be embedded in the stage. Playwright's `recordVideo` is lower quality and can't line two pages up. Generated frames and MP4s are ~160 MB and reproducible. **Revisit if:** the overlay supports iframes (then record one page), or the video needs sound.
 
 ## D40 — A remote note store over plain HTTP, called by the server (2026-10-16)
 - **Decision:** a documented protocol (docs/PROTOCOL.md) mirroring `NoteStore`: `version`, `notes`, `assets`, create/patch/delete, bearer token. Clients: `remoteStore` (Node, or `REDLINE_STORE_URL`/`_TOKEN`) and `RemoteNoteStore` (.NET); reference server `notesProtocol`. The dev server makes the calls; the browser still only talks to `/__redline`.
@@ -197,3 +189,11 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** every `NoteStore` method takes an optional last `ctx: { req }` (not the change feed), and `remoteStore` takes `headers(ctx)` to forward, say, the reviewer's session cookie. For deployed review in Node, `examples/review-frontend` offers shapes, none required: two images and a gateway (A), reviewers-only middleware in one server (B), a review environment (C). .NET needs nothing: `IHttpContextAccessor`, and online mode stamps the author.
 - **Why:** a deployed site serves many reviewers, and one token per server would put one name on every note. A production integration had to carry the session through `AsyncLocalStorage` to its store; an argument is plainer and keeps old stores working (they ignore it).
 - **Revisit if:** the change feed needs per-person scoping (it carries no data today, so one server credential is enough).
+
+## D46 — Note labels: one row of chips, the name stored on the note, a default list (2026-10-26)
+- **Decision:** an optional `label` on every note type, picked from chips above the popover's textarea or by a leading `#bug`; it leads the heading (`### [ ] Bug · Comment · …`). The `labels` option (Node) / `Labels` (.NET) sets the list, names or `{ name, color }`; default Bug, UX, Idea, Copy; `false` / `Clear()` turns it off. The server keeps any label, cleaned (one line, ≤30 chars), not only listed ones. `labels` may be a function of the request (.NET `LabelsFrom`), asked per `/config`, for lists kept in a backend.
+- **Why:** chips are one click and all visible, where a dropdown is two clicks and would crowd the footer on a phone. One row, scrolling sideways with a fade, never wrapping, keeps the popover's height steady. Storing the name, not an id, keeps the markdown readable without the config. **Revisit if:** lists grow long (then a "more" menu), or labels should be editable after saving / filter the panel.
+
+## D47 — The copy-prompt button follows the store; servers can hide it or give their own text (2026-10-26)
+- **Decision:** the panel's **Copy prompt for your agent** shows by default only with the markdown store (`createStore` / `MarkdownNoteStore`), and not in .NET online mode. `prompt` (.NET `Prompt`) set to text replaces the copied prompt (`{open}`, `{page}` filled in); `false` / `''` hides it.
+- **Why:** the built-in prompt names `.redline/` files, which don't exist with a remote store; on a server the reviewer often isn't the one with an agent or MCP access. A team that does route agents through MCP writes the text that fits. **Revisit if:** extensions need to change it per page (then an API call), or reviewers want to send notes to someone instead.
