@@ -74,9 +74,9 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .pop .diff { margin: 10px 12px 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-2); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; max-height: 140px; overflow: auto; }
 .pop .diff .del { color: #ff8a9d; text-decoration: line-through; }
 .pop .diff .ins { color: #7ee2b0; }
-.pop footer { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.pop footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .pop footer label { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 12px; cursor: pointer; }
-.pop footer .grow { flex: 1; }
+.pop footer .btns { display: flex; gap: 8px; margin-left: auto; }
 .pop footer .btn { white-space: nowrap; }
 .pop .chips { display: flex; flex-wrap: nowrap; gap: 6px; padding: 10px 12px 0; overflow-x: auto; scrollbar-width: none; }
 .pop .chips::-webkit-scrollbar { display: none; }

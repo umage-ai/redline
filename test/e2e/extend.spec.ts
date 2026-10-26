@@ -79,6 +79,12 @@ for (const c of cases) {
       await expect(apply).toBeEnabled();
       await expect(apply).toHaveClass(/primary/);
       await expect(ui(page, '.pop .btn').filter({ hasText: 'Save note' })).toBeVisible();
+      // every footer button inside the popover (Apply to file used to stick out past its right edge)
+      const pop = (await ui(page, '.pop').boundingBox())!;
+      for (const b of await ui(page, '.pop footer .btn').all()) {
+        const r = (await b.boundingBox())!;
+        expect(r.x + r.width).toBeLessThanOrEqual(pop.x + pop.width);
+      }
       await apply.click();
       await expect.poll(file.read).toContain('<h2 data-testid="edit-heading">Edited &amp; saved</h2>');
       await expect(page.getByTestId('edit-heading')).toHaveText('Edited & saved');   // HMR or reload

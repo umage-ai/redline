@@ -471,10 +471,12 @@ async function boot() {
       direct ? direct.why : null,
       h('footer', {},
         h('label', { title: 'Attach a screenshot with the target outlined' }, shot, 'Screenshot'),
-        h('span', { class: 'grow' }),
-        h('button', { class: 'btn', onclick: cancelDraft }, 'Cancel'),
-        save,
-        direct ? direct.btn : null,
+        // The buttons stay together; short of room (Save note + Apply to file) they wrap below, right-aligned.
+        h('span', { class: 'btns' },
+          h('button', { class: 'btn', onclick: cancelDraft }, 'Cancel'),
+          save,
+          direct ? direct.btn : null,
+        ),
       ),
     );
     (pop as HTMLElement & { _shot?: HTMLInputElement })._shot = shot;
