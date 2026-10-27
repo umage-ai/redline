@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { networkHost, withRedline, type NextConfig, type NextConfigFn } from '../../src/next.ts';
@@ -82,7 +83,7 @@ test('next dev: the loader runs before SWC under webpack and on .tsx/.jsx under 
   assert.equal(off.turbopack, undefined);
 });
 
-test('next dev: MCP through Next\'s proxy is refused without tokens; called directly, it answers', async () => {
+test('next dev: MCP through a proxy that didn\'t stamp the caller is refused without tokens; called directly, it answers', async () => {
   const { destination } = (await (await dev({})).rewrites()).beforeFiles[0];
   const mcp = destination.replace(':path*', 'mcp');
   const call = (headers: Record<string, string> = {}) => fetch(mcp, {
@@ -97,7 +98,7 @@ test('next dev: MCP through Next\'s proxy is refused without tokens; called dire
   assert.equal((await direct.json()).result.serverInfo.name, 'redline');
 });
 
-test('next dev without -H 127.0.0.1 gets a warning: it listens on the network, and the API has no login', () => {
+test('networkHost: next dev listens on the network unless -H is loopback (a warning when network is on)', () => {
   const cli = (...a: string[]) => networkHost(['node', 'next', 'dev', ...a], {});
   assert.equal(cli(), 'every network interface');
   assert.equal(cli('-H', '0.0.0.0'), 'every network interface');
@@ -106,6 +107,50 @@ test('next dev without -H 127.0.0.1 gets a warning: it listens on the network, a
   assert.equal(cli('--hostname=localhost'), null);
   assert.equal(networkHost(['node', 'start-server.js'], { NEXT_PRIVATE_WORKER: '1' }), null);   // the worker can't see the flag
   assert.equal(networkHost(['node', '--test', 'next.test.ts'], {}), null);                    // not next dev
+});
+
+// Next's rewrite as far as it matters here: the caller's headers on, its Host as x-forwarded-host, from 127.0.0.1.
+async function nextLikeProxy(destination: string) {
+  const front = http.createServer((req, res) => {
+    const target = new URL(destination.replace(':path*', (req.url ?? '').slice('/__redline/'.length)));
+    const out = http.request(target, { method: req.method, headers: { ...req.headers, host: target.host, 'x-forwarded-host': req.headers.host ?? '' } }, r => {
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    });
+    req.pipe(out);
+  });
+  await new Promise<void>(r => front.listen(0, '0.0.0.0', r));
+  const port = (front.address() as { port: number }).port;
+  const call = (address: string, p: string, headers: Record<string, string>, body?: string) => new Promise<number>((resolve, reject) => {
+    const rq = http.request({ host: address, port, path: p, method: body ? 'POST' : 'GET', headers }, rs => { rs.resume(); resolve(rs.statusCode ?? 0); });
+    rq.on('error', reject);
+    rq.end(body);
+  });
+  return { port, call, close: () => front.close() };
+}
+
+test('next dev: through the rewrite the API server knows the caller\'s real address, so another machine can\'t fake its Host (D48)', async () => {
+  const { destination } = (await (await dev({})).rewrites()).beforeFiles[0];
+  const front = await nextLikeProxy(destination);
+  try {
+    const local = `localhost:${front.port}`;
+    assert.equal(await front.call('127.0.0.1', '/__redline/config', { host: local }), 200);
+    assert.equal(await front.call('127.0.0.1', '/__redline/config', { host: `192.168.1.20:${front.port}` }), 403);   // the Host check stays
+    const mcp = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } });
+    const json = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+    assert.equal(await front.call('127.0.0.1', '/__redline/mcp', { host: local, ...json }, mcp), 200);   // stamped: MCP knows it's local
+
+    // From this machine's own network address the socket shows that address, whatever the Host says.
+    const lan = Object.values(os.networkInterfaces()).flat().find(i => i && i.family === 'IPv4' && !i.internal)?.address;
+    if (!lan) return void console.log('# no network interface: the LAN half of this test was skipped');
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      assert.equal(await front.call(lan, '/__redline/config', { host: local }), 403);
+      assert.equal(await front.call(lan, '/__redline/config', { host: local, 'x-redline-peer': 'guess 127.0.0.1' }), 403);
+      assert.equal(await front.call(lan, '/__redline/mcp', { host: local, ...json }, mcp), 401);
+    } finally { console.warn = warn; }
+  } finally { front.close(); }
 });
 
 test('loader: stamps .tsx outside node_modules, with an object source map; leaves the rest as it came', () => {

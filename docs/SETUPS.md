@@ -30,7 +30,7 @@ Rules that hold in every setup:
 - **Overlay runs in:** the framework's dev server. It is gone from builds.
 - **Notes:** `<repo>/.redline/pages/<page>.md`, plus screenshots in `.redline/assets/`. The folder is gitignored.
 - **Agent gets them:** by reading the markdown, guided by the skill that `npx redline init` installs; or with
-  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only; through `next dev`, tokens only).
+  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only, `next dev` included).
 - **Install (JS/TS):** `npm i -D @umage.ai/redline`, `npx redline init`, then one line of config:
 
 | Stack | Config |
@@ -45,7 +45,7 @@ Rules that hold in every setup:
 - **Status:** ✅ `@umage.ai/redline` on npm, with every framework above covered by e2e tests. .NET is tested
   (unit and browser) but unpublished.
 - **Not for:** sharing notes between people. Each checkout has its own `.redline/`.
-- **Network:** the API has no login, so the plugins answer this machine only (`network: true` opens them). `next dev` listens on the network and only the Host header shows who calls, so use `-H 127.0.0.1`.
+- **Network:** the API has no login, so the plugins answer this machine only (`network: true` opens them). Under `next dev` (on the network by default) the caller's address is stamped before Next's proxy hides it.
 - **Details:** [README.md](../README.md) "Setup in a repo".
 
 ## 2. Shared notes in dev (remote store)

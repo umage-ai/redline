@@ -148,13 +148,16 @@ const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest();
 const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
 const LOCAL_HOST = /^(localhost|[^:/]+\.localhost|127(\.\d+){3}|\[::1\])(:\d+)?$/i;
 
+/** The caller's address as the server in front saw it (set by withRedline's API server under Next, D48). */
+export const PEER = Symbol.for('umage.redline.peer');
+const peerOf = (req: IncomingMessage) => (req as { [PEER]?: string })[PEER] ?? req.socket?.remoteAddress ?? '';
+
 /**
- * A call from this machine: a loopback address, and a local Host (x-forwarded-host behind a proxy). Behind
- * Next's rewrite every call comes from 127.0.0.1 and the Host is the only sign: it stops other machines'
- * browsers and DNS rebinding, not someone sending a fake Host header (`next dev -H 127.0.0.1` does).
+ * A call from this machine: a loopback address, and a local Host (x-forwarded-host behind a proxy), which
+ * stops DNS rebinding. Behind Next's rewrite the address is the one Next's own server saw (PEER).
  */
 export function localCall(req: IncomingMessage): boolean {
-  if (!LOOPBACK.test(req.socket?.remoteAddress ?? '')) return false;
+  if (!LOOPBACK.test(peerOf(req))) return false;
   const h = req.headers;
   const host = String(h['x-forwarded-host'] ?? h.host ?? h[':authority'] ?? '').split(',')[0].trim();
   return LOCAL_HOST.test(host);
@@ -172,7 +175,7 @@ export function mcpAllowed(req: IncomingMessage, tokens: string[] | undefined): 
     const want = (t: string) => !t.startsWith('sha256:') ? sha256(t) : /^[0-9a-f]{64}$/i.test(t.slice(7)) ? Buffer.from(t.slice(7), 'hex') : null;
     return tokens.some(t => { const w = want(t); return !!w && timingSafeEqual(got, w); });
   }
-  return !bearer && LOOPBACK.test(req.socket.remoteAddress ?? '');
+  return !bearer && LOOPBACK.test(peerOf(req));
 }
 
 let pkgVersion: string | undefined;
@@ -243,7 +246,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     if (opts.network || localCall(req)) return false;
     if (!warned) {
       warned = true;
-      console.warn(`[redline] refused a call from ${req.socket?.remoteAddress} (host ${req.headers['x-forwarded-host'] ?? req.headers.host}): only this machine gets the overlay. Set network: true to let others in.`);
+      console.warn(`[redline] refused a call from ${peerOf(req)} (host ${req.headers['x-forwarded-host'] ?? req.headers.host}): only this machine gets the overlay. Set network: true to let others in.`);
     }
     return true;
   };

@@ -74,7 +74,7 @@ In dev it turns on Angular's template source locations, so notes point at the te
 "serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
 ```
 
-**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`). `next dev` listens on your network and `/__redline/*` has no login. Redline turns away other machines' browsers, but behind Next's proxy a hand-made request with a faked `Host` gets through: use `next dev -H 127.0.0.1` (Redline warns otherwise).
+**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`). `next dev` listens on your network and `/__redline/*` has no login, so Redline checks each caller's own address, as Next's server received it, and answers this machine only (`network: true` opens it).
 
 ```tsx
 export default withRedline(nextConfig, { directEdit: true })   // next.config.ts, from '@umage.ai/redline/next'; keeps nextConfig's type (NextConfig)
@@ -133,7 +133,7 @@ notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKIL
 with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
 `store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server
 also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere;
-through `next dev` it needs `mcpTokens`, since Next's proxy hides who calls).
+through `next dev` too).
 
 ## What gets written
 
