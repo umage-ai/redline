@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-10-20 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-10-27 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -177,3 +177,23 @@ Prune entries whose cause is gone from the code.
 - **Cause:** the Node-version check (`process.getBuiltinModule('node:sqlite')`) loaded the module, and with it the warning, before `quietSqliteWarning()` ran.
 - **Fix:** install the filter first; `db.ts` takes the module through `getBuiltinModule`, so a static import can't hoist it above the filter.
 - **Guard:** `scripts/test-hub-package.mjs` fails when stderr contains ExperimentalWarning.
+
+## L44 — Next: `failed to read input source map … invalid type: string` on every .tsx
+- **Cause:** Next's SWC loader accepts a loader's source map only as an object; webpack itself takes a string.
+- **Fix:** `next-loader.ts` passes `JSON.parse(map)`.
+- **Guard:** `next.test.ts` "loader: stamps .tsx … with an object source map".
+
+## L45 — Turbopack: `Module not found: Can't resolve '@umage.ai/redline/next/script'`, webpack fine
+- **Cause:** the fixture links the package from the repo (`file:../../..`), outside `turbopack.root`; Turbopack reads nothing outside its root.
+- **Fix:** the fixture sets `turbopack.root` (and `outputFileTracingRoot`) to the repo. Same for `npm link` in a real app.
+- **Guard:** the `next-turbo` fixture (`frameworks.spec.ts`).
+
+## L46 — Through Next's rewrite every request reaches the API server from 127.0.0.1
+- **Cause:** Next proxies rewrites with `changeOrigin` and sets only `x-forwarded-host`, no client address; `next dev` listens on the LAN by default.
+- **Fix:** the Next API server refuses `/__redline/mcp` with `x-forwarded-host` unless `mcpTokens` is set; `redline mcp` registers and calls it directly.
+- **Guard:** `next.test.ts` "MCP through Next's proxy is refused without tokens".
+
+## L47 — A running `next dev` keeps failing with `Can't resolve …/dist/next-loader.cjs` after `npm run build`
+- **Cause:** the build empties `dist/` first; Next caches the failed resolution and doesn't retry when the file returns.
+- **Fix:** restart the Next fixture servers after a rebuild (Vite fixtures recover on reload).
+- **Guard:** none; e2e builds before starting the servers.

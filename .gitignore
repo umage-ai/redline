@@ -11,3 +11,6 @@ test/fixtures/angular/.angular
 promo/out
 redline-hub.db*
 test/fixtures/vanilla/.vite-cache-hub
+test/fixtures/next/.next-*
+test/fixtures/next/next-env.d.ts
+test/fixtures/next/.install-lock

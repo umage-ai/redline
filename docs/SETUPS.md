@@ -1,6 +1,6 @@
 # Setups
 
-Last updated: 2026-10-26 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
+Last updated: 2026-10-27 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
 
 Redline has one overlay (the browser part) and one note format. What changes between setups is **where
 the overlay runs** and **where the notes are kept**. Pick the first row that fits.
@@ -30,7 +30,7 @@ Rules that hold in every setup:
 - **Overlay runs in:** the framework's dev server. It is gone from builds.
 - **Notes:** `<repo>/.redline/pages/<page>.md`, plus screenshots in `.redline/assets/`. The folder is gitignored.
 - **Agent gets them:** by reading the markdown, guided by the skill that `npx redline init` installs; or with
-  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only).
+  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only; through `next dev`, tokens only).
 - **Install (JS/TS):** `npm i -D @umage.ai/redline`, `npx redline init`, then one line of config:
 
 | Stack | Config |
@@ -38,6 +38,7 @@ Rules that hold in every setup:
 | Vite: React, Vue, Svelte/SvelteKit, Solid, Preact | `plugins: [redline(), react()]` from `@umage.ai/redline/vite` |
 | Astro | `integrations: [redline()]` from `@umage.ai/redline/astro` |
 | Angular CLI 17+ | `serve` builder `@umage.ai/redline:dev-server` in `angular.json` |
+| Next.js 15+ (webpack or Turbopack) | `withRedline(config)` from `@umage.ai/redline/next` in `next.config`, plus `<Redline />` from `@umage.ai/redline/next/script` in the root layout |
 | Other Node servers (Express, http) | `redlineMiddleware()` from `@umage.ai/redline/server` → `app.use(api); app.use(inject)` |
 | ASP.NET Core, Razor, Blazor, Optimizely | `AddRedline()`. **Not on NuGet yet**: build the packages from `dotnet/` ([dotnet/README.md](../dotnet/README.md)) |
 

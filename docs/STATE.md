@@ -1,10 +1,10 @@
 # State
 
-Last updated: 2026-10-26 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-10-27 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
-v0.4.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
+v0.5.0 published to npm as `@umage.ai/redline` (D4), MIT; public repo `umage-ai/redline`. Our internal apps (Astro,
 React + Vite 7, SvelteKit) install it as a devDependency. The tarball ships only `dist/` (JS + `dist/types`), `skill/`,
 README and LICENSE. Later releases go through `.github/workflows/publish.yml` (Trusted Publishing, D13).
 `@umage.ai/redline-hub` (`hub/`, D44) is at 0.1.0, not yet published. The .NET packages (`dotnet/`, not yet published) are `UmageAI.Redline.AspNetCore`, `UmageAI.Redline.Build` and `UmageAI.Redline.Optimizely` (0.1.0).
@@ -37,6 +37,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
 | Angular CLI: `@umage.ai/redline:dev-server` builder wraps `ng serve` (middleware + dev-only template source locations); `ng build` untouched | ✅ Angular 22, real `ng serve` | `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
+| Next.js (D48): `withRedline` in next.config + `<Redline />` in the layout; App Router (Server and Client Components) and Pages Router; file:line + component chain from stamps; Apply to file; MCP via Next only with `mcpTokens` | ✅ Next 15.5, webpack and Turbopack (fixtures `next`, `next-turbo`); Next 16.4 checked by hand | `next.test.ts`, `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Sketch text labels (Enter commits once, Escape drops) | ✅ | `overlay.spec.ts` |
 | Sketch colours: one swatch folds out a palette of six (halos), per shape, `C` cycles, remembered; kept in svg + png | ✅ | `overlay.spec.ts`, `mobile.spec.ts` |
 | Phones/touch (360 px, Pixel 8 Pro at 125%): everything fits, tap to pick, swipe scrolls while picking, tap outside ends a text edit, sketch by finger, full-width panel, pins kept on screen; `examples/demo` is responsive | ✅ emulated | `mobile.spec.ts`; not yet tried on a real device |
@@ -69,7 +70,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 - Elements added after hydration in Astro have no source (the snapshot is taken at parse time).
 - Remote stores: the .NET middleware has no change feed yet (the overlay polls). The hub is a reference for teams on a private network: plain HTTP, no SSO, rate limits or backups (D44); the .NET client is unit-tested against a stub, not yet against the hub.
 - `buildSource` output is unit-tested per framework, not yet through a real `vite build` + `redlineMiddleware` fixture.
-- Not supported yet (D23): Nuxt and Next.js (HTML isn't served through a Vite/connect stack we hook), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
+- Not supported yet (D23): Nuxt (HTML is rendered outside the Vite middleware), Qwik and Lit source locations. The Angular builder's schema is copied from Angular 22; newer `ng serve` flags need angular.json options until it is refreshed.
+- Next.js: the live feed (`/events`, remote stores) and bodies over 10 MB through Next's proxy (it buffers them when the app has `middleware.ts`) are untested; Next before 15 is untested.
 - `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.
 - .NET: apps under a `PathBase` aren't supported (the client calls `/__redline` at the root); hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN.
 

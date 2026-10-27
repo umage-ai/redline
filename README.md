@@ -14,7 +14,7 @@ dev server as markdown under `.redline/` with everything an agent needs to find 
 Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with the bundled
 `redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
 
-It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `ng serve`, Debug builds), unless you opt in for a review site. Local, shared, deployed or wired into your own systems: [docs/SETUPS.md](docs/SETUPS.md) says which setup fits.
+It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Next.js (15+), Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `next dev`, `ng serve`, Debug builds), unless you opt in for a review site. Local, shared, deployed or wired into your own systems: [docs/SETUPS.md](docs/SETUPS.md) says which setup fits.
 
 ## Modes
 
@@ -26,17 +26,15 @@ It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, wit
 | `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for your agent**. | |
 | `Esc` | | Steps back one level: draft → mode → panel → closed. | |
 
-Saving a note returns to idle; press `C` (or tap **Comment**) for the next one. Clicks never reach the app while
-you're picking, and the app never sees you using the overlay, so an open dropdown, popover or combobox stays open:
-open it, press `C` and click the item (try the **Export** menu, **⋯** row menus and driver filter in `npm run demo`).
-Notes show as numbered pins that follow their element; hovering a pin shows the note and the agent's reply.
+Saving a note returns to idle; press `C` (or tap **Comment**) for the next one. Clicks never reach the app while you're picking,
+and the app never sees you using the overlay, so an open dropdown, popover or combobox stays open: open it, press `C` and click
+the item (try the **Export** menu, **⋯** row menus and driver filter in `npm run demo`). Notes show as numbered pins that follow their element; hovering a pin shows the note and the agent's reply.
 
 Tag a note with a **label** from the chips above the text box (**Bug**, **UX**, **Idea**, **Copy**), or start it with `#bug`. The label
 leads the note's heading, so the agent sees it first. Your own: `labels: ['Bug', { name: 'Perf', color: '#0c0' }]`; none: `labels: false`.
 
-**Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then the mode buttons.
-Toolbars grow their targets, a tap picks an element while a swipe still scrolls, the popover stays above the keyboard
-and the panel goes full width. Use **↑ Parent** and **Page** in place of `Alt`/`Shift`+click.
+**Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then the mode buttons. Toolbars grow their
+targets, a tap picks while a swipe scrolls, the popover stays above the keyboard and the panel goes full width. **↑ Parent** / **Page** replace `Alt`/`Shift`+click.
 
 | Text: edit in place, saved as a diff | Sketch: box, arrow, pen and labels |
 |---|---|
@@ -76,21 +74,26 @@ In dev it turns on Angular's template source locations, so notes point at the te
 "serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
 ```
 
+**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`).
+
+```tsx
+export default withRedline({ /* your Next config */ }, { directEdit: true })   // next.config.mjs, from '@umage.ai/redline/next'
+<body>{children}<Redline /></body>   // app/layout.tsx, from '@umage.ai/redline/next/script'; renders nothing outside development
+```
+
 **ASP.NET Core, Blazor, Optimizely CMS** (upcoming, not on NuGet yet): `UmageAI.Redline.AspNetCore` / `UmageAI.Redline.Optimizely`, then `AddRedline()`.
 Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serves editors on a live site. See [dotnet/README.md](dotnet/README.md).
 
-**Other Node dev servers**: `@umage.ai/redline/server` exports `redlineMiddleware()` → `{ api, inject }`.
-**Working on Redline itself**: build a checkout (`npm run dev`) and `npm link` it, or import its `dist/vite.js` directly.
+**Other Node dev servers**: `redlineMiddleware()` → `{ api, inject }` from `@umage.ai/redline/server`. **Working on Redline**: `npm link` a built checkout.
 
-Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, labels: [...], jsxSource: true, vueSource: true })`.
-`root` is where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false`
-hides the round button (hotkey only). `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`).
-`pageKey: 'path'` makes hash routes (a deck's `#/3`) share one notes file. `labels` may also be a function of the request. `prompt`
-replaces the **Copy prompt** text (`{open}`, `{page}`), or `false` hides it; it is hidden by default with a remote store.
+Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, labels: [...], jsxSource: true, vueSource: true })`. `root` is
+where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false` hides the round button.
+`app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`). `pageKey: 'path'` makes hash routes (a deck's `#/3`)
+share one notes file. `labels` may be a function of the request. `prompt` replaces the **Copy prompt** text (`{open}`, `{page}`), or `false`
+hides it (the default with a remote store).
 
-**Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one
-`.redline/` at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's
-**All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).
+**Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one `.redline/`
+at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's **All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).
 
 ### Extending
 
@@ -109,8 +112,7 @@ All optional; without them Redline behaves as described above. Types come from `
 
 ## Coding agents
 
-Redline isn't tied to one agent. The notes are plain markdown, and `npx redline init` installs the
-guide where agents look for it:
+Redline isn't tied to one agent. The notes are plain markdown, and `npx redline init` installs the guide where agents look for it:
 
 | Written | Read by |
 |---|---|
@@ -120,9 +122,8 @@ guide where agents look for it:
 | a `GEMINI.md` section + `.gemini/commands/redline.toml` | Gemini CLI (`/redline`) |
 | `.github/prompts/redline.prompt.md` | Copilot Chat in VS Code (`/redline`) |
 
-The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md`
-or `.gemini/`, `.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini`
-(`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade.
+The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md` or `.gemini/`,
+`.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini` (`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade.
 
 **Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline
 notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
@@ -131,7 +132,8 @@ notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKIL
 **MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
 with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
 `store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server
-also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere).
+also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere;
+through `next dev` it needs `mcpTokens`, since Next's proxy hides who calls).
 
 ## What gets written
 
@@ -165,6 +167,7 @@ replies are never overwritten. The overlay polls about every 2 s, which is why r
 | Astro | `data-astro-source-file/-loc` (snapshotted at parse time, because Astro's dev toolbar strips them) | `.astro` files up the tree |
 | React 19 (Vite) | The plugin stamps `data-redline-src="file:line:col"` on HTML elements in `.jsx`/`.tsx` during dev | Fiber owner chain, with router and provider plumbing filtered out |
 | Solid, Preact (Vite) | The same JSX stamp | The components the stamped elements are written in |
+| Next.js 15+ | The same JSX stamp, from a loader `withRedline` adds (webpack and Turbopack) | The components the stamped elements are written in (Server Components have no fibers) |
 | Vue 3 (Vite) | The plugin stamps HTML elements in `.vue` templates during dev | `__vueParentComponent` chain |
 | Angular 17+ | `data-ng-source-location` (Angular's `enableTemplateSourceLocations`, turned on by the builder in dev) | `ng.getOwningComponent`, then the host components around it |
 | Razor, Blazor (.NET) | Debug builds compile `.cshtml`/`.razor` copies stamped with `data-redline-src`; Optimizely adds CMS content + property | Stamped files up the tree |
@@ -172,21 +175,18 @@ replies are never overwritten. The overlay polls about every 2 s, which is why r
 
 ## Screenshots
 
-By default the DOM is rendered to a canvas with
-[modern-screenshot](https://github.com/qq15725/modern-screenshot). Page scroll and inner scroll
-containers are reproduced. WebGL canvases, cross-origin map tiles and video may come out blank
-this way. For those apps, tick **Pixel-perfect screenshots (tab capture)** in the panel. It
-captures the real tab pixels, and Chrome asks once per page load.
+By default the DOM is rendered to a canvas with [modern-screenshot](https://github.com/qq15725/modern-screenshot), page scroll and inner
+scroll containers included. WebGL canvases, cross-origin map tiles and video may come out blank this way. For those apps, tick
+**Pixel-perfect screenshots (tab capture)** in the panel: it captures the real tab pixels, and Chrome asks once per page load.
 
 ## Develop
 
 ```bash
 npm run dev         # rebuild dist/ on change (reload the app for client changes, restart it for server changes)
 npm test            # unit tests (node:test) + docs check
-npm run test:e2e    # Playwright against fixture apps: vanilla, React, SvelteKit, Astro, Angular, Vue, Solid, Preact
+npm run test:e2e    # Playwright against fixture apps: vanilla, React, SvelteKit, Astro, Angular, Vue, Solid, Preact, Next
 npm run check       # typecheck + unit + docs + e2e
 npm run test:package   # install the packed tarball into fresh apps per framework and test it end to end
-npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app
 ```
 
 Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and

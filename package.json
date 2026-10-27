@@ -18,6 +18,7 @@
     "react",
     "vue",
     "angular",
+    "nextjs",
     "solid-js",
     "preact",
     "feedback",
@@ -56,6 +57,14 @@
     "./angular": {
       "types": "./dist/types/angular.d.ts",
       "default": "./dist/angular.js"
+    },
+    "./next": {
+      "types": "./dist/types/next.d.ts",
+      "default": "./dist/next.js"
+    },
+    "./next/script": {
+      "types": "./dist/types/next-script.d.ts",
+      "default": "./dist/next-script.js"
     },
     "./client.js": "./dist/client.js",
     "./package.json": "./package.json"
@@ -104,6 +113,7 @@
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/node": "^22.10.0",
+    "@types/react": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "@vitejs/plugin-vue": "^6.0.10",
     "astro": "^6.4.8",
