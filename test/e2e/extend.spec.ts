@@ -58,6 +58,8 @@ const cases = [
   { f: FIXTURES.angular, rel: 'src/app/edit-zone.html', route: '/', dynamic: /expression/ },
   { f: FIXTURES.solid, rel: 'src/EditZone.tsx', route: '/', dynamic: /expression/ },
   { f: FIXTURES.preact, rel: 'src/EditZone.tsx', route: '/', dynamic: /expression/ },
+  { f: FIXTURES.next, rel: 'components/EditZone.tsx', route: '/', dynamic: /expression/ },
+  { f: FIXTURES['next-turbo'], rel: 'components/EditZone.tsx', route: '/', dynamic: /expression/ },
 ];
 
 for (const c of cases) {

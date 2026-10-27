@@ -22,4 +22,7 @@ export const FIXTURES = {
   vue: vite('vue', 5204),
   solid: vite('solid', 5205),
   preact: vite('preact', 5206),
+  // Next.js 15 (D48): one app, served twice (webpack and Turbopack); own node_modules, installed by serve.mjs.
+  next: { ...fixture('next', 5207, 'node serve.mjs 5207', 300_000) },
+  'next-turbo': { ...fixture('next', 5208, 'node serve.mjs 5208 --turbopack', 300_000), name: 'next-turbo' },
 } satisfies Record<string, Fixture>;

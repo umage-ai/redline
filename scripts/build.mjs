@@ -1,4 +1,4 @@
-// Builds dist/: Node entries (vite, astro, angular, server, cli) as ESM with deps external,
+// Builds dist/: Node entries (vite, astro, angular, next, server, cli) as ESM with deps external,
 // the browser overlay as one self-contained ESM file, and type declarations in dist/types.
 // Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44).
 import * as esbuild from 'esbuild';
@@ -11,9 +11,15 @@ rmSync('dist', { recursive: true, force: true });
 rmSync('hub/dist', { recursive: true, force: true });
 
 const node = {
-  entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts' },
+  entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts', next: 'src/next.ts', 'next-script': 'src/next-script.ts' },
   outdir: 'dist', bundle: true, platform: 'node', format: 'esm', target: 'node20',
   packages: 'external', sourcemap: true, logLevel: 'info',
+};
+// The webpack/Turbopack loader for Next (D48): CommonJS, dependencies inlined (@babel/parser is ESM-only).
+const nextLoader = {
+  entryPoints: { 'next-loader': 'src/next-loader.ts' },
+  outdir: 'dist', outExtension: { '.js': '.cjs' }, bundle: true, platform: 'node', format: 'cjs', target: 'node20',
+  logLevel: 'info', footer: { js: 'module.exports = module.exports.default;' },
 };
 const client = {
   entryPoints: { client: 'src/client/index.ts' },
@@ -28,9 +34,9 @@ const hub = {
 };
 
 if (watch) {
-  for (const o of [node, client, hub]) await (await esbuild.context(o)).watch();
+  for (const o of [node, nextLoader, client, hub]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(client), esbuild.build(hub)]);
+  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(hub)]);
   emitTypes();
 }
 angularManifest();

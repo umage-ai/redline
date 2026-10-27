@@ -1,0 +1,106 @@
+// Next.js (D48): withRedline's config in `next dev` only, the API server behind the rewrite, and the
+// loader that stamps JSX for webpack and Turbopack. The browser side is in test/e2e (fixtures next, next-turbo).
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { withRedline, type NextConfig } from '../../src/next.ts';
+import redlineLoader from '../../src/next-loader.ts';
+
+const DEV = 'phase-development-server';
+const ctx = { defaultConfig: {} };
+const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-next-'));
+const dev = (config: Parameters<typeof withRedline>[0], opts = {}) => withRedline(config, { root, ...opts })(DEV, ctx);
+const warn = console.warn, log = console.log;
+
+test('next build and next start get the config back untouched, object or function', async () => {
+  const config = { reactStrictMode: true, rewrites: async () => [] };
+  assert.equal(await withRedline(config)('phase-production-build', ctx), config);
+  assert.equal(await withRedline(config)('phase-production-server', ctx), config);
+  assert.equal(await withRedline((phase: string) => ({ ...config, phase }))('phase-production-build', ctx).then((c: NextConfig) => c.phase), 'phase-production-build');
+});
+
+test('next dev: /__redline/* is rewritten first, past basePath, to the API server; the app\'s rewrites stay', async () => {
+  console.log = () => {};
+  try {
+    const app = { source: '/old', destination: '/new' };
+    const listed = await (await dev({ basePath: '/docs', rewrites: async () => [app] })).rewrites();
+    assert.equal(listed.beforeFiles.length, 1);
+    assert.deepEqual(listed.afterFiles, [app]);
+    const ours = listed.beforeFiles[0];
+    assert.equal(ours.source, '/__redline/:path*');
+    assert.equal(ours.basePath, false);
+    assert.match(ours.destination, /^http:\/\/127\.0\.0\.1:\d+\/__redline\/:path\*$/);
+
+    const grouped = await (await dev(async () => ({ rewrites: async () => ({ beforeFiles: [app], fallback: [app] }) }))).rewrites();
+    assert.deepEqual(grouped.beforeFiles, [ours, app]);
+    assert.deepEqual(grouped.fallback, [app]);
+
+    // One API server per process: Next reads its config more than once.
+    assert.equal((await (await dev({})).rewrites()).beforeFiles[0].destination, ours.destination);
+    const config = await (await fetch(ours.destination.replace(':path*', 'config'))).json();
+    assert.equal(config.dir, '.redline');
+  } finally { console.log = log; }
+});
+
+test('next dev: the loader runs before SWC under webpack and on .tsx/.jsx under Turbopack', async () => {
+  const seen: unknown[] = [];
+  const out = await dev({ webpack: (c: NextConfig, w: unknown) => { seen.push(w); return c; }, turbopack: { root, rules: { '*.svg': { loaders: ['svgr'] } } } });
+  const cfg = out.webpack({ module: { rules: [{ test: /x/ }] } }, { dev: true });
+  assert.deepEqual(seen, [{ dev: true }]);   // the app's own webpack() still runs
+  const rule = cfg.module.rules[0];
+  assert.equal(rule.enforce, 'pre');
+  assert.ok(rule.test.test('a.tsx') && rule.test.test('a.jsx') && !rule.test.test('a.ts'));
+  assert.ok(rule.exclude.test('/app/node_modules/x/a.jsx'));
+  assert.match(rule.use[0].loader, /next-loader\.cjs$/);
+  assert.equal(rule.use[0].options.root, root);
+  assert.equal(out.turbopack.root, root);
+  assert.deepEqual(out.turbopack.rules['*.svg'], { loaders: ['svgr'] });
+  assert.deepEqual(out.turbopack.rules['*.tsx'], { loaders: [rule.use[0]] });
+  assert.deepEqual(out.turbopack.rules['*.jsx'], { loaders: [rule.use[0]] });
+
+  // The app's own *.tsx rule wins (with a warning); jsxSource: false adds no loader.
+  const warned: string[] = [];
+  console.warn = (m: string) => warned.push(m);
+  try {
+    const mine = { loaders: ['mine'] };
+    assert.equal((await dev({ turbopack: { rules: { '*.tsx': mine } } })).turbopack.rules['*.tsx'], mine);
+    assert.match(warned[0], /turbopack\.rules\['\*\.tsx'\]/);
+  } finally { console.warn = warn; }
+  const off = await dev({}, { jsxSource: false });
+  assert.equal(off.webpack, undefined);
+  assert.equal(off.turbopack, undefined);
+});
+
+test('next dev: MCP through Next\'s proxy is refused without tokens; called directly, it answers', async () => {
+  const { destination } = (await (await dev({})).rewrites()).beforeFiles[0];
+  const mcp = destination.replace(':path*', 'mcp');
+  const call = (headers: Record<string, string> = {}) => fetch(mcp, {
+    method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } }),
+  });
+  const proxied = await call({ 'x-forwarded-host': 'localhost:3000' });
+  assert.equal(proxied.status, 401);
+  assert.match((await proxied.json()).error, /redline mcp/);
+  const direct = await call();
+  assert.equal(direct.status, 200);
+  assert.equal((await direct.json()).result.serverInfo.name, 'redline');
+});
+
+test('loader: stamps .tsx outside node_modules, with an object source map; leaves the rest as it came', () => {
+  const run = (resourcePath: string, code: string, map?: unknown) => {
+    let got: unknown[] = [];
+    redlineLoader.call({ resourcePath, getOptions: () => ({ root }), callback: (...a: unknown[]) => { got = a; } }, code, map);
+    return got as [null, string, unknown];
+  };
+  const [err, code, map] = run(path.join(root, 'app/page.tsx'), 'export default function Page() {\n  return <main>Hi</main>;\n}\n');
+  assert.equal(err, null);
+  assert.match(code, /<main data-redline-src="app\/page\.tsx:2:10 Page">/);
+  assert.equal(typeof map, 'object');
+  assert.equal((map as { version: number }).version, 3);
+
+  const lib = 'export const A = () => <div />;';
+  assert.deepEqual(run(path.join(root, 'node_modules/lib/a.jsx'), lib, 'in'), [null, lib, 'in']);
+  assert.deepEqual(run(path.join(root, 'a.tsx'), 'export const n = 1;', 'in'), [null, 'export const n = 1;', 'in']);
+});

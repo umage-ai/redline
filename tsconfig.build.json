@@ -8,5 +8,5 @@
     "outDir": "dist/types",
     "rootDir": "src"
   },
-  "include": ["src/vite.ts", "src/astro.ts", "src/angular.ts", "src/server/index.ts"]
+  "include": ["src/vite.ts", "src/astro.ts", "src/angular.ts", "src/next.ts", "src/next-script.ts", "src/server/index.ts"]
 }

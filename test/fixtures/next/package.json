@@ -1,0 +1,16 @@
+{
+  "name": "redline-fixture-next",
+  "private": true,
+  "description": "Next.js 15 fixture for e2e (port 5207 webpack, 5208 Turbopack). Own install: Next is large. serve.mjs installs it on first run.",
+  "dependencies": {
+    "next": "15.5.28",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.0",
+    "@types/react": "19.3.0",
+    "@umage.ai/redline": "file:../../..",
+    "typescript": "5.9.3"
+  }
+}

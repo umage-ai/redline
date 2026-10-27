@@ -295,8 +295,12 @@ function dedupe(a: string[]): string[] | undefined {
   return out.length ? out : undefined;
 }
 
+// Next.js sets window.next. Its Server Components never become fibers in the browser, and the fibers
+// above a client element are Next's router: the stamps' chain names the components the code is written in (D48).
+const isNext = () => !!(window as unknown as { next?: { version?: string } }).next?.version;
+
 export function sourceInfo(el: Element) {
-  return reactInfo(el) ?? vueInfo(el) ?? angularInfo(el) ?? svelteInfo(el) ?? astroInfo(el) ?? stampInfo(el) ?? {};
+  return (isNext() ? stampInfo(el) : null) ?? reactInfo(el) ?? vueInfo(el) ?? angularInfo(el) ?? svelteInfo(el) ?? astroInfo(el) ?? stampInfo(el) ?? {};
 }
 
 /** The short label shown on hover and in pins: test id, else tag#id.class, plus source. */
