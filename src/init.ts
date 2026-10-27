@@ -21,15 +21,17 @@ export const BASELINE_AGENTS = ['agents', 'codex', 'cursor', 'windsurf', 'zed', 
 
 /** Where agents find the guide; also what the overlay's prompt points at. */
 export const GUIDE = '.agents/skills/redline/SKILL.md';
-export const GUIDE_PATHS = [GUIDE, '.claude/skills/redline/SKILL.md', '.github/skills/redline/SKILL.md'];
+const CLAUDE_GUIDE = '.claude/skills/redline/SKILL.md';
+export const GUIDE_PATHS = [GUIDE, CLAUDE_GUIDE, '.github/skills/redline/SKILL.md'];
 
 const HEADING = '## UI feedback (Redline)';
-export const SECTION = `
+/** The section for AGENTS.md and friends; CLAUDE.md's points at the copy Claude Code loads. */
+export const section = (guide = GUIDE) => `
 ${HEADING}
 
 In dev, a reviewer pins comments, sketches and text changes on the running UI (Alt+Shift+R in the browser).
 They are saved under \`.redline/\` (gitignored): start at \`.redline/INDEX.md\`, then \`.redline/pages/*.md\`.
-To apply them, follow \`${GUIDE}\` (the \`redline\` skill).
+To apply them, follow \`${guide}\` (the \`redline\` skill).
 `;
 
 const TASK = `Work through the open Redline UI feedback in .redline/INDEX.md. Follow ${GUIDE}.`;
@@ -53,54 +55,63 @@ export interface InitOptions {
   skill: string;
   /** Register the `redline mcp` server with this command line (D22). */
   mcp?: { command: string; args: string[] };
+  /** Change nothing: the log says what would be written. */
+  dryRun?: boolean;
 }
 
-/** Sets the repo up and returns one log line per step. Safe to re-run: files are refreshed, sections added once. */
+/**
+ * Sets the repo up and returns one log line per step: "✓" a change, "·" already so, "!" needs a hand.
+ * Safe to re-run: files are refreshed, sections added once.
+ */
 export async function initRepo(root: string, opts: InitOptions): Promise<string[]> {
   const log: string[] = [];
   const harnesses = opts.harnesses ?? detect(root);
   const rel = (p: string) => path.relative(root, p).replace(/\\/g, '/');
+  const put = async (abs: string, text: string) => {
+    if (opts.dryRun) return;
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, text);
+  };
 
   const write = async (file: string, text: string) => {
     const abs = path.join(root, file);
     const had = existsSync(abs) && (await fs.readFile(abs, 'utf8')) === text;
-    await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, text);
+    if (!had) await put(abs, text);
     log.push(`${had ? '·' : '✓'} ${rel(abs)}${had ? ' (up to date)' : ''}`);
   };
   /** Append the Redline section; create the file (with `fresh` as its start) only when asked to. */
-  const section = async (file: string, fresh: string | null) => {
+  const addSection = async (file: string, fresh: string | null, guide = GUIDE) => {
     const abs = path.join(root, file);
     if (existsSync(abs)) {
       const text = await fs.readFile(abs, 'utf8');
       if (text.includes(HEADING)) { log.push(`· ${file} already has the Redline section`); return; }
-      await fs.writeFile(abs, text + (text.endsWith('\n') ? '' : '\n') + SECTION);
+      await put(abs, text + (text.endsWith('\n') ? '' : '\n') + section(guide));
       log.push(`✓ ${file}: added the Redline section`);
     } else if (fresh !== null) {
-      await fs.writeFile(abs, fresh + SECTION);
+      await put(abs, fresh + section(guide));
       log.push(`✓ ${file} created`);
     }
   };
 
   await write(GUIDE, opts.skill);
-  await section('AGENTS.md', '# AGENTS.md\n');
+  await addSection('AGENTS.md', '# AGENTS.md\n');
 
   const gi = path.join(root, '.gitignore');
   const cur = existsSync(gi) ? await fs.readFile(gi, 'utf8') : '';
   if (!/^\/?\.redline\/?$/m.test(cur)) {
-    await fs.writeFile(gi, cur + (cur && !cur.endsWith('\n') ? '\n' : '') + '\n# Redline UI feedback notes (dev only)\n.redline/\n');
+    await put(gi, cur + (cur && !cur.endsWith('\n') ? '\n' : '') + '\n# Redline UI feedback notes (dev only)\n.redline/\n');
     log.push('✓ .gitignore: added .redline/');
   } else log.push('· .gitignore already ignores .redline/');
 
   const create = opts.createMissing ?? false;
   if (harnesses.includes('claude')) {
-    await write('.claude/skills/redline/SKILL.md', opts.skill);
+    await write(CLAUDE_GUIDE, opts.skill);
     // A new CLAUDE.md just imports AGENTS.md (which has the section), so there's one place to edit.
     if (!existsSync(path.join(root, 'CLAUDE.md')) && create) await write('CLAUDE.md', '# Project notes\n\n@AGENTS.md\n');
-    else await section('CLAUDE.md', null);
+    else await addSection('CLAUDE.md', null, CLAUDE_GUIDE);
   }
   if (harnesses.includes('gemini')) {
-    await section('GEMINI.md', create ? '# Project notes\n' : null);
+    await addSection('GEMINI.md', create ? '# Project notes\n' : null);
     await write('.gemini/commands/redline.toml',
       `description = "Apply the open Redline UI feedback notes in .redline/"\nprompt = """\n${TASK}\n{{args}}\n"""\n`);
   }
@@ -120,8 +131,7 @@ export async function initRepo(root: string, opts: InitOptions): Promise<string[
       }
       const same = JSON.stringify(json[key]?.redline) === JSON.stringify(entry);
       json[key] = { ...json[key], redline: entry };
-      await fs.mkdir(path.dirname(abs), { recursive: true });
-      await fs.writeFile(abs, JSON.stringify(json, null, 2) + '\n');
+      if (!same) await put(abs, JSON.stringify(json, null, 2) + '\n');
       log.push(same ? `· ${file}: MCP server up to date` : `✓ ${file}: added the redline MCP server`);
     };
     await merge('.mcp.json', 'mcpServers', { command, args });

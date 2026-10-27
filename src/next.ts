@@ -6,8 +6,10 @@
 // The overlay script comes from <Redline /> (`@umage.ai/redline/next/script`) in the root layout.
 // `next build` and `next start` get the config back untouched.
 //
+//   import type { NextConfig } from 'next'
 //   import { withRedline } from '@umage.ai/redline/next'
-//   export default withRedline({ /* your Next config */ }, { directEdit: true })
+//   const nextConfig: NextConfig = { /* your Next config */ }
+//   export default withRedline(nextConfig, { directEdit: true })
 
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -23,12 +25,13 @@ export interface RedlineNextOptions extends RedlineOptions {
   jsxSource?: boolean;
 }
 
-// Next's config shapes, as far as this touches them (no dependency on next's types).
+// Next's config shapes, as far as this touches them (no dependency on next's types: withRedline is
+// generic, so the app's own `NextConfig` type passes through and Next still checks the config).
 type Json = Record<string, any>;
 type Rewrite = { source: string; destination: string; basePath?: false; locale?: false };
 type Rewrites = Rewrite[] | { beforeFiles?: Rewrite[]; afterFiles?: Rewrite[]; fallback?: Rewrite[] };
 export type NextConfig = Json;
-export type NextConfigFn = (phase: string, ctx: { defaultConfig: NextConfig }) => NextConfig | Promise<NextConfig>;
+export type NextConfigFn<C extends object = NextConfig> = (phase: string, ctx: { defaultConfig: NextConfig }) => C | Promise<C>;
 
 const PHASE_DEV = 'phase-development-server';
 const loaderFile = fileURLToPath(new URL('./next-loader.cjs', import.meta.url));
@@ -58,9 +61,23 @@ function sidecar(options: RedlineNextOptions, root: string, serverRoot: string):
       const port = (server.address() as AddressInfo).port;
       register(`http://127.0.0.1:${port}`);   // `redline mcp` (D22) calls this server directly
       console.log(`  \x1b[31m✎ redline\x1b[0m  notes → ${options.dir ?? '.redline'}/  (toggle: ${options.hotkey ?? 'alt+shift+r'})`);
+      const lan = networkHost(process.argv, process.env);
+      if (lan) console.warn(`[redline] next dev listens on ${lan}: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/. To keep it on this machine: next dev -H 127.0.0.1`);
       resolve(port);
     });
   });
+}
+
+/**
+ * The non-loopback host `next dev` listens on, if it does: every interface unless -H/--hostname says
+ * otherwise. Only the CLI process sees the flag (its worker gets the host over IPC), so the worker says nothing.
+ */
+export function networkHost(argv: string[], env: Record<string, string | undefined>): string | null {
+  if (env.NEXT_PRIVATE_WORKER || !argv.includes('dev')) return null;
+  const i = argv.findIndex(a => a === '-H' || a === '--hostname' || a.startsWith('--hostname='));
+  const host = i < 0 ? '' : argv[i].startsWith('--hostname=') ? argv[i].slice(11) : argv[i + 1] ?? '';
+  if (/^(localhost|127(\.\d+){3}|::1|\[::1\])$/i.test(host)) return null;
+  return host && host !== '0.0.0.0' && host !== '::' ? host : 'every network interface';
 }
 
 function nextVersion(dir: string): number[] {
@@ -69,10 +86,11 @@ function nextVersion(dir: string): number[] {
 }
 
 /** Wraps a Next config (object or function) so `next dev` runs Redline. */
-export function withRedline(config: NextConfig | NextConfigFn = {}, options: RedlineNextOptions = {}): NextConfigFn {
+export function withRedline<C extends object = NextConfig>(config: C | NextConfigFn<C> = {} as C, options: RedlineNextOptions = {}): (phase: string, ctx: { defaultConfig: NextConfig }) => Promise<C> {
   return async (phase, ctx) => {
-    const base: NextConfig = typeof config === 'function' ? await config(phase, ctx) : config;
-    if (phase !== PHASE_DEV) return base;
+    const app: C = typeof config === 'function' ? await config(phase, ctx) : config;
+    if (phase !== PHASE_DEV) return app;
+    const base = app as Json;
     const serverRoot = process.cwd();
     const root = options.root ? path.resolve(options.root) : findRoot(serverRoot);
     const { jsxSource, ...rest } = options;
@@ -107,7 +125,7 @@ export function withRedline(config: NextConfig | NextConfigFn = {}, options: Red
       if (legacy) out.experimental = { ...base.experimental, turbo: { ...turbo, rules } };
       else out.turbopack = { ...turbo, rules };
     }
-    return out;
+    return out as C;
   };
 }
 

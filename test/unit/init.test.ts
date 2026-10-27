@@ -28,7 +28,7 @@ test('init: detects Claude, Gemini and Copilot from their files and only touches
   assert.deepEqual(detect(root), ['claude', 'gemini', 'copilot']);
   await initRepo(root, { skill });
   assert.equal(await read(root, '.claude/skills/redline/SKILL.md'), skill);
-  assert.match(await read(root, 'CLAUDE.md'), /^# App\n\n## UI feedback \(Redline\)/);
+  assert.match(await read(root, 'CLAUDE.md'), /^# App\n\n## UI feedback \(Redline\)[\s\S]*`\.claude\/skills\/redline\/SKILL\.md`/);   // the copy Claude Code loads
   assert.equal(has(root, 'GEMINI.md'), false);                       // detected via .gemini/, not created
   assert.match(await read(root, '.gemini/commands/redline.toml'), /prompt = """\nWork through[\s\S]*\{\{args\}\}/);
   assert.match(await read(root, '.github/prompts/redline.prompt.md'), /^---\ndescription: .+\n---\n[\s\S]*\(\.\.\/\.\.\/\.agents\/skills\/redline\/SKILL\.md\)/);
@@ -54,4 +54,16 @@ test('init: re-running refreshes the skill and adds each section once', async ()
   assert.match(await read(root, '.gitignore'), /^node_modules\n/);
   assert.equal(await read(root, GUIDE), skill + 'v2\n');
   assert.ok(log.some(l => l.includes('AGENTS.md already has the Redline section')));
+});
+
+test('init: a dry run lists the changes and writes nothing', async () => {
+  const root = await repo();
+  await fs.writeFile(path.join(root, 'CLAUDE.md'), '# App\n');
+  const log = await initRepo(root, { skill, dryRun: true, mcp: { command: 'node', args: ['cli.js', 'mcp'] } });
+  for (const f of [GUIDE, '.claude/skills/redline/SKILL.md', 'AGENTS.md', '.gitignore', '.mcp.json']) {
+    assert.ok(log.some(l => l.startsWith('✓') && l.includes(f)), f);
+    assert.equal(has(root, f), false, f);
+  }
+  assert.equal(await read(root, 'CLAUDE.md'), '# App\n');
+  assert.ok(log.some(l => l === '✓ CLAUDE.md: added the Redline section'));
 });

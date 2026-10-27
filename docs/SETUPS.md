@@ -45,6 +45,7 @@ Rules that hold in every setup:
 - **Status:** ✅ `@umage.ai/redline` on npm, with every framework above covered by e2e tests. .NET is tested
   (unit and browser) but unpublished.
 - **Not for:** sharing notes between people. Each checkout has its own `.redline/`.
+- **Network:** the API has no login. Vite and Angular listen on localhost; `next dev` on the network, so use `-H 127.0.0.1`.
 - **Details:** [README.md](../README.md) "Setup in a repo".
 
 ## 2. Shared notes in dev (remote store)

@@ -24,7 +24,7 @@ const ASSET_RE = /^!\[(screenshot|sketch)\]\(.*\)\s*$/;
 
 export const PAGE_PREAMBLE = `<!--
   Written by the Redline overlay (dev only) for a coding agent. The full guide is the
-  redline skill (.agents/skills/redline/SKILL.md, installed by \`npx redline init\`).
+  redline skill, if this repo has it (\`npx redline init\`); this comment covers the basics.
   Each note: a "### [ ]" heading naming the reviewer's label if any (Bug, UX, …), the
   element and where it lives in source,
   an anchor comment (JSON: url, selector, xpath, source file:line, component chain,

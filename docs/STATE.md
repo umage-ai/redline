@@ -19,7 +19,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Script injection, comment mode, app never sees clicks | ✅ | `overlay.spec.ts` |
 | Disabled controls pickable; autofocus doesn't eat mode keys | ✅ | `overlay.spec.ts` |
 | Monorepos: per-app notes in one root `.redline/`, `init` from any folder (D17) | ✅ | `test/unit/monorepo.test.ts`, `overlay.spec.ts` |
-| Any agent: `init` writes Agent Skills + AGENTS.md (+ Claude/Gemini/Copilot extras); neutral copied prompt (D16) | ✅ | `test/unit/init.test.ts`, `overlay.spec.ts`, `npm run test:package` |
+| Any agent: `init` writes Agent Skills + AGENTS.md (+ Claude/Gemini/Copilot extras), asks first in a terminal, `--dry-run`; neutral copied prompt (D16) | ✅ | `test/unit/init.test.ts`, `overlay.spec.ts`, `npm run test:package` |
 | Open dropdowns/popovers survive the overlay: toolbar, picking, typing, Escape, hotkey (D14) | ✅ fixture menu; try in `examples/demo` (Export, ⋯, driver filter) | `overlay.spec.ts`; not yet tried against real Radix/Headless UI/MUI |
 | Parent / whole-page targeting | ✅ | `overlay.spec.ts` |
 | Text mode → diff note | ✅ | `overlay.spec.ts` |
@@ -37,7 +37,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
 | Angular CLI: `@umage.ai/redline:dev-server` builder wraps `ng serve` (middleware + dev-only template source locations); `ng build` untouched | ✅ Angular 22, real `ng serve` | `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
-| Next.js (D48): `withRedline` in next.config + `<Redline />` in the layout; App Router (Server and Client Components) and Pages Router; file:line + component chain from stamps; Apply to file; MCP via Next only with `mcpTokens` | ✅ Next 15.5, webpack and Turbopack (fixtures `next`, `next-turbo`); Next 16.4 checked by hand | `next.test.ts`, `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
+| Next.js (D48): `withRedline` in next.config + `<Redline />` in the layout; App Router (Server and Client Components) and Pages Router; file:line from stamps; component chain from React's owners + Server Component dev info (route-group layouts too); Apply to file; MCP via Next only with `mcpTokens`; warns when `next dev` listens on the network; `withRedline` keeps the config's type | ✅ Next 15.5, webpack and Turbopack (fixtures `next`, `next-turbo`); Next 16.4 checked by hand | `next.test.ts`, `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Sketch text labels (Enter commits once, Escape drops) | ✅ | `overlay.spec.ts` |
 | Sketch colours: one swatch folds out a palette of six (halos), per shape, `C` cycles, remembered; kept in svg + png | ✅ | `overlay.spec.ts`, `mobile.spec.ts` |
 | Phones/touch (360 px, Pixel 8 Pro at 125%): everything fits, tap to pick, swipe scrolls while picking, tap outside ends a text edit, sketch by finger, full-width panel, pins kept on screen; `examples/demo` is responsive | ✅ emulated | `mobile.spec.ts`; not yet tried on a real device |

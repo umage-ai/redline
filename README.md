@@ -74,10 +74,10 @@ In dev it turns on Angular's template source locations, so notes point at the te
 "serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
 ```
 
-**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`).
+**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`). `next dev` listens on your network and `/__redline/*` has no login, so anyone who can reach it can write notes to your disk: use `next dev -H 127.0.0.1` (Redline warns otherwise).
 
 ```tsx
-export default withRedline({ /* your Next config */ }, { directEdit: true })   // next.config.mjs, from '@umage.ai/redline/next'
+export default withRedline(nextConfig, { directEdit: true })   // next.config.ts, from '@umage.ai/redline/next'; keeps nextConfig's type (NextConfig)
 <body>{children}<Redline /></body>   // app/layout.tsx, from '@umage.ai/redline/next/script'; renders nothing outside development
 ```
 
@@ -118,12 +118,12 @@ Redline isn't tied to one agent. The notes are plain markdown, and `npx redline 
 |---|---|
 | `.agents/skills/redline/SKILL.md` (always) | Agent Skills: Codex, Cursor, GitHub Copilot / VS Code, OpenCode, … |
 | a Redline section in `AGENTS.md` (always; created if missing) | Codex, Cursor, Copilot, Windsurf, Zed, Amp, Jules, Devin, Factory, … |
-| `.claude/skills/redline/SKILL.md` + a `CLAUDE.md` section | Claude Code (the skill also shows up as `/redline`) |
+| `.claude/skills/redline/SKILL.md` + a `CLAUDE.md` section pointing at it | Claude Code (the skill also shows up as `/redline`) |
 | a `GEMINI.md` section + `.gemini/commands/redline.toml` | Gemini CLI (`/redline`) |
 | `.github/prompts/redline.prompt.md` | Copilot Chat in VS Code (`/redline`) |
 
 The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md` or `.gemini/`,
-`.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini` (`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade.
+`.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini` (`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade. In a terminal, `init` lists the changes and asks first (`--yes` skips the question); `--dry-run` only lists them.
 
 **Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline
 notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
@@ -165,9 +165,9 @@ replies are never overwritten. The overlay polls about every 2 s, which is why r
 |---|---|---|
 | Svelte 5 / SvelteKit | `__svelte_meta` (built into Svelte dev builds) | `__svelte_meta.parent` chain |
 | Astro | `data-astro-source-file/-loc` (snapshotted at parse time, because Astro's dev toolbar strips them) | `.astro` files up the tree |
-| React 19 (Vite) | The plugin stamps `data-redline-src="file:line:col"` on HTML elements in `.jsx`/`.tsx` during dev | Fiber owner chain, with router and provider plumbing filtered out |
+| React 19 (Vite) | The plugin stamps `data-redline-src="file:line:col Component"` on HTML elements in `.jsx`/`.tsx` during dev | Fiber owner chain, with router and provider plumbing filtered out |
 | Solid, Preact (Vite) | The same JSX stamp | The components the stamped elements are written in |
-| Next.js 15+ | The same JSX stamp, from a loader `withRedline` adds (webpack and Turbopack) | The components the stamped elements are written in (Server Components have no fibers) |
+| Next.js 15+ | The same JSX stamp, from a loader `withRedline` adds (webpack and Turbopack) | Client components that own the element, then every Server Component around it (page, route-group layouts, root layout) |
 | Vue 3 (Vite) | The plugin stamps HTML elements in `.vue` templates during dev | `__vueParentComponent` chain |
 | Angular 17+ | `data-ng-source-location` (Angular's `enableTemplateSourceLocations`, turned on by the builder in dev) | `ng.getOwningComponent`, then the host components around it |
 | Razor, Blazor (.NET) | Debug builds compile `.cshtml`/`.razor` copies stamped with `data-redline-src`; Optimizely adds CMS content + property | Stamped files up the tree |

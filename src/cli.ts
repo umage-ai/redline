@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// redline init [dir] [--agents=claude,gemini,copilot|all|none] [--claude-md] [--mcp]
+// redline init [dir] [--agents=claude,gemini,copilot|all|none] [--claude-md] [--mcp] [--dry-run] [--yes]
 //   Sets a repo up for Redline with any coding agent; see src/init.ts for what is written.
 // redline mcp [dir] [--url <dev server>] [--dir .redline]
 //   MCP server (stdio) with the notes as tools; see src/mcp.ts.
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { BASELINE_AGENTS, detect, GUIDE, HARNESSES, initRepo, type Harness } from './init.ts';
 import { findRoot } from './server/root.ts';
@@ -20,7 +21,7 @@ const given = path.resolve(args.find((a, i) => !a.startsWith('--') && !VALUED.in
 // Notes live at the repo root (nearest .git), so the guide goes there too, even when run inside apps/web.
 const target = flag('--here') !== undefined ? given : findRoot(given);
 
-const USAGE = `Usage: redline init [dir] [--agents=<list>] [--here] [--claude-md] [--mcp]
+const USAGE = `Usage: redline init [dir] [--agents=<list>] [--here] [--claude-md] [--mcp] [--dry-run] [--yes]
        redline mcp [dir] [--url <dev server url>] [--dir .redline]
 
 Always writes ${GUIDE} and an AGENTS.md section (Codex, Cursor, Copilot,
@@ -34,6 +35,8 @@ Windsurf, Zed, Amp, Jules, OpenCode, …) and gitignores .redline/.
                    points there too).
   --claude-md      same as --agents=claude (kept for older setups).
   --mcp            also register the redline MCP server (.mcp.json, plus VS Code, Gemini, Cursor configs).
+  --dry-run        list what would change, change nothing.
+  --yes            don't ask before writing (in a terminal, init lists the changes and asks first).
 
 In a monorepo, run it anywhere: it installs at the repo root (nearest .git), where every app's notes go.
 
@@ -55,8 +58,20 @@ async function init() {
   if (target !== given) console.log(`Monorepo: setting up the repo root ${target} (notes from every app go to its .redline/).
 `);
   const skill = await fs.readFile(fileURLToPath(new URL('../skill/SKILL.md', import.meta.url)), 'utf8');
-  const log = await initRepo(target, { skill, harnesses, createMissing: harnesses !== undefined, mcp: flag('--mcp') !== undefined ? mcpCommand(target) : undefined });
-  for (const l of log) console.log(l);
+  const opts = { skill, harnesses, createMissing: harnesses !== undefined, mcp: flag('--mcp') !== undefined ? mcpCommand(target) : undefined };
+  const ask = process.stdin.isTTY && process.stdout.isTTY && flag('--yes') === undefined;
+  if (flag('--dry-run') !== undefined || ask) {
+    const plan = await initRepo(target, { ...opts, dryRun: true });
+    for (const l of plan) console.log(l);
+    if (!plan.some(l => l.startsWith('✓'))) return;
+    if (!ask) { console.log('\nDry run: nothing written.'); return; }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = (await rl.question('\nWrite these (✓) changes? [Y/n] ')).trim().toLowerCase();
+    rl.close();
+    if (answer && !answer.startsWith('y')) { console.log('Nothing written.'); return; }
+  }
+  const log = await initRepo(target, opts);
+  if (!ask) for (const l of log) console.log(l);
   const used = harnesses ?? detect(target);
   console.log(`\nAgents: AGENTS.md + Agent Skills${used.length ? ', ' + used.join(', ') : ''}.`);
   console.log('Next: add the plugin to your dev server (see README), run dev, press Alt+Shift+R.');

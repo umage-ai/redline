@@ -162,7 +162,12 @@ function astroInfo(el: Element): { source?: SourceLoc; components?: string[] } |
   return source ? { source, components: dedupe(comps) } : null;
 }
 
-type Fiber = { type?: unknown; return?: Fiber | null; _debugSource?: { fileName: string; lineNumber: number; columnNumber?: number } };
+type Fiber = {
+  type?: unknown; return?: Fiber | null; alternate?: Fiber | null; _debugSource?: { fileName: string; lineNumber: number; columnNumber?: number };
+  // React 19 dev: who created the element (a fiber, or a Server Component's info), and the Server Components that rendered it.
+  _debugOwner?: Fiber | ServerInfo | null; _debugInfo?: (ServerInfo | object)[] | null;
+};
+type ServerInfo = { name?: string; env?: string; owner?: Fiber | ServerInfo | null };
 
 function fiberOf(el: Element): Fiber | null {
   for (const k in el) if (k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$')) return (el as unknown as Record<string, Fiber>)[k];
@@ -295,12 +300,33 @@ function dedupe(a: string[]): string[] | undefined {
   return out.length ? out : undefined;
 }
 
-// Next.js sets window.next. Its Server Components never become fibers in the browser, and the fibers
-// above a client element are Next's router: the stamps' chain names the components the code is written in (D48).
+// Next.js sets window.next. Above a client element the fibers are mostly Next's router, and Server
+// Components never become fibers: they ride along as the _debugInfo of what they rendered (React 19 dev).
 const isNext = () => !!(window as unknown as { next?: { version?: string } }).next?.version;
 
+/*
+ * Next (D48): up the tree from the element, the client components that own it (wrote the element or
+ * the component around it) and every Server Component on the way (page, route-group layouts, root
+ * layout), also those that render no element of their own, which the stamps never see.
+ */
+function nextInfo(el: Element): { source?: SourceLoc; components?: string[] } | null {
+  let fiber: Fiber | null = null;
+  for (let cur: Element | null = el; cur && !fiber; cur = cur.parentElement) fiber = fiberOf(cur);
+  if (!fiber) return null;
+  const owners = new Set<unknown>();
+  for (let o: Fiber | ServerInfo | null | undefined = fiber._debugOwner; o && !owners.has(o); o = 'return' in o ? o._debugOwner : (o as ServerInfo).owner) owners.add(o);
+  const comps: string[] = [];
+  const add = (n: string | null | undefined) => { if (n && !REACT_PLUMBING.test(n) && !n.startsWith('_')) comps.push(n); };
+  for (let f: Fiber | null = fiber; f && comps.length < 6; f = f.return ?? null) {
+    if (owners.has(f) || (f.alternate && owners.has(f.alternate))) add(reactName(f.type));
+    for (const d of [...(f._debugInfo ?? [])].reverse()) add((d as ServerInfo).name);
+  }
+  if (!comps.length) return null;
+  return { source: stampOf(el)?.source, components: dedupe(comps) };
+}
+
 export function sourceInfo(el: Element) {
-  return (isNext() ? stampInfo(el) : null) ?? reactInfo(el) ?? vueInfo(el) ?? angularInfo(el) ?? svelteInfo(el) ?? astroInfo(el) ?? stampInfo(el) ?? {};
+  return (isNext() ? nextInfo(el) ?? stampInfo(el) : null) ?? reactInfo(el) ?? vueInfo(el) ?? angularInfo(el) ?? svelteInfo(el) ?? astroInfo(el) ?? stampInfo(el) ?? {};
 }
 
 /** The short label shown on hover and in pins: test id, else tag#id.class, plus source. */
