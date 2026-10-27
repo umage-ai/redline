@@ -80,6 +80,14 @@ export interface RedlineOptions {
    */
   mcpTokens?: string[];
   /**
+   * Answer the overlay's API for other machines too. Default false in the dev-server plugins (Vite,
+   * Astro, Angular, Next): the API has no login, so only calls from this machine get it (a loopback
+   * address and a local Host; through Next's proxy the Host is all there is, which browsers can't fake
+   * but curl can). `redlineMiddleware` defaults to true: a deployed review server gates reviewers itself.
+   * MCP keeps its own rule (`mcpTokens`).
+   */
+  network?: boolean;
+  /**
    * The build the pages come from, e.g. a commit hash: recorded on every new note so an agent
    * reads the source lines at that revision. Useful when the overlay runs on a deployed build
    * with source stamps (`buildSource`, D43) rather than on a dev server.
@@ -138,6 +146,19 @@ export function normaliseSource(file: string, root: string, serverRoot: string):
 
 const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest();
 const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+const LOCAL_HOST = /^(localhost|[^:/]+\.localhost|127(\.\d+){3}|\[::1\])(:\d+)?$/i;
+
+/**
+ * A call from this machine: a loopback address, and a local Host (x-forwarded-host behind a proxy). Behind
+ * Next's rewrite every call comes from 127.0.0.1 and the Host is the only sign: it stops other machines'
+ * browsers and DNS rebinding, not someone sending a fake Host header (`next dev -H 127.0.0.1` does).
+ */
+export function localCall(req: IncomingMessage): boolean {
+  if (!LOOPBACK.test(req.socket?.remoteAddress ?? '')) return false;
+  const h = req.headers;
+  const host = String(h['x-forwarded-host'] ?? h.host ?? h[':authority'] ?? '').split(',')[0].trim();
+  return LOCAL_HOST.test(host);
+}
 
 /** Who may call the MCP endpoint: a configured bearer token, or (no tokens configured) a loopback caller. */
 export function mcpAllowed(req: IncomingMessage, tokens: string[] | undefined): boolean {
@@ -216,9 +237,26 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     async asset(name) { const a = await store.asset(name, { req }); return a ? { type: a.type, data: Buffer.from(a.data) } : null; },
   });
 
+  // Other machines get a 403 (and no script injected), with one line in the dev server's log saying why.
+  let warned = false;
+  const refused = (req: IncomingMessage) => {
+    if (opts.network || localCall(req)) return false;
+    if (!warned) {
+      warned = true;
+      console.warn(`[redline] refused a call from ${req.socket?.remoteAddress} (host ${req.headers['x-forwarded-host'] ?? req.headers.host}): only this machine gets the overlay. Set network: true to let others in.`);
+    }
+    return true;
+  };
+
   const api: Middleware = (req, res, next) => {
     const url = req.url ?? '';
     if (!url.startsWith(API_BASE + '/')) return next();
+    if (!url.startsWith(`${API_BASE}/mcp`) && refused(req)) {
+      res.statusCode = 403;
+      res.setHeader('content-type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ error: 'Redline answers this machine only; set the network option to allow others' }));
+      return;
+    }
     if (req.headers.host) register(`${(req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${req.headers.host}`);
     const [p] = url.slice(API_BASE.length).split('?');
     const method = req.method ?? 'GET';
@@ -345,7 +383,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     });
   };
 
-  return { api, inject: htmlInjector(SNAPSHOT + `<script type="module" src="${API_BASE}/client.js" ${MARK}></script>`), store, root, register };
+  const injector = htmlInjector(SNAPSHOT + `<script type="module" src="${API_BASE}/client.js" ${MARK}></script>`);
+  const inject: Middleware = (req, res, next) => (refused(req) ? next() : injector(req, res, next));
+  return { api, inject, store, root, register };
 }
 
 /**

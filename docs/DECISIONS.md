@@ -36,8 +36,8 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** modern-screenshot renders the viewport and recreates page and inner scroll offsets. A panel toggle switches to `getDisplayMedia` tab capture.
 - **Why:** no prompts in the common case. Tab capture is pixel-perfect (WebGL, maps) but Chrome asks once per page load.
 
-## D9 — Mutations require an `x-redline: 1` header, not an Origin check (2026-10-13)
-- **Why:** behind a reverse proxy (e.g. YARP) the Host doesn't match the browser Origin. A custom header forces a CORS preflight from other sites, which we never answer.
+## D9 — Mutations require an `x-redline: 1` header, not an Origin check; plugins answer this machine only (2026-10-13, amended 2026-10-27)
+- **Why:** behind a reverse proxy (e.g. YARP) the Host doesn't match the browser Origin. A custom header forces a CORS preflight from other sites, which we never answer. **Amended:** the dev-server plugins refuse the API and skip injection unless the caller is loopback with a local Host (`localCall`; `network: true` opens it). Behind Next's proxy the forwarded Host is the only sign: it stops other machines' browsers and DNS rebinding, not a faked header. `redlineMiddleware` defaults to `network: true`, since deployed review gates reviewers itself. **Revisit if:** a real check for Next (a per-session secret) is wanted.
 
 ## D10 — Single package, flat `dist/`, client served by the middleware (2026-10-13, amended 2026-10-20)
 - **Decision:** one package with subpath entries (`vite`, `astro`, `server`, `client.js`). The client is a prebuilt bundle read from disk by the handler. The one other package is the hub (D44), a standalone server, not something apps import.

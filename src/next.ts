@@ -62,7 +62,9 @@ function sidecar(options: RedlineNextOptions, root: string, serverRoot: string):
       register(`http://127.0.0.1:${port}`);   // `redline mcp` (D22) calls this server directly
       console.log(`  \x1b[31m✎ redline\x1b[0m  notes → ${options.dir ?? '.redline'}/  (toggle: ${options.hotkey ?? 'alt+shift+r'})`);
       const lan = networkHost(process.argv, process.env);
-      if (lan) console.warn(`[redline] next dev listens on ${lan}: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/. To keep it on this machine: next dev -H 127.0.0.1`);
+      if (lan) console.warn(options.network
+        ? `[redline] next dev listens on ${lan} and network is on: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/.`
+        : `[redline] next dev listens on ${lan}: Redline refuses other machines' browsers, but not a request with a faked Host header. To keep it on this machine: next dev -H 127.0.0.1`);
       resolve(port);
     });
   });
