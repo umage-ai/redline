@@ -74,7 +74,7 @@ In dev it turns on Angular's template source locations, so notes point at the te
 "serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
 ```
 
-**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`). `next dev` listens on your network and `/__redline/*` has no login, so Redline checks each caller's own address, as Next's server received it, and answers this machine only (`network: true` opens it).
+**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`). `next dev` listens on your network and `/__redline/*` has no login, so Redline checks each caller's own address, as Next's server received it, and answers this machine only (see `network`).
 
 ```tsx
 export default withRedline(nextConfig, { directEdit: true })   // next.config.ts, from '@umage.ai/redline/next'; keeps nextConfig's type (NextConfig)
@@ -90,7 +90,7 @@ Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true
 where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false` hides the round button.
 `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`). `pageKey: 'path'` makes hash routes (a deck's `#/3`)
 share one notes file. `labels` may be a function of the request. `prompt` replaces the **Copy prompt** text (`{open}`, `{page}`), or `false`
-hides it (the default with a remote store). The overlay and its API answer this machine only; **`network: true`** lets others in (`vite --host` reviews from a phone, a container, a proxy with its own domain; `redlineMiddleware` defaults to it).
+hides it (the default with a remote store). The overlay and its API answer this machine only; **`network`** adds addresses, subnets and host names (`['192.168.1.20', '172.17.0.1', 'myapp.test']`), or `true` for everyone (`redlineMiddleware`'s default). Phones, Docker, nginx: [docs/SETUPS.md](docs/SETUPS.md#reaching-the-dev-server-from-elsewhere).
 
 **Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one `.redline/`
 at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's **All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).

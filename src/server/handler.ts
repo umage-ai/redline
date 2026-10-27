@@ -4,6 +4,7 @@
 
 import { promises as fs, existsSync, readFileSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import net from 'node:net';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Note, Target } from '../shared/types.ts';
@@ -80,13 +81,15 @@ export interface RedlineOptions {
    */
   mcpTokens?: string[];
   /**
-   * Answer the overlay's API for other machines too. Default false in the dev-server plugins (Vite,
-   * Astro, Angular, Next): the API has no login, so only calls from this machine get it (a loopback
-   * address and a local Host; through Next's proxy the Host is all there is, which browsers can't fake
-   * but curl can). `redlineMiddleware` defaults to true: a deployed review server gates reviewers itself.
+   * Who besides this machine gets the overlay and its API, which has no login (docs/SETUPS.md "Reaching the
+   * dev server from elsewhere"). Default in the dev-server plugins (Vite, Astro, Angular, Next): nobody, i.e.
+   * a loopback caller with a local Host. A list adds callers: addresses and subnets (`192.168.1.20`,
+   * `172.16.0.0/12`, `fd00::/8`) match the caller's address, whatever its Host; host names (`myapp.test`,
+   * `*.myapp.test`) match the Host of a call from this machine (a proxy here with its own domain).
+   * `true`: everyone, the default of `redlineMiddleware` (a deployed review server gates reviewers itself).
    * MCP keeps its own rule (`mcpTokens`).
    */
-  network?: boolean;
+  network?: boolean | string[];
   /**
    * The build the pages come from, e.g. a commit hash: recorded on every new note so an agent
    * reads the source lines at that revision. Useful when the overlay runs on a deployed build
@@ -161,6 +164,37 @@ export function localCall(req: IncomingMessage): boolean {
   const h = req.headers;
   const host = String(h['x-forwarded-host'] ?? h.host ?? h[':authority'] ?? '').split(',')[0].trim();
   return LOCAL_HOST.test(host);
+}
+
+/**
+ * The `network` list as a check: an address or subnet entry admits that caller, a host name entry a call
+ * from this machine with that Host. Throws on an entry that is neither, so a typo fails at startup.
+ */
+export function networkAllows(entries: string[]): (req: IncomingMessage) => boolean {
+  const ips = new net.BlockList();
+  const hosts: string[] = [];
+  for (const e of entries) {
+    const [addr, bits, extra] = e.trim().split('/');
+    const family = net.isIP(addr);
+    try {
+      if (family && extra === undefined && (bits === undefined || /^\d+$/.test(bits))) {
+        const type = family === 6 ? 'ipv6' : 'ipv4';
+        if (bits === undefined) ips.addAddress(addr, type); else ips.addSubnet(addr, Number(bits), type);
+        continue;
+      }
+    } catch { /* a prefix out of range: reported below */ }
+    if (bits === undefined && /^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*$/i.test(addr)) { hosts.push(addr.toLowerCase()); continue; }
+    throw new Error(`[redline] network: "${e}" is not an address, a subnet (10.0.0.0/8) or a host name`);
+  }
+  return req => {
+    const peer = peerOf(req);
+    const family = net.isIP(peer);
+    if (family && ips.check(peer, family === 6 ? 'ipv6' : 'ipv4')) return true;
+    if (!hosts.length || !LOOPBACK.test(peer)) return false;
+    const h = req.headers;
+    const host = String(h['x-forwarded-host'] ?? h.host ?? h[':authority'] ?? '').split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
+    return hosts.some(x => (x.startsWith('*.') ? host.endsWith(x.slice(1)) : host === x));
+  };
 }
 
 /** Who may call the MCP endpoint: a configured bearer token, or (no tokens configured) a loopback caller. */
@@ -241,12 +275,14 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   });
 
   // Other machines get a 403 (and no script injected), with one line in the dev server's log saying why.
+  const listed = Array.isArray(opts.network) ? networkAllows(opts.network) : () => false;
   let warned = false;
   const refused = (req: IncomingMessage) => {
-    if (opts.network || localCall(req)) return false;
+    if (opts.network === true || localCall(req) || listed(req)) return false;
     if (!warned) {
       warned = true;
-      console.warn(`[redline] refused a call from ${peerOf(req)} (host ${req.headers['x-forwarded-host'] ?? req.headers.host}): only this machine gets the overlay. Set network: true to let others in.`);
+      const peer = peerOf(req), host = req.headers['x-forwarded-host'] ?? req.headers.host;
+      console.warn(`[redline] refused a call from ${peer} (host ${host}): only this machine gets the overlay. To let it in, add ${LOOPBACK.test(peer) ? `'${String(host).replace(/:\d+$/, '')}'` : `'${peer.replace(/^::ffff:(?=\d)/, '')}'`} to the network option (or network: true for everyone).`);
     }
     return true;
   };

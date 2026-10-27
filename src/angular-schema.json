@@ -185,6 +185,13 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Bearer tokens (plain or sha256:<hex>) for POST /__redline/mcp from other machines."
+        },
+        "network": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "description": "Who besides this machine gets the overlay: true for everyone, or addresses, subnets (172.16.0.0/12) and host names (myapp.test)."
         }
       },
       "additionalProperties": false

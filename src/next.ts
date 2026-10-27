@@ -90,7 +90,7 @@ function sidecar(options: RedlineNextOptions, root: string, serverRoot: string):
       register(`http://127.0.0.1:${port}`);   // `redline mcp` (D22) calls this server directly
       console.log(`  \x1b[31m✎ redline\x1b[0m  notes → ${options.dir ?? '.redline'}/  (toggle: ${options.hotkey ?? 'alt+shift+r'})`);
       const lan = networkHost(process.argv, process.env);
-      if (lan && options.network) console.warn(`[redline] next dev listens on ${lan} and network is on: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/.`);
+      if (lan && options.network === true) console.warn(`[redline] next dev listens on ${lan} and network is on: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/.`);
       resolve(port);
     });
   });
