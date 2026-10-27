@@ -5,13 +5,13 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { withRedline, type NextConfig } from '../../src/next.ts';
+import { networkHost, withRedline, type NextConfig, type NextConfigFn } from '../../src/next.ts';
 import redlineLoader from '../../src/next-loader.ts';
 
 const DEV = 'phase-development-server';
 const ctx = { defaultConfig: {} };
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-next-'));
-const dev = (config: Parameters<typeof withRedline>[0], opts = {}) => withRedline(config, { root, ...opts })(DEV, ctx);
+const dev = (config: NextConfig | NextConfigFn, opts = {}) => withRedline<NextConfig>(config, { root, ...opts })(DEV, ctx);
 const warn = console.warn, log = console.log;
 
 test('next build and next start get the config back untouched, object or function', async () => {
@@ -19,6 +19,15 @@ test('next build and next start get the config back untouched, object or functio
   assert.equal(await withRedline(config)('phase-production-build', ctx), config);
   assert.equal(await withRedline(config)('phase-production-server', ctx), config);
   assert.equal(await withRedline((phase: string) => ({ ...config, phase }))('phase-production-build', ctx).then((c: NextConfig) => c.phase), 'phase-production-build');
+});
+
+test('withRedline keeps the app\'s config type, so Next\'s NextConfig still checks it', () => {
+  type Cfg = { reactStrictMode?: boolean; images?: { unoptimized?: boolean } };
+  const cfg: Cfg = { reactStrictMode: true };
+  const wrapped: (phase: string, ctx: { defaultConfig: Cfg }) => Promise<Cfg> = withRedline(cfg);   // Next's own shape for a config function
+  // @ts-expect-error a typo in the config is a type error (only `npm run typecheck` sees this line)
+  withRedline<Cfg>({ reactStrictMod: true });
+  assert.equal(typeof wrapped, 'function');
 });
 
 test('next dev: /__redline/* is rewritten first, past basePath, to the API server; the app\'s rewrites stay', async () => {
@@ -86,6 +95,17 @@ test('next dev: MCP through Next\'s proxy is refused without tokens; called dire
   const direct = await call();
   assert.equal(direct.status, 200);
   assert.equal((await direct.json()).result.serverInfo.name, 'redline');
+});
+
+test('next dev without -H 127.0.0.1 gets a warning: it listens on the network, and the API has no login', () => {
+  const cli = (...a: string[]) => networkHost(['node', 'next', 'dev', ...a], {});
+  assert.equal(cli(), 'every network interface');
+  assert.equal(cli('-H', '0.0.0.0'), 'every network interface');
+  assert.equal(cli('--hostname=192.168.1.20'), '192.168.1.20');
+  for (const h of ['127.0.0.1', 'localhost', '::1']) assert.equal(cli('-H', h), null, h);
+  assert.equal(cli('--hostname=localhost'), null);
+  assert.equal(networkHost(['node', 'start-server.js'], { NEXT_PRIVATE_WORKER: '1' }), null);   // the worker can't see the flag
+  assert.equal(networkHost(['node', '--test', 'next.test.ts'], {}), null);                    // not next dev
 });
 
 test('loader: stamps .tsx outside node_modules, with an object source map; leaves the rest as it came', () => {

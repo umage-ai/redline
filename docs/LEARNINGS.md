@@ -187,8 +187,8 @@ Prune entries whose cause is gone from the code.
 - **Guard:** the `next-turbo` fixture (`frameworks.spec.ts`).
 
 ## L46 — Through Next's rewrite every request reaches the API server from 127.0.0.1
-- **Cause / fix:** Next proxies rewrites with `changeOrigin` and sets only `x-forwarded-host`; `next dev` listens on the LAN by default. The Next API server refuses `/__redline/mcp` with `x-forwarded-host` unless `mcpTokens` is set; `redline mcp` registers and calls it directly.
-- **Guard:** `next.test.ts` "MCP through Next's proxy is refused without tokens".
+- **Cause / fix:** Next proxies rewrites with `changeOrigin` and sets only `x-forwarded-host`; `next dev` listens on the LAN by default. The Next API server refuses `/__redline/mcp` with `x-forwarded-host` unless `mcpTokens` is set; `redline mcp` registers and calls it directly. The rest of the API checks the forwarded Host (Next copies the caller's `Host`, so curl can fake it), and `withRedline` warns when `next dev` has no loopback `-H` (only the CLI process sees the flag; its worker gets it over IPC).
+- **Guard:** `next.test.ts` "MCP through Next's proxy is refused without tokens", "next dev without -H 127.0.0.1 gets a warning"; `network.test.ts`.
 
 ## L47 — A running `next dev` keeps failing with `Can't resolve …/dist/next-loader.cjs` after `npm run build`
 - **Cause / fix:** the build empties `dist/` first, and Next caches the failed resolution. Restart the Next fixture servers after a rebuild (Vite fixtures recover on reload).

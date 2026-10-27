@@ -8,7 +8,9 @@ import { clientFile } from '../vite.ts';
 import { createHandler, type RedlineOptions } from './handler.ts';
 
 export function redlineMiddleware(opts: RedlineOptions & { serverRoot?: string } = {}) {
-  return createHandler({ ...opts, serverRoot: opts.serverRoot ?? process.cwd(), clientFile });
+  // Open to the network by default, unlike the dev-server plugins: a deployed review server (docs/SETUPS.md 3)
+  // decides who gets the overlay itself.
+  return createHandler({ ...opts, network: opts.network ?? true, serverRoot: opts.serverRoot ?? process.cwd(), clientFile });
 }
 
 export { createStore, newId, stamp, validId, cleanPatch } from './store.ts';

@@ -1,6 +1,6 @@
 // Source location + component chain per framework. Each fixture renders
 // <button data-testid="card-action"> inside a <Card> component, written in the page file.
-// Chains: React and Vue walk the component tree (Card renders the slot, inside App); Svelte,
+// Chains: React, Next and Vue walk the component tree (Card renders the slot, inside App); Svelte,
 // Astro, Angular, Solid and Preact list the component the element is written in first.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
@@ -15,8 +15,8 @@ const cases = [
   { f: FIXTURES.angular, file: 'src/app/app.html', components: ['App', 'Card'] },
   { f: FIXTURES.solid, file: 'src/App.tsx', components: ['App', 'Card'] },
   { f: FIXTURES.preact, file: 'src/App.tsx', components: ['App', 'Card'] },
-  { f: FIXTURES.next, file: 'app/page.tsx', components: ['Page', 'Card'] },
-  { f: FIXTURES['next-turbo'], file: 'app/page.tsx', components: ['Page', 'Card'] },
+  { f: FIXTURES.next, file: 'app/page.tsx', components: ['Card', 'Page'] },
+  { f: FIXTURES['next-turbo'], file: 'app/page.tsx', components: ['Card', 'Page'] },
 ];
 
 for (const { f, file, components } of cases) {
@@ -57,7 +57,7 @@ for (const f of [FIXTURES.next, FIXTURES['next-turbo']]) {
     await openOverlay(page, f);
     let note = await comment(page, page.getByTestId('client-action'), 'Count in tens.');
     expect(note.target?.source).toMatchObject({ file: 'components/Counter.tsx', line: await lineOf(path.join(f.dir, 'components/Counter.tsx'), 'data-testid="client-action"') });
-    expect(note.target?.components?.slice(0, 2)).toEqual(['Counter', 'Card']);
+    expect(note.target?.components).toEqual(['Counter', 'Card', 'Page', 'RootLayout']);
     await page.getByTestId('client-action').evaluate(b => (b as HTMLButtonElement).click());
     await expect(page.getByTestId('client-action')).toHaveText('Clicked 1');   // hydrated, stamps and all
     expect(errors.filter(e => /hydrat|didn't match/i.test(e))).toEqual([]);
@@ -67,5 +67,15 @@ for (const f of [FIXTURES.next, FIXTURES['next-turbo']]) {
     note = await comment(legacy, legacy.getByTestId('legacy-title'), 'Rename.');
     expect(note.target?.source).toMatchObject({ file: 'pages/legacy.tsx', line: await lineOf(path.join(f.dir, 'pages/legacy.tsx'), 'data-testid="legacy-title"') });
     expect(note.target?.components?.[0]).toBe('Legacy');
+  });
+
+  // A route group's layout and a page that renders only a Client Component: neither has an element
+  // of its own between the button and the root layout, so a chain from the stamps skipped them.
+  test(`${f.name}: the chain names the page and the route-group layout, even without elements of their own`, async ({ page }) => {
+    await resetNotes(f);
+    await openOverlay(page, f, '/admin');
+    const note = await comment(page, page.getByTestId('rounds-action'), 'Show the round number.');
+    expect(note.target?.source).toMatchObject({ file: 'components/AdminClient.tsx', line: await lineOf(path.join(f.dir, 'components/AdminClient.tsx'), 'data-testid="rounds-action"') });
+    expect(note.target?.components).toEqual(['RoundsTab', 'AdminClient', 'AdminPage', 'DashboardLayout', 'RootLayout']);
   });
 }
