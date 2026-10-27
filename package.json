@@ -1,6 +1,6 @@
 {
   "name": "@umage.ai/redline",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Dev-only UI feedback overlay: pin comments, sketches and text changes on any web UI, saved as markdown an AI agent can work through.",
   "type": "module",
   "license": "MIT",
