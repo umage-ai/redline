@@ -30,7 +30,7 @@ Rules that hold in every setup:
 - **Overlay runs in:** the framework's dev server. It is gone from builds.
 - **Notes:** `<repo>/.redline/pages/<page>.md`, plus screenshots in `.redline/assets/`. The folder is gitignored.
 - **Agent gets them:** by reading the markdown, guided by the skill that `npx redline init` installs; or with
-  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only; through `next dev`, tokens only).
+  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only, `next dev` included).
 - **Install (JS/TS):** `npm i -D @umage.ai/redline`, `npx redline init`, then one line of config:
 
 | Stack | Config |
@@ -45,8 +45,28 @@ Rules that hold in every setup:
 - **Status:** ✅ `@umage.ai/redline` on npm, with every framework above covered by e2e tests. .NET is tested
   (unit and browser) but unpublished.
 - **Not for:** sharing notes between people. Each checkout has its own `.redline/`.
-- **Network:** the API has no login, so the plugins answer this machine only (`network: true` opens them). `next dev` listens on the network and only the Host header shows who calls, so use `-H 127.0.0.1`.
+- **Network:** the API has no login, so the plugins answer this machine only. See below for anything else.
 - **Details:** [README.md](../README.md) "Setup in a repo".
+
+### Reaching the dev server from elsewhere
+
+The overlay's API has no login: whoever reaches it can read and write notes and screenshots, and with
+`directEdit` the source. So the plugins answer a caller only if it is this machine (a loopback address and
+a local Host, which also stops DNS rebinding). The `network` option adds callers: addresses and subnets
+match the caller's address, host names the Host of a call from this machine; `true` lets everyone in.
+A refused call logs one line naming the address or host to add.
+
+| Situation | What Redline sees | Set |
+|---|---|---|
+| `next dev` (listens on the network by default) | the caller's own address: `withRedline` stamps it before Next's proxy hides it (D48) | nothing |
+| A phone or colleague on the LAN (`vite --host`) | their address | `network: ['192.168.1.20']` or the subnet `'192.168.1.0/24'` |
+| Dev server in Docker, browser on the host | the bridge gateway (`172.17.0.1` with Docker Desktop), for **every** caller | `-p 127.0.0.1:5173:5173`, then `network: ['172.17.0.1']` |
+| nginx (or Caddy…) on this machine with its own domain | 127.0.0.1 and the Host nginx sends | `network: ['myapp.test']` if it passes `Host $host`; nothing if not |
+| A proxy on another machine | the proxy's address, for everyone it lets through | the proxy's address, and restrict access in the proxy |
+
+Behind a proxy or Docker's port forwarding, Redline can only see the proxy: allowing it allows everyone who
+reaches the proxy, so keep the proxy (or the published port) on 127.0.0.1, or restrict it there. Redline
+doesn't trust `X-Forwarded-For`. Vite 6+ has its own Host check: a custom domain also goes in `server.allowedHosts`.
 
 ## 2. Shared notes in dev (remote store)
 

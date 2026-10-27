@@ -11,13 +11,15 @@
 //   const nextConfig: NextConfig = { /* your Next config */ }
 //   export default withRedline(nextConfig, { directEdit: true })
 
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import http, { type IncomingMessage } from 'node:http';
+import net, { type AddressInfo } from 'node:net';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { clientFile } from './vite.ts';
-import { createHandler, findRoot, type RedlineOptions } from './server/handler.ts';
+import { createHandler, findRoot, PEER, type RedlineOptions } from './server/handler.ts';
 import { API_BASE } from './shared/types.ts';
 
 export interface RedlineNextOptions extends RedlineOptions {
@@ -36,6 +38,27 @@ export type NextConfigFn<C extends object = NextConfig> = (phase: string, ctx: {
 const PHASE_DEV = 'phase-development-server';
 const loaderFile = fileURLToPath(new URL('./next-loader.cjs', import.meta.url));
 const SIDECAR = Symbol.for('umage.redline.next');
+const STAMPED = Symbol.for('umage.redline.next.peer');
+const PEER_HEADER = 'x-redline-peer';
+
+/**
+ * Next's rewrite proxy hides the caller (every request reaches the API server from 127.0.0.1, with the
+ * caller's own Host as x-forwarded-host), so the servers in this process, Next's among them, stamp each
+ * /__redline request with its socket address before Next sees it (D48). A secret per process vouches for
+ * the stamp; a caller's own x-redline-peer is overwritten. Dev only: withRedline runs in `next dev` only.
+ */
+function stampPeers(own: http.Server, secret: string) {
+  const g = globalThis as { [STAMPED]?: boolean };
+  if (g[STAMPED]) return;
+  g[STAMPED] = true;
+  const proto = net.Server.prototype as { emit: (event: string | symbol, ...args: unknown[]) => boolean };
+  const emit = Object.hasOwn(proto, 'emit') ? proto.emit : EventEmitter.prototype.emit;
+  proto.emit = function (this: net.Server, event, ...args) {
+    const req = args[0] as IncomingMessage | undefined;
+    if (event === 'request' && this !== own && req?.url?.startsWith(`${API_BASE}/`)) req.headers[PEER_HEADER] = `${secret} ${req.socket?.remoteAddress ?? ''}`;
+    return emit.call(this, event, ...args);
+  };
+}
 
 /**
  * The API server, once per process: Next reads its config more than once, and keeps a process
@@ -45,16 +68,21 @@ function sidecar(options: RedlineNextOptions, root: string, serverRoot: string):
   const g = globalThis as { [SIDECAR]?: Promise<number> };
   return g[SIDECAR] ??= new Promise<number>((resolve, reject) => {
     const { api, register } = createHandler({ ...options, root, serverRoot, clientFile });
+    const secret = randomBytes(16).toString('hex');
     const server = http.createServer((req, res) => {
-      // Through Next's rewrite every caller comes from 127.0.0.1 (Next adds only x-forwarded-host), and
-      // `next dev` listens on the network by default: without tokens, MCP answers direct calls only.
-      if (req.headers['x-forwarded-host'] !== undefined && req.url?.startsWith(`${API_BASE}/mcp`) && !options.mcpTokens?.length) {
+      const stamp = req.headers[PEER_HEADER];
+      delete req.headers[PEER_HEADER];
+      if (typeof stamp === 'string' && stamp.startsWith(`${secret} `)) (req as { [PEER]?: string })[PEER] = stamp.slice(secret.length + 1);
+      // Proxied without a stamp, the caller is unknown (every request comes from 127.0.0.1): without
+      // tokens, MCP then answers direct calls only.
+      else if (req.headers['x-forwarded-host'] !== undefined && req.url?.startsWith(`${API_BASE}/mcp`) && !options.mcpTokens?.length) {
         res.writeHead(401, { 'content-type': 'application/json; charset=utf-8', 'www-authenticate': 'Bearer realm="redline"' });
-        res.end(JSON.stringify({ error: "MCP through next dev can't tell local callers from remote ones: use `redline mcp`, or set mcpTokens" }));
+        res.end(JSON.stringify({ error: "MCP through next dev couldn't tell who calls: use `redline mcp`, or set mcpTokens" }));
         return;
       }
       api(req, res, () => { res.statusCode = 404; res.end(); });
     });
+    stampPeers(server, secret);
     server.on('error', reject);
     server.listen(0, '127.0.0.1', () => {
       server.unref();
@@ -62,9 +90,7 @@ function sidecar(options: RedlineNextOptions, root: string, serverRoot: string):
       register(`http://127.0.0.1:${port}`);   // `redline mcp` (D22) calls this server directly
       console.log(`  \x1b[31m✎ redline\x1b[0m  notes → ${options.dir ?? '.redline'}/  (toggle: ${options.hotkey ?? 'alt+shift+r'})`);
       const lan = networkHost(process.argv, process.env);
-      if (lan) console.warn(options.network
-        ? `[redline] next dev listens on ${lan} and network is on: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/.`
-        : `[redline] next dev listens on ${lan}: Redline refuses other machines' browsers, but not a request with a faked Host header. To keep it on this machine: next dev -H 127.0.0.1`);
+      if (lan && options.network === true) console.warn(`[redline] next dev listens on ${lan} and network is on: anyone who can reach it can write notes and screenshots to ${options.dir ?? '.redline'}/.`);
       resolve(port);
     });
   });

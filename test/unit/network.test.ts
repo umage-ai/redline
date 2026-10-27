@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { createHandler, localCall } from '../../src/server/handler.ts';
+import { createHandler, localCall, networkAllows } from '../../src/server/handler.ts';
 import { redlineMiddleware } from '../../src/server/index.ts';
 
 const req = (remoteAddress: string, headers: Record<string, string>) => ({ socket: { remoteAddress }, headers }) as never;
@@ -25,7 +25,7 @@ test('localCall: a loopback address and a local Host, forwarded or not', () => {
   assert.equal(localCall(req('127.0.0.1', {})), false);
 });
 
-async function serve(opts: { network?: boolean }, middleware = false) {
+async function serve(opts: { network?: boolean | string[] }, middleware = false) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-net-'));
   const base = { root, serverRoot: root, clientFile: import.meta.filename, ...opts };
   const { api, inject } = middleware ? redlineMiddleware(base) : createHandler(base);
@@ -64,4 +64,29 @@ test('redlineMiddleware stays open by default: a deployed review server gates re
   const s = await serve({}, true);
   try { assert.equal((await s.get('/__redline/config', { host: 'review.example.com' })).status, 200); }
   finally { s.close(); }
+});
+
+test('network list: addresses and subnets admit those callers, host names a call from this machine with that Host', () => {
+  const allows = networkAllows(['192.168.1.20', '172.16.0.0/12', 'fd00::/8', 'myapp.test', '*.dev.example']);
+  assert.equal(allows(req('192.168.1.20', { host: '192.168.1.5:5173' })), true);          // a phone on the LAN
+  assert.equal(allows(req('192.168.1.21', { host: '192.168.1.5:5173' })), false);
+  assert.equal(allows(req('::ffff:172.17.0.1', { host: 'localhost:5173' })), true);       // Docker's gateway, as Node reports IPv4 on a dual-stack socket
+  assert.equal(allows(req('fd00::5', { host: 'x' })), true);
+  assert.equal(allows(req('127.0.0.1', { host: 'myapp.test' })), true);                   // nginx on this machine with its own domain
+  assert.equal(allows(req('127.0.0.1', { host: 'web.dev.example:8443' })), true);
+  assert.equal(allows(req('127.0.0.1', { host: 'myapp.test.evil.example' })), false);
+  assert.equal(allows(req('192.168.1.99', { host: 'myapp.test' })), false);              // a host name never admits another machine
+  assert.throws(() => networkAllows(['10.0.0.0/40']), /not an address, a subnet/);
+  assert.throws(() => networkAllows(['http://myapp.test']), /not an address, a subnet/);
+});
+
+test('network list in the handler: listed callers get the API, others the 403 that names what to add', async () => {
+  const warn = console.warn, warned: string[] = [];
+  console.warn = (m: string) => warned.push(m);
+  const s = await serve({ network: ['myapp.test'] });
+  try {
+    assert.equal((await s.get('/__redline/config', { host: 'myapp.test' })).status, 200);
+    assert.equal((await s.get('/__redline/config', { host: 'other.test' })).status, 403);
+    assert.match(warned[0], /add 'other\.test' to the network option/);
+  } finally { console.warn = warn; s.close(); }
 });
