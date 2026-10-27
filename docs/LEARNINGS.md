@@ -156,7 +156,7 @@ Prune entries whose cause is gone from the code.
 ## L36 — The red highlight stayed on screen after saving a comment, drifting as the page scrolled
 - **Cause:** the scroll handler (`reposition`) redraws the highlight for `draft.el`, and `draft` is still set while `saveDraft` awaits the screenshot and POST. A scroll then re-showed it; after saving, the mode is idle, so nothing hid it again.
 - **Fix:** `reposition` skips while `busy`; a successful save hides the highlight.
-- **Guard:** `overlay.spec.ts` "the highlight goes away after saving, even if the page scrolls while saving".
+- **Guard:** `overlay.spec.ts` "the highlight goes away after saving, even if the page scrolls while saving". It flaked on CI until it waited for the textarea's focus (set a tick after the click): earlier keys are mode keys, `s` opened sketch.
 
 ## L40 — Every page logged an EventSource error when the store had no change feed
 - **Cause:** the first version opened `/__redline/events` unconditionally; the markdown store answers 404, and Chrome logs the refused stream on every load.

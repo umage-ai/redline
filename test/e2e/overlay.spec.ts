@@ -287,6 +287,8 @@ test('the highlight goes away after saving, even if the page scrolls while savin
   });
   await page.keyboard.press('c');
   await mouseAt(page, page.getByTestId('agent-save'));
+  // The popover focuses its textarea a tick after the click; typed earlier, the letters are mode keys ('s' = sketch).
+  await expect(ui(page, '.pop textarea')).toBeFocused();
   await page.keyboard.type('Make this secondary.');
   const saved = waitForSave(page);
   await page.keyboard.press('Control+Enter');
