@@ -12,9 +12,14 @@ import { createHub } from '../../hub/src/server.ts';
 import { FIXTURES } from './fixtures.ts';
 import { comment, openOverlay, ui } from './helpers.ts';
 
-const PORT = 5207;   // next to the fixtures' 5199-5206
+const PORT = 5209;   // after the fixtures (5199-5208); .NET samples use 5210-5213
 let db: Db, dir: string, close: () => Promise<void>, hubUrl: string, key: string;
 let vite: ViteDevServer | undefined;
+
+// It used 5207 until the Next fixture took it: Linux CI failed with "Port 5207 is already in use" (L48).
+test("the hub test's dev server port is not a fixture's", () => {
+  expect(Object.values(FIXTURES).map(f => Number(new URL(f.url).port))).not.toContain(PORT);
+});
 
 test.beforeAll(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-hub-e2e-'));

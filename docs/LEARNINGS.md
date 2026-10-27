@@ -179,21 +179,21 @@ Prune entries whose cause is gone from the code.
 - **Guard:** `scripts/test-hub-package.mjs` fails when stderr contains ExperimentalWarning.
 
 ## L44 — Next: `failed to read input source map … invalid type: string` on every .tsx
-- **Cause:** Next's SWC loader accepts a loader's source map only as an object; webpack itself takes a string.
-- **Fix:** `next-loader.ts` passes `JSON.parse(map)`.
+- **Cause / fix:** Next's SWC loader accepts a loader's source map only as an object (webpack takes a string); `next-loader.ts` passes `JSON.parse(map)`.
 - **Guard:** `next.test.ts` "loader: stamps .tsx … with an object source map".
 
 ## L45 — Turbopack: `Module not found: Can't resolve '@umage.ai/redline/next/script'`, webpack fine
-- **Cause:** the fixture links the package from the repo (`file:../../..`), outside `turbopack.root`; Turbopack reads nothing outside its root.
-- **Fix:** the fixture sets `turbopack.root` (and `outputFileTracingRoot`) to the repo. Same for `npm link` in a real app.
+- **Cause / fix:** the fixture links the package from the repo (`file:../../..`), outside `turbopack.root`, and Turbopack reads nothing outside it. The fixture sets `turbopack.root` (and `outputFileTracingRoot`) to the repo. Same for `npm link` in a real app.
 - **Guard:** the `next-turbo` fixture (`frameworks.spec.ts`).
 
 ## L46 — Through Next's rewrite every request reaches the API server from 127.0.0.1
-- **Cause:** Next proxies rewrites with `changeOrigin` and sets only `x-forwarded-host`, no client address; `next dev` listens on the LAN by default.
-- **Fix:** the Next API server refuses `/__redline/mcp` with `x-forwarded-host` unless `mcpTokens` is set; `redline mcp` registers and calls it directly.
+- **Cause / fix:** Next proxies rewrites with `changeOrigin` and sets only `x-forwarded-host`; `next dev` listens on the LAN by default. The Next API server refuses `/__redline/mcp` with `x-forwarded-host` unless `mcpTokens` is set; `redline mcp` registers and calls it directly.
 - **Guard:** `next.test.ts` "MCP through Next's proxy is refused without tokens".
 
 ## L47 — A running `next dev` keeps failing with `Can't resolve …/dist/next-loader.cjs` after `npm run build`
-- **Cause:** the build empties `dist/` first; Next caches the failed resolution and doesn't retry when the file returns.
-- **Fix:** restart the Next fixture servers after a rebuild (Vite fixtures recover on reload).
+- **Cause / fix:** the build empties `dist/` first, and Next caches the failed resolution. Restart the Next fixture servers after a rebuild (Vite fixtures recover on reload).
 - **Guard:** none; e2e builds before starting the servers.
+
+## L48 — CI: `Port 5207 is already in use` in `hub.spec.ts`; passed on Windows
+- **Cause:** the hub test starts its own Vite server on a fixed port, which the new Next fixture also took. Windows let both bind (IPv4 vs IPv6 `localhost`); Linux didn't.
+- **Fix:** the hub test uses 5209; a fixture port must not reuse a spec's own. **Guard:** `hub.spec.ts` "the hub test's dev server port is not a fixture's".
