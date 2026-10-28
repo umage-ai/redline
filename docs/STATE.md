@@ -1,6 +1,6 @@
 # State
 
-Last updated: 2026-10-27 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-10-28 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
@@ -35,7 +35,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
 | Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
-| Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 6, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
+| Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 7, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
 | Angular CLI: `@umage.ai/redline:dev-server` builder wraps `ng serve` (middleware + dev-only template source locations); `ng build` untouched | ✅ Angular 22, real `ng serve` | `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
 | Astro toolbar coexistence (attrs stripped, bar lifted) | ✅ | `frameworks.spec.ts` |
 | Next.js (D48): `withRedline` in next.config + `<Redline />` in the layout; App Router (Server and Client Components) and Pages Router; file:line from stamps; component chain from React's owners + Server Component dev info (route-group layouts too); Apply to file; local MCP through Next too; `withRedline` keeps the config's type | ✅ Next 15.5, webpack and Turbopack (fixtures `next`, `next-turbo`); Next 16.4 checked by hand | `next.test.ts`, `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |
