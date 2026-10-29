@@ -15,7 +15,7 @@ import path from 'node:path';
 // ---------- storyboard (keep in step with the table in promo/README.md) ----------
 const S = {
   open: { step: '01 · Open', title: 'Press a hotkey in your<br>running dev app.', keys: ['Alt', 'Shift', 'R'] },
-  comment: { step: '02 · Comment', title: 'Click any element.<br>Say what you want.', keys: ['C'] },
+  comment: { step: '02 · Comment', title: 'Click any element, pick a label,<br>say what you want.', keys: ['C'] },
   commentSaved: { step: '02 · Comment', title: 'Saved as markdown, with the selector,<br>source file:line and a screenshot.' },
   text: { step: '03 · Text', title: 'Rewrite copy<br>right on the page.', keys: ['T'] },
   textApplied: { step: '03 · Text', title: 'Static copy? Written straight<br>into the source file.' },
@@ -170,6 +170,9 @@ try {
   await page.keyboard.press('c');
   await pick(page.getByTestId('new-route'));
   await focused('TEXTAREA');
+  await hold(400);
+  await pick(ui('.pop .chip').filter({ hasText: 'UX' }));   // label the note (D46)
+  await hold(500);
   await typeSlow(COMMENT);
   await hold(900);
   await save('Control+Enter');

@@ -19,7 +19,7 @@ It takes about a minute. `promo/out/` is gitignored.
 |---|---|
 | Audience | Developers and product people scrolling LinkedIn with the sound off |
 | Message | Mark up your running UI. Your AI agent applies it. |
-| Format | MP4 · H.264 · yuv420p · 1080×1350 (4:5, the tallest feed format) · 30 fps · no audio track · ~56 s. `PROMO_FORMAT=web`: 1920×1080 (16:9) for web pages, same storyboard |
+| Format | MP4 · H.264 · yuv420p · 1080×1350 (4:5, the tallest feed format) · 30 fps · no audio track · ~58 s. `PROMO_FORMAT=web`: 1920×1080 (16:9) for web pages, same storyboard |
 | Thumbnail | `redline-promo-poster.png` (the title card at 1.5 s). Upload it as the custom thumbnail. |
 | Sound-off rules | Every scene has a large caption (step label + one sentence) and shows the keys pressed |
 | Layout | Caption on top · the app in a browser frame · a live panel underneath: the real `.redline` markdown file, then the agent's terminal |
@@ -33,7 +33,7 @@ Captions live in `S` at the top of `record.mjs`; the agent's edits and replies i
 |---|---|---|---|
 | 0 | 0–3 s | Title card: **Redline** · Mark up your running UI. Your AI agent applies it. | |
 | 1 | 3–7 s | 01 · Open: *Press a hotkey in your running dev app.* `Alt` `Shift` `R` | The cursor moves into the app and the toolbar opens |
-| 2 | 7–17 s | 02 · Comment: *Click any element. Say what you want.* `C` | Picks "New route" and types the comment. On save, the note appears in the markdown panel → *Saved as markdown, with the selector, source file:line and a screenshot.* |
+| 2 | 7–17 s | 02 · Comment: *Click any element, pick a label, say what you want.* `C` | Picks "New route", picks the **UX** label and types the comment. On save, the note appears in the markdown panel → *Saved as markdown, with the selector, source file:line and a screenshot.* |
 | 3 | 17–29 s | 03 · Text: *Rewrite copy right on the page.* `T` | Rewrites the lead paragraph and clicks **Apply to file** (`directEdit`); the panel shows the App.tsx diff → *Static copy? Written straight into the source file.* |
 | 4 | 27–39 s | 04 · Sketch: *Draw boxes, arrows and labels on the page.* `S` | Box around the chart, an arrow, a text label, then a note |
 | 5 | 41–51 s | 05 · Agent: *Your AI agent picks up the notes over MCP.* | The terminal shows `list_notes` / `get_note` / `update_note` for the 2 notes. The button changes live through HMR; the comment gets `[x]` and a reply, the sketch a question → *Ticked off, with replies, live in the overlay.* The notes panel opens with "Show done" |
