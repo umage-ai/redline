@@ -116,7 +116,7 @@
     "@types/react": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "@vitejs/plugin-vue": "^6.0.10",
-    "astro": "^6.4.8",
+    "astro": "^7.4.2",
     "esbuild": "^0.28.2",
     "modern-screenshot": "^4.7.0",
     "preact": "^11.0.1",

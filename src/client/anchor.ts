@@ -3,13 +3,11 @@
 // (selector → test id → id → xpath → tag+text).
 
 import type { CmsRef, SourceLoc, Target } from '../shared/types.ts';
+import { clip } from '../shared/text.ts';
+
+export { clip };
 
 const TESTID_ATTRS = ['data-testid', 'data-test-id', 'data-test', 'data-cy', 'data-qa'];
-
-export function clip(s: string | null | undefined, n: number): string {
-  const t = (s ?? '').replace(/\s+/g, ' ').trim();
-  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
-}
 
 const cssEsc = (s: string) => (typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(s) : s.replace(/["\\]/g, '\\$&'));
 

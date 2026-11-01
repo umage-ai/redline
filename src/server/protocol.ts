@@ -10,10 +10,11 @@
 // caller (never from the request), and say which notes are the caller's (`mine`). Which notes are
 // visible (resolved ones fading out, D42) is the store's policy, not the protocol's.
 
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage } from 'node:http';
 import { STORE_OWNED, type NewNoteRequest } from '../shared/types.ts';
 import { cleanPatch, type NoteStore } from './store.ts';
 import type { Middleware } from './handler.ts';
+import { json as send, MAX_BODY, readBody } from './http.ts';
 
 export interface ProtocolOptions {
   /** Path the protocol is served under, e.g. '/redline'. Default: the root. */
@@ -29,30 +30,11 @@ export interface ProtocolOptions {
   maxBody?: number;
 }
 
-function send(res: ServerResponse, status: number, body: unknown) {
-  res.statusCode = status;
-  res.setHeader('content-type', 'application/json; charset=utf-8');
-  res.setHeader('cache-control', 'no-store');
-  res.end(JSON.stringify(body));
-}
-
-function readJson(req: IncomingMessage, max: number): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    req.on('data', (c: Buffer) => {
-      size += c.length;
-      if (size > max) { reject(new Error('body too large')); req.destroy(); return; }
-      chunks.push(c);
-    });
-    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || 'null')); } catch (e) { reject(e); } });
-    req.on('error', reject);
-  });
-}
+const readJson = async (req: IncomingMessage, max: number): Promise<unknown> => JSON.parse((await readBody(req, max)) || 'null');
 
 export function notesProtocol(store: NoteStore, opts: ProtocolOptions = {}): Middleware {
   const base = (opts.base ?? '').replace(/\/+$/, '');
-  const max = opts.maxBody ?? 30 * 1024 * 1024;
+  const max = opts.maxBody ?? MAX_BODY;
 
   return (req, res, next) => {
     const url = req.url ?? '';

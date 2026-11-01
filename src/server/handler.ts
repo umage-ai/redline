@@ -17,6 +17,7 @@ import { registerServer } from './registry.ts';
 import { cleanLabel, normalizeLabels, type LabelDef, type LabelsSource } from '../shared/labels.ts';
 import { GUIDE_PATHS } from '../init.ts';
 import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
+import { json, readBody } from './http.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -105,31 +106,8 @@ const MARK = 'data-redline-client';
 const SNAPSHOT = '<script>(function(){var m=window.__redlineSrc=window.__redlineSrc||new WeakMap();' +
   'document.querySelectorAll("[data-astro-source-file]").forEach(function(e){' +
   'm.set(e,[e.getAttribute("data-astro-source-file"),e.getAttribute("data-astro-source-loc")||""])})})()</script>';
-const MAX_BODY = 30 * 1024 * 1024;
 
 export { findRoot };
-
-function json(res: ServerResponse, status: number, body: unknown) {
-  const s = JSON.stringify(body);
-  res.statusCode = status;
-  res.setHeader('content-type', 'application/json; charset=utf-8');
-  res.setHeader('cache-control', 'no-store');
-  res.end(s);
-}
-
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    req.on('data', (c: Buffer) => {
-      size += c.length;
-      if (size > MAX_BODY) { reject(new Error('body too large')); req.destroy(); return; }
-      chunks.push(c);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
 
 /** Turn whatever path a framework reported into a repo-relative, forward-slash path. */
 export function normaliseSource(file: string, root: string, serverRoot: string): string {
@@ -210,6 +188,38 @@ export function mcpAllowed(req: IncomingMessage, tokens: string[] | undefined): 
     return tokens.some(t => { const w = want(t); return !!w && timingSafeEqual(got, w); });
   }
   return !bearer && LOOPBACK.test(peerOf(req));
+}
+
+/** MCP over Streamable HTTP (D37): stateless JSON-RPC, the same tools as `redline mcp`, on this server's store. */
+async function serveMcp(req: IncomingMessage, res: ServerResponse, backend: Backend, tokens: string[] | undefined, version: string) {
+  // A browser page on another origin (DNS rebinding included) must not reach the tools.
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null' && (() => { try { return new URL(origin).host !== req.headers.host; } catch { return true; } })()) return json(res, 403, { error: 'cross-origin MCP request' });
+  if (!mcpAllowed(req, tokens)) {
+    res.setHeader('www-authenticate', 'Bearer realm="redline"');
+    return json(res, 401, { error: tokens?.length ? 'a valid bearer token is required' : 'MCP answers local calls only; set mcpTokens to allow remote agents' });
+  }
+  if (req.method !== 'POST') { res.statusCode = 405; res.setHeader('allow', 'POST'); res.end(); return; }   // no SSE stream: tools are request/response
+  let msg: JsonRpcMessage | JsonRpcMessage[];
+  try { msg = JSON.parse(await readBody(req)); } catch { return json(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
+  const handle = (m: JsonRpcMessage) => handleMcpMessage(m, { backend: async () => backend, version });
+  const replies = Array.isArray(msg)
+    ? (await Promise.all(msg.filter(m => m && typeof m === 'object').map(handle))).filter(r => r !== null)
+    : msg && typeof msg === 'object' ? await handle(msg) : undefined;
+  if (replies === undefined) return json(res, 400, { error: 'expected a JSON-RPC message' });
+  if (replies === null || (Array.isArray(replies) && !replies.length)) { res.statusCode = 202; res.end(); return; }
+  return json(res, 200, replies);
+}
+
+/** A /edit request body as an EditRequest with only the known fields, or null when a required one is missing. */
+function editRequestFrom(body: EditRequest | null, inspect: boolean): EditRequest | null {
+  if (typeof body?.from !== 'string' || typeof body.tag !== 'string' || (!inspect && typeof body.to !== 'string')) return null;
+  return {
+    from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
+    tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
+    nth: Number.isInteger(body.nth?.index) && Number.isInteger(body.nth?.count) ? { index: body.nth!.index, count: body.nth!.count } : undefined,
+    cms: body.cms && typeof body.cms === 'object' ? { ...body.cms } : undefined,
+  };
 }
 
 let pkgVersion: string | undefined;
@@ -347,26 +357,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return;
       }
 
-      // MCP over Streamable HTTP (D37): stateless JSON-RPC, the same tools as `redline mcp`, on this server's store.
-      if (p === '/mcp') {
-        // A browser page on another origin (DNS rebinding included) must not reach the tools.
-        const origin = req.headers.origin;
-        if (origin && origin !== 'null' && (() => { try { return new URL(origin).host !== req.headers.host; } catch { return true; } })()) return json(res, 403, { error: 'cross-origin MCP request' });
-        if (!mcpAllowed(req, opts.mcpTokens)) {
-          res.setHeader('www-authenticate', 'Bearer realm="redline"');
-          return json(res, 401, { error: opts.mcpTokens?.length ? 'a valid bearer token is required' : 'MCP answers local calls only; set mcpTokens to allow remote agents' });
-        }
-        if (method !== 'POST') { res.statusCode = 405; res.setHeader('allow', 'POST'); res.end(); return; }   // no SSE stream: tools are request/response
-        let msg: JsonRpcMessage | JsonRpcMessage[];
-        try { msg = JSON.parse(await readBody(req)); } catch { return json(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
-        const handle = (m: JsonRpcMessage) => handleMcpMessage(m, { backend: async () => mcpBackend(req), version: versionOf(opts.clientFile) });
-        const replies = Array.isArray(msg)
-          ? (await Promise.all(msg.filter(m => m && typeof m === 'object').map(handle))).filter(r => r !== null)
-          : msg && typeof msg === 'object' ? await handle(msg) : undefined;
-        if (replies === undefined) return json(res, 400, { error: 'expected a JSON-RPC message' });
-        if (replies === null || (Array.isArray(replies) && !replies.length)) { res.statusCode = 202; res.end(); return; }
-        return json(res, 200, replies);
-      }
+      if (p === '/mcp') return serveMcp(req, res, mcpBackend(req), opts.mcpTokens, versionOf(opts.clientFile));
 
       // Mutations need the custom header: a cross-site page can't send it without a
       // CORS preflight, which we never answer.
@@ -401,15 +392,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       // editor); ?dry=1 only checks, so the overlay can offer "Apply to file" or not.
       if (method === 'POST' && p === '/edit') {
         if (!writers.length) return json(res, 404, { error: 'direct edits are off (directEdit option)' });
-        const body = JSON.parse(await readBody(req)) as EditRequest;
         const inspect = /[?&]inspect=1/.test(url);
-        if (typeof body?.from !== 'string' || typeof body.tag !== 'string' || (!inspect && typeof body.to !== 'string')) return json(res, 400, { error: 'from, to and tag are required' });
-        const edit: EditRequest = {
-          from: body.from, to: inspect ? body.from : body.to, html: typeof body.html === 'string' ? body.html : undefined,
-          tag: body.tag.toLowerCase(), url: String(body.url ?? ''), source: body.source?.file ? { ...body.source } : undefined,
-          nth: Number.isInteger(body.nth?.index) && Number.isInteger(body.nth?.count) ? { index: body.nth!.index, count: body.nth!.count } : undefined,
-          cms: body.cms && typeof body.cms === 'object' ? { ...body.cms } : undefined,
-        };
+        const edit = editRequestFrom(JSON.parse(await readBody(req)), inspect);
+        if (!edit) return json(res, 400, { error: 'from, to and tag are required' });
         if (edit.source) edit.source.file = normaliseSource(edit.source.file, root, opts.serverRoot);
         const dryRun = inspect || /[?&]dry=1/.test(url);
         const result = await runWriters(writers, edit, { root, serverRoot: opts.serverRoot, dryRun, inspect, resolve: rel => resolveInside(root, dir, rel) });

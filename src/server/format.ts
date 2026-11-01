@@ -13,6 +13,7 @@
 //   > Agent's one-line reply.
 
 import { STORE_OWNED, type Note } from '../shared/types.ts';
+import { clip } from '../shared/text.ts';
 
 // Body, reply and done live in the markdown itself; what a remote store reports about a note
 // (resolved, seen, its link) belongs to that store and is never written here. `author` stays:
@@ -35,10 +36,7 @@ export const PAGE_PREAMBLE = `<!--
   Never edit or delete the <!-- redline … --> comment; never reorder notes.
 -->`;
 
-export function clip(s: string | undefined, n: number): string {
-  const t = (s ?? '').replace(/\s+/g, ' ').trim();
-  return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
-}
+export { clip };
 
 const TYPE_LABEL: Record<Note['type'], string> = { comment: 'Comment', sketch: 'Sketch', text: 'Text change' };
 
