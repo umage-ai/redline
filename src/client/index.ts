@@ -231,6 +231,27 @@ async function boot() {
     toastTimer = window.setTimeout(() => (toastEl.style.display = 'none'), ms);
   }
 
+  /**
+   * A spinner toast while a slow save runs: nothing for a fast one, "Saving…" after 0.5 s, a word on
+   * big pages after 2 s. The overlay is never in the screenshot, so the toast isn't either. Returns stop.
+   */
+  function savingNotice(): () => void {
+    const show = (msg: string) => {
+      clearTimeout(toastTimer);
+      toastEl.textContent = msg;
+      toastEl.className = 'toast wait';
+      toastEl.style.display = '';
+    };
+    const timers = [
+      window.setTimeout(() => show('Saving…'), 500),
+      window.setTimeout(() => show('Large pages take a little longer to screenshot. Hold on…'), 2000),
+    ];
+    return () => {
+      timers.forEach(clearTimeout);
+      if (toastEl.classList.contains('wait')) toastEl.style.display = 'none';
+    };
+  }
+
   /* ---------- data ---------- */
   async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
     const r = await fetch(API_BASE + path, { method, headers: { 'content-type': 'application/json', 'x-redline': '1' }, body: body ? JSON.stringify(body) : undefined });
@@ -602,6 +623,7 @@ async function boot() {
     popLayer.style.display = 'none';
     hideHl();
     if (d.editor) d.editor.style.visibility = 'hidden';
+    const stopNotice = savingNotice();
     try {
       if (wantShot && ls.get('tabcapture', '0') === '1' && !tabCaptureActive()) await startTabCapture();
       const el = d.whole ? null : d.el ?? null;
@@ -631,6 +653,7 @@ async function boot() {
         screenshot: png,
         sketch: d.sketch ? sketchFile(d.sketch.shapes, innerWidth, innerHeight, document.title) : undefined,
       });
+      stopNotice();
       d.editor?.remove(); d.sketch?.destroy();
       draft = null;
       popLayer.replaceChildren();
@@ -640,6 +663,7 @@ async function boot() {
       emit('noteCreated', saved);
       await poll(true);
     } catch (err) {
+      stopNotice();
       toast('Could not save: ' + (err as Error).message, true, 5000);
       if (d.editor) d.editor.style.visibility = '';
     } finally {

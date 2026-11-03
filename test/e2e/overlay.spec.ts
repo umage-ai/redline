@@ -15,6 +15,20 @@ test('injects the client and stays out of the way until opened', async ({ page }
   await expect(ui(page, '.bar')).toBeHidden();
 });
 
+test('never ends up in a printout: launcher, toolbar, pins and panel hide for print media', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  await comment(page, page.getByTestId('agent-save'), 'Printed?');
+  await page.keyboard.press('n');
+  await expect(ui(page, '.pin')).toBeVisible();
+  await expect(ui(page, '.bar')).toBeVisible();
+  await page.emulateMedia({ media: 'print' });
+  expect(await page.locator('redline-root').evaluate(el => getComputedStyle(el).display)).toBe('none');
+  for (const sel of ['.bar', '.pin', '.panel', '.launcher']) await expect(ui(page, sel)).toBeHidden();
+  await page.emulateMedia({ media: 'screen' });
+  await expect(ui(page, '.bar')).toBeVisible();
+});
+
 test('comment: app never sees the click; note has anchors, screenshot, index', async ({ page }) => {
   await openOverlay(page, f);
   await page.keyboard.press('c');

@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-10-27 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-03 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -47,6 +47,7 @@ Prune entries whose cause is gone from the code.
 ## L10 — Inner scroll containers in DOM screenshots
 - **Problem:** modern-screenshot clones the DOM, and clones lose their `scrollTop`.
 - **Fix:** before capture, mark the children of scrolled containers (and of `<body>` for page scroll) with their offset, then translate the clones in `onCloneEachNode`. Fixed elements are skipped, so sticky headers are still lost.
+- **Long pages:** cloning everything took ~20 s at 36k elements. Elements wholly below the viewport (with a size; zero-size portal roots stay) are filtered out. **Guard:** `capture.spec.ts` "a long page".
 
 ## L11 — Sketch label added twice; Escape kept it anyway
 - **Cause:** removing a focused `<input>` fires `blur` synchronously. Enter → commit → `remove()` → blur → commit again (and `remove()` threw); Escape → `remove()` → blur → commit.
@@ -59,8 +60,7 @@ Prune entries whose cause is gone from the code.
 - **Guard:** unit "source paths are repo-relative even when root is reached through a link".
 
 ## L13 — Tooling: shell-quoted code edits on Windows lose backslashes
-- Editing code through `node -e "…"` or bash heredocs mangled regexes (`\d` became `d`, `\(` became `(`) and broke theme detection and a filter, with no compile error.
-- **Rule:** make code edits with the Edit/Write tools, not shell string-replacement.
+- Editing code through `node -e "…"` or heredocs mangled regexes (`\d` → `d`) with no compile error. **Rule:** edit code with the Edit/Write tools, not shell string-replacement.
 
 ## L14 — Keys pressed right after a popover opens are lost or switch modes (tests only)
 - **Cause:** the popover focuses its textarea in a `setTimeout`. Typing earlier hits the page: `S` of "Switch" started a new sketch, `Enter` saved nothing. Showed up as CI-only flakiness on the slower Linux runner.
@@ -94,9 +94,7 @@ Prune entries whose cause is gone from the code.
 
 ## L20 — First tag release: `npm publish` 403 "OIDC permission denied for this action"
 - **Cause:** npm trusted publishers allow only `npm stage publish` by default (since Sept 2026); a direct `npm publish` needs "Allow npm publish" ticked in the package's Trusted Publisher settings. Dry runs never authenticate, so they didn't show it.
-- **Fix:** ticked (and saved) "Allow npm publish" (D13: fully automatic releases; the alternative is `npm stage publish` + a 2FA approval per release) and re-ran the failed job. The tag didn't need to move.
-- **Also:** after a green publish, npm says "being processed"; the version showed up on the registry ~2 minutes later.
-- **Guard:** the note at the top of `publish.yml`.
+- **Fix:** ticked (and saved) "Allow npm publish" (D13: fully automatic releases; the alternative is `npm stage publish` + a 2FA approval per release) and re-ran the failed job; the version shows up ~2 min after a green publish. **Guard:** the note at the top of `publish.yml`.
 
 ## L21 — Astro 404s a page file created just before the test navigates to it
 - **Cause:** Astro's dev server registers new routes from a file watcher; a page written moments before `page.goto` can be requested before the route exists (it passed once, then 404'd).
@@ -149,8 +147,7 @@ Prune entries whose cause is gone from the code.
 - **Guard:** `MiddlewareTests.Registers_in_servers_json_for_redline_mcp`. Checked by hand: `node dist/cli.js mcp` lists notes from the Razor sample.
 
 ## L35 — Promo video: the last screencast frame's duration was ignored
-- **Cause:** ffmpeg's concat demuxer drops the `duration` of the final entry, so without a fix the end card is cut short.
-- **Fix:** `concatList` in `promo/record.mjs` repeats the last file after its `duration` line.
+- **Cause / fix:** ffmpeg's concat demuxer drops the final entry's `duration`; `concatList` in `promo/record.mjs` repeats the last file after it.
 - **Guard:** not a test; check the contact sheet (`promo/README.md`, "Changing it") after a change.
 
 ## L36 — The red highlight stayed on screen after saving a comment, drifting as the page scrolled
@@ -197,3 +194,6 @@ Prune entries whose cause is gone from the code.
 ## L48 — CI: `Port 5207 is already in use` in `hub.spec.ts`; passed on Windows
 - **Cause:** the hub test starts its own Vite server on a fixed port, which the new Next fixture also took. Windows let both bind (IPv4 vs IPv6 `localhost`); Linux didn't.
 - **Fix:** the hub test uses 5209; a fixture port must not reuse a spec's own. **Guard:** `hub.spec.ts` "the hub test's dev server port is not a fixture's".
+
+## L49 — Tab capture: another note's pin in the screenshot on a big or slow page
+- **Cause / fix:** the overlay was hidden, then a fixed ~170 ms wait; the stream runs at 5 fps and a slow page paints late, so the video still held an old frame. Now waits for a frame captured after the hide (`requestVideoFrameCallback`, max 800 ms). **Guard:** `capture.spec.ts` "tab capture" (Chrome `--auto-accept-this-tab-capture`; caught the old code 1 run in 3).

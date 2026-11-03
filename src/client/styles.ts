@@ -1,6 +1,8 @@
 // All overlay CSS lives in the shadow root, so it can't leak into or be broken by the app.
 export const CSS = /* css */ `
 :host { all: initial; }
+/* Never in a printout or a print-to-PDF: !important here beats the host's inline display (shadow context wins for important). */
+@media print { :host, .rl { display: none !important; } }
 * { box-sizing: border-box; }
 .rl {
   --ink: #ff2d55; --ink-2: #ff6b85; --bg: #131316; --bg-2: #1c1c21; --bg-3: #26262d;
@@ -177,6 +179,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .toast { position: fixed; left: calc((100vw - var(--panel-w, 0px)) / 2); bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
+.toast.wait { display: flex; align-items: center; gap: 8px; }
+.toast.wait::before { content: ''; flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink); animation: rl-spin .8s linear infinite; }
+@keyframes rl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .toast.wait::before { animation-duration: 2.4s; } }
 .busy { position: fixed; inset: 0; cursor: progress; pointer-events: auto; }
 
 /* touch: bigger targets, no keyboard hints, actions always visible */
