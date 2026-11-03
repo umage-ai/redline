@@ -35,11 +35,32 @@ export function stopTabCapture() {
 
 const frames = (n: number) => new Promise<void>(r => { const f = () => (--n <= 0 ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
 
+type FrameMeta = { captureTime?: number };
+type FrameVideo = HTMLVideoElement & { requestVideoFrameCallback?(cb: (now: number, meta: FrameMeta) => void): number };
+
+/**
+ * Resolves on the first video frame captured after `since`, so the overlay (pins, popover) that was
+ * just hidden is not in it. The stream runs at 5 fps and a slow page paints late, so a fixed wait could
+ * still catch an old frame. Without captureTime, the second new frame; never more than `max` ms.
+ */
+function frameAfter(v: FrameVideo, since: number, max = 800): Promise<void> {
+  return new Promise(resolve => {
+    const t = setTimeout(resolve, max);
+    if (!v.requestVideoFrameCallback) { clearTimeout(t); setTimeout(resolve, 250); return; }
+    let seen = 0;
+    const next = () => v.requestVideoFrameCallback!((_, meta) => {
+      if (meta.captureTime !== undefined ? meta.captureTime >= since : ++seen >= 2) { clearTimeout(t); resolve(); }
+      else next();
+    });
+    next();
+  });
+}
+
 async function grabTab(host: HTMLElement): Promise<HTMLCanvasElement> {
   const prev = host.style.visibility;
   host.style.visibility = 'hidden';
-  await frames(3);
-  await new Promise(r => setTimeout(r, 120));   // let the capture pipeline catch a clean frame
+  await frames(2);   // the hidden overlay is painted
+  await frameAfter(video!, performance.now());
   const v = video!;
   const c = document.createElement('canvas');
   c.width = innerWidth; c.height = innerHeight;
@@ -49,6 +70,18 @@ async function grabTab(host: HTMLElement): Promise<HTMLCanvasElement> {
 }
 
 const SHIFT = 'data-redline-shift';
+
+/**
+ * Wholly below the viewport, so never in the shot: left out of the clone, which on a long page saves
+ * most of the cloning, style copying and image fetching. Only below (removing content above or beside
+ * would move what is visible), and only boxes with a size: a zero-size portal root at the end of
+ * <body> can still hold an open menu or dialog positioned on screen.
+ */
+const belowView = (n: Node) => {
+  if (!(n instanceof Element)) return false;
+  const r = n.getBoundingClientRect();
+  return r.top >= innerHeight && r.width > 0 && r.height > 0;
+};
 
 async function renderDom(host: HTMLElement): Promise<HTMLCanvasElement> {
   // Mark children of every scrolled container (and of <body> for the page scroll)
@@ -75,7 +108,7 @@ async function renderDom(host: HTMLElement): Promise<HTMLCanvasElement> {
       height: innerHeight,
       scale: Math.min(devicePixelRatio || 1, 2),
       backgroundColor: !/rgba\(0, 0, 0, 0\)|transparent/.test(htmlBg) ? htmlBg : !/rgba\(0, 0, 0, 0\)|transparent/.test(bg) ? bg : '#ffffff',
-      filter: n => n !== host,
+      filter: n => n !== host && !belowView(n),
       timeout: 4000,
       style: { overflow: 'hidden' },
       onCloneEachNode: (n: Node) => {

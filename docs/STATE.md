@@ -1,6 +1,6 @@
 # State
 
-Last updated: 2026-10-28 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-11-03 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
@@ -16,7 +16,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Markdown format round-trip, agent edits kept, slugs | ✅ | `test/unit/format.test.ts` |
 | Store: assets, INDEX.md, update/remove, concurrent agent edits | ✅ | unit |
 | JSX source stamping (HTML tags only, with the enclosing component's name); Vue SFC template stamping | ✅ | `format.test.ts` |
-| Script injection, comment mode, app never sees clicks | ✅ | `overlay.spec.ts` |
+| Script injection, comment mode, app never sees clicks; the overlay never prints (hidden for print media) | ✅ | `overlay.spec.ts` |
 | Disabled controls pickable; autofocus doesn't eat mode keys | ✅ | `overlay.spec.ts` |
 | Monorepos: per-app notes in one root `.redline/`, `init` from any folder (D17) | ✅ | `test/unit/monorepo.test.ts`, `overlay.spec.ts` |
 | Any agent: `init` writes Agent Skills + AGENTS.md (+ Claude/Gemini/Copilot extras), asks first in a terminal, `--dry-run`; neutral copied prompt (D16) | ✅ | `test/unit/init.test.ts`, `overlay.spec.ts`, `npm run test:package` |
@@ -58,7 +58,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Redline hub (`hub/`, D44): projects, personal member/agent tokens, protocol + live feed at `/p/<project>`, MCP per project, allowed sites, D42 visibility (5 min after seen, 24 h max), UI (notes with screenshots, reply/resolve/archive, tokens with setup snippets), SQLite persistence, localhost default + `--host` warning | ✅ overlay → dev server → hub → green pin, in Chrome | `hub.test.ts`, `hub.spec.ts`, `scripts/test-hub-package.mjs` (in `test:package`) |
 | Store calls carry the request (`ctx.req`) and `remoteStore` forwards per-reviewer `headers(ctx)`, so a shared site's notes carry each reviewer's name (D45); `examples/review-frontend`: shapes A (two images + gateway rule + reviewer switch), B (`reviewersOnly` in one server), C (review environment); store acting as the reviewer | ✅ unit; the pattern runs in production in a closed-source app, the example itself is not deployed here | `remote.test.ts`, `review-frontend.test.ts`, typecheck |
 | Source stamps in `vite build` with `buildSource` (JSX, Vue, Svelte) and the `build` option on notes (D43) | ✅ unit | `svelte-source.test.ts`, `remote.test.ts`; not yet in an e2e build fixture |
-| Pixel-perfect tab capture (getDisplayMedia) | ⚠️ manual only | needs a permission prompt, not automatable |
+| Pixel-perfect tab capture (getDisplayMedia): no overlay (other notes' pins) in the frame, even on a slow page (L49) | ✅ Chrome | `capture.spec.ts` (auto-accept flag) |
+| DOM screenshots on long pages: content wholly below the viewport left out (36k elements: ~20 s → ~1.3 s); portalled menus kept; a spinner toast after 0.5 s, a "large pages" word after 2 s | ✅ | `capture.spec.ts` |
 
 ## Known gaps
 
