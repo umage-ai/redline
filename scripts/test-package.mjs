@@ -90,6 +90,16 @@ import { redlineMiddleware, parsePage, serializePage, createStore } from '${pkg.
 const o: RedlineViteOptions = { launcher: false, hotkey: 'alt+shift+r', jsxSource: true, dir: '.redline' }
 const plugins = redline(o), integration = astro(o), mw = redlineMiddleware({ serverRoot: '.' })
 console.log(plugins.length, integration.name, typeof mw.api, typeof parsePage, typeof serializePage, typeof createStore)
+// Embedding (D49): mount with a wrapped transport, and the building blocks.
+import { mount, httpTransport, type MountOptions, type RedlineTransport } from '${pkg.name}/overlay'
+import { describe, resolve } from '${pkg.name}/overlay/anchor'
+import { SketchLayer } from '${pkg.name}/overlay/sketch'
+import { screenshot } from '${pkg.name}/overlay/capture'
+import { shieldApp } from '${pkg.name}/overlay/shield'
+import { CSS } from '${pkg.name}/overlay/styles'
+const base: RedlineTransport = httpTransport('/__redline')
+const m: MountOptions = { transport: { ...base, create: r => base.create(r) }, shadowMode: 'closed', namespace: 'x', captureErrors: false }
+console.log(typeof mount, m, typeof describe, typeof resolve, typeof SketchLayer, typeof screenshot, typeof shieldApp, CSS.length)
 `);
   for (const [module, resolution] of [['esnext', 'bundler'], ['nodenext', 'nodenext']]) {
     run(`npx tsc --noEmit --strict --target es2022 --skipLibCheck --module ${module} --moduleResolution ${resolution} --types node check.ts`);

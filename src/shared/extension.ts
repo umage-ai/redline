@@ -23,6 +23,19 @@ export interface RedlineButton {
   active?(): boolean;
 }
 
+/** A spot in the toolbar for your own element (v3): a workspace chip, an account menu. */
+export interface RedlineSlot {
+  id: string;
+  /** Called on every toolbar render with an empty element inside the overlay's shadow root. */
+  render(el: HTMLElement): void;
+}
+
+/**
+ * A blocking step before notes load (v3): render into `el` (sign-in, a workspace picker), and
+ * resolve to let the reviewer in. A rejection shows its message and asks again on the next open.
+ */
+export type RedlineGate = (el: HTMLElement) => void | Promise<void>;
+
 export interface RedlinePanelSection {
   id: string;
   title?: string;
@@ -58,13 +71,26 @@ export interface RedlinePanelState {
 export type RedlinePageKey = (loc: Location, builtIn: string) => string | null | undefined;
 
 export interface RedlineApi {
-  /** 2 adds removeButton, panelState, setPageKey and the panel/page events. Check `rl.version >= 2`. */
-  version: 2;
+  /**
+   * 2 adds removeButton, panelState, setPageKey and the panel/page events; 3 adds addSlot,
+   * removeSlot and gate. Check `rl.version >= 3`.
+   */
+  version: 3;
   /** Adds a toolbar button; a button with the same id is replaced (use that to update one). */
   addButton(b: RedlineButton): void;
   /** Removes a toolbar button added with addButton (v2). */
   removeButton(id: string): void;
   addPanelSection(s: RedlinePanelSection): void;
+  /** Adds (or, same id, replaces) a toolbar slot after the buttons (v3). */
+  addSlot(s: RedlineSlot): void;
+  removeSlot(id: string): void;
+  /**
+   * Locks the overlay behind `gate` (v3): notes are dropped and the modes are off until it resolves
+   * (sign-out, switching workspace). It runs now when the overlay is open, else on the next open.
+   */
+  gate(gate: RedlineGate): void;
+  /** Whether a gate is waiting to be passed (v3). */
+  locked(): boolean;
   on<E extends keyof RedlineEvents>(event: E, fn: (...args: RedlineEvents[E]) => void): () => void;
   open(): void;
   close(): void;

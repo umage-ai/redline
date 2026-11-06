@@ -36,6 +36,13 @@ public class StoreTests
         Assert.Equal("Fixed", (await store.ListAsync()).Single(n => n.Id == a.Id).Reply);
         Assert.Null(await store.UpdateAsync("nope0", new NotePatch { Done = true }));
 
+        // A product's own status (D50): trimmed, kept in the note's fields, "" clears it.
+        var st = await store.UpdateAsync(a.Id!, NotePatch.FromJson((JsonObject)JsonNode.Parse("""{"status":"  in-review "}""")!));
+        Assert.Equal("in-review", st!.Get("status"));
+        Assert.Equal("in-review", (await store.ListAsync()).Single(n => n.Id == a.Id).Get("status"));
+        await store.UpdateAsync(a.Id!, new NotePatch { Status = "" });
+        Assert.Null((await store.ListAsync()).Single(n => n.Id == a.Id).Get("status"));
+
         Assert.True(await store.RemoveAsync(a.Id!));
         Assert.False(await store.RemoveAsync(a.Id!));
         Assert.Null(await store.AssetAsync($"{a.Id}.png"));

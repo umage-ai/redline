@@ -66,6 +66,8 @@ export class SketchLayer {
   readonly shapes: Shape[] = [];
   tool: Tool = 'rect';
   color = INK;
+  /** The text tool's input placeholder (the overlay passes its translation). */
+  labelPlaceholder = 'Label…';
   private live: Shape | null = null;
   private input: HTMLInputElement | null = null;
 
@@ -121,7 +123,7 @@ export class SketchLayer {
     const color = this.color;   // the colour when the label was started
     inp.style.borderColor = color;
     inp.style.top = `${y - 16}px`;
-    inp.placeholder = 'Label…';
+    inp.placeholder = this.labelPlaceholder;
     // Removing a focused input fires `blur` synchronously, so Enter/Escape would run this twice.
     let closed = false;
     const close = (keep: boolean) => {

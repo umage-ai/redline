@@ -1,14 +1,17 @@
 // Builds dist/: Node entries (vite, astro, angular, next, server, cli) as ESM with deps external,
-// the browser overlay as one self-contained ESM file, and type declarations in dist/types.
-// Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44).
+// the browser overlay as one self-contained ESM file (what the dev server injects) and as
+// side-effect-free ESM modules for embedding (dist/overlay, D49), and type declarations in dist/types.
+// Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44), and
+// overlay/dist: @umage.ai/redline-overlay, the same overlay modules and their types on their own (D50).
 import * as esbuild from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const watch = process.argv.includes('--watch');
 rmSync('dist', { recursive: true, force: true });
 rmSync('hub/dist', { recursive: true, force: true });
+rmSync('overlay/dist', { recursive: true, force: true });
 
 const node = {
   entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts', next: 'src/next.ts', 'next-script': 'src/next-script.ts' },
@@ -26,6 +29,13 @@ const client = {
   outdir: 'dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
   minify: !watch, sourcemap: 'inline', logLevel: 'info', legalComments: 'none',
 };
+// @umage.ai/redline/overlay and its building blocks: shared code in chunks, nothing starts on import.
+const OVERLAY = ['mount', 'anchor', 'sketch', 'capture', 'shield', 'styles', 'transport', 'strings'];
+const overlay = {
+  entryPoints: Object.fromEntries(OVERLAY.map(n => [n, `src/client/${n}.ts`])),
+  outdir: 'dist/overlay', bundle: true, splitting: true, platform: 'browser', format: 'esm', target: 'es2022',
+  chunkNames: 'chunks/[name]-[hash]', sourcemap: true, logLevel: 'info', legalComments: 'none',
+};
 
 const hub = {
   entryPoints: { cli: 'hub/src/cli.ts' },
@@ -34,10 +44,11 @@ const hub = {
 };
 
 if (watch) {
-  for (const o of [node, nextLoader, client, hub]) await (await esbuild.context(o)).watch();
+  for (const o of [node, nextLoader, client, overlay, hub]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(hub)]);
+  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(overlay), esbuild.build(hub)]);
   emitTypes();
+  overlayPackage();
 }
 angularManifest();
 
@@ -50,6 +61,14 @@ function angularManifest() {
     builders: { 'dev-server': { implementation: './angular.js', schema: './angular-schema.json', description: 'Angular dev server with the Redline overlay' } },
   }, null, 2));
   copyFileSync('src/angular-schema.json', 'dist/angular-schema.json');
+}
+
+// @umage.ai/redline-overlay (overlay/): the browser modules and the declarations they reach.
+function overlayPackage() {
+  cpSync('dist/overlay', 'overlay/dist', { recursive: true });
+  for (const d of ['client', 'shared']) cpSync(`dist/types/${d}`, `overlay/dist/types/${d}`, { recursive: true });
+  mkdirSync('overlay/dist/types/server', { recursive: true });
+  copyFileSync('dist/types/server/edit.d.ts', 'overlay/dist/types/server/edit.d.ts');   // the rich-text Token type
 }
 
 // Declarations for the package exports (dist/types). tsc keeps the `.ts` import specifiers,

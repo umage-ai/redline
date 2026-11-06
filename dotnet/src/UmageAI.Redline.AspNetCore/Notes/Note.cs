@@ -110,6 +110,8 @@ public sealed class NotePatch
     public string? To { get; set; }
     /// <summary>The author has seen the note resolved (remote stores, D42); the markdown and SQL stores ignore it.</summary>
     public bool? Seen { get; set; }
+    /// <summary>A product's own status (the overlay's <c>statuses</c>, D50); "" removes it.</summary>
+    public string? Status { get; set; }
 
     public static NotePatch FromJson(JsonObject? o)
     {
@@ -122,10 +124,11 @@ public sealed class NotePatch
             Done = B(o?["done"]),
             To = S(o?["to"]),
             Seen = B(o?["seen"]),
+            Status = S(o?["status"]) is { } st ? (st.Trim() is var t && t.Length > 40 ? t[..40] : t) : null,
         };
     }
 
-    public bool IsEmpty => Body is null && Reply is null && Done is null && To is null && Seen is null;
+    public bool IsEmpty => Body is null && Reply is null && Done is null && To is null && Seen is null && Status is null;
 
     public JsonObject ToJson()
     {
@@ -135,6 +138,7 @@ public sealed class NotePatch
         if (Done is not null) o["done"] = Done;
         if (To is not null) o["to"] = To;
         if (Seen is not null) o["seen"] = Seen;
+        if (Status is not null) o["status"] = Status;
         return o;
     }
 
@@ -145,6 +149,7 @@ public sealed class NotePatch
         if (Reply is not null) n.Reply = Reply;
         if (To is not null && n.Type == "text") n.To = To;
         if (Done is not null) n.Done = Done.Value;
+        if (Status is not null) n.Set("status", Status.Length > 0 ? Status : null);
     }
 }
 

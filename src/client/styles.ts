@@ -4,9 +4,12 @@ export const CSS = /* css */ `
 /* Never in a printout or a print-to-PDF: !important here beats the host's inline display (shadow context wins for important). */
 @media print { :host, .rl { display: none !important; } }
 * { box-sizing: border-box; }
-.rl {
+/* Theme tokens on the host: a page rule on the host tag, or mount's \`theme\` option, overrides them. */
+:host {
   --ink: #ff2d55; --ink-2: #ff6b85; --bg: #131316; --bg-2: #1c1c21; --bg-3: #26262d;
   --line: #34343c; --fg: #ececf1; --fg-2: #a3a3ad; --fg-3: #6e6e78; --ok: #3ecf8e;
+}
+.rl {
   font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--fg); -webkit-font-smoothing: antialiased;
 }
@@ -39,6 +42,13 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .bar button:hover { background: var(--bg-3); color: var(--fg); }
 .bar button.on { background: var(--ink); color: #fff; }
 .bar button.on kbd { background: rgba(255,255,255,.2); color: #fff; }
+.bar button:disabled { opacity: .4; cursor: default; background: none; color: var(--fg-2); }
+.bar .slot { display: flex; align-items: center; }
+/* The gate (D50): a blocking step (sign-in, a workspace picker) above the toolbar, rendered by the caller. */
+.gate { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(68px + var(--lift, 0px)); width: min(380px, calc(100vw - 16px));
+  max-height: calc(100vh - 100px); overflow: auto; padding: 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(0,0,0,.35); pointer-events: auto; }
+.gate input, .gate select { font: inherit; color: var(--fg); background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 .bar .count { background: var(--bg-3); color: var(--fg); border-radius: 9px; padding: 0 6px; font-size: 11px; font-weight: 650; }
 .bar button.on .count { background: rgba(255,255,255,.25); }
 
@@ -162,7 +172,14 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .card .diff .ins { color: #7ee2b0; }
 .card img { display: block; margin-top: 8px; max-width: 100%; max-height: 140px; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; }
 .card .reply { margin-top: 8px; padding: 6px 9px; border-left: 2px solid var(--ok); background: rgba(62,207,142,.07); border-radius: 0 6px 6px 0; color: var(--fg); white-space: pre-wrap; }
-.card .reply::before { content: 'Agent'; display: block; font-size: 10.5px; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: .05em; }
+.card .reply::before { content: attr(data-who); display: block; font-size: 10.5px; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: .05em; }
+.card .msg { margin-top: 6px; padding: 6px 9px; border-radius: 8px; background: var(--bg-3); white-space: pre-wrap; overflow-wrap: anywhere; }
+.card .msg .by { margin-bottom: 2px; color: var(--fg-3); font-size: 10.5px; }
+.card .msg.agent { border-left: 2px solid var(--ok); }
+.card .msg.owner { border-left: 2px solid var(--ink); }
+.card .reply-row { display: flex; gap: 6px; align-items: flex-end; margin-top: 6px; }
+.card .reply-row textarea { min-height: 34px; margin-top: 0; }
+.card .acts select { font: inherit; font-size: 11.5px; color: var(--fg-2); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 4px; }
 .card .meta { margin-top: 6px; color: var(--fg-3); font-size: 11px; }
 .card .meta .stale { color: #e8a33d; }
 .card textarea { width: 100%; min-height: 70px; margin-top: 6px; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; resize: vertical; outline: 0; }

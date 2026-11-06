@@ -15,14 +15,18 @@ export interface StoreOptions {
   dir?: string;     // folder for notes, relative to root (default .redline)
 }
 
-/** `seen`: the author has seen the note resolved (remote stores, D42); the markdown store ignores it. */
-export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen'>>;
+/**
+ * `seen`: the author has seen the note resolved (remote stores, D42); the markdown store ignores it.
+ * `status`: a product's own status (the overlay's `statuses`, D50); "" removes it.
+ */
+export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen' | 'status'>>;
 
 /** Keep only the fields a patch may carry, with the right types (the API takes them from the page). */
 export function cleanPatch(p: unknown): NotePatch {
   const src = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
   const out: NotePatch = {};
   for (const k of ['body', 'reply', 'to'] as const) if (typeof src[k] === 'string') out[k] = src[k] as string;
+  if (typeof src.status === 'string') out.status = src.status.trim().slice(0, 40);
   for (const k of ['done', 'seen'] as const) if (typeof src[k] === 'boolean') out[k] = src[k] as boolean;
   return out;
 }
@@ -192,6 +196,7 @@ export function createStore(opts: StoreOptions) {
         if (typeof patch.reply === 'string') n.reply = patch.reply;
         if (typeof patch.to === 'string' && n.type === 'text') n.to = patch.to;
         if (typeof patch.done === 'boolean') n.done = patch.done;
+        if (typeof patch.status === 'string') n.status = patch.status || undefined;
         await writeFile(hit.file, hit.notes);
         await writeIndex();
         return n;

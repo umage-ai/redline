@@ -8,5 +8,5 @@
     "outDir": "dist/types",
     "rootDir": "src"
   },
-  "include": ["src/vite.ts", "src/astro.ts", "src/angular.ts", "src/next.ts", "src/next-script.ts", "src/server/index.ts"]
+  "include": ["src/vite.ts", "src/astro.ts", "src/angular.ts", "src/next.ts", "src/next-script.ts", "src/server/index.ts", "src/client/mount.ts", "src/client/anchor.ts", "src/client/sketch.ts", "src/client/capture.ts", "src/client/shield.ts", "src/client/styles.ts", "src/client/transport.ts", "src/client/strings.ts"]
 }
