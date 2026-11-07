@@ -33,7 +33,23 @@ test('an extension adds a toolbar button with a key, a panel section, and hears 
 async function editable(f: Fixture, rel: string) {
   const file = path.join(f.dir, rel);
   const original = await fs.readFile(file, 'utf8');
-  return { read: () => fs.readFile(file, 'utf8'), restore: async () => { if ((await fs.readFile(file, 'utf8')) !== original) await fs.writeFile(file, original); } };
+  return {
+    read: () => fs.readFile(file, 'utf8'),
+    restore: async () => { if ((await fs.readFile(file, 'utf8')) !== original) await fs.writeFile(file, original); },
+    /** Writes the original again, so a dev server that missed the last restore serves it (L52). */
+    rewrite: () => fs.writeFile(file, original),
+  };
+}
+
+/**
+ * Waits until the page shows `text` from the file. A previous test wrote this file and put it back;
+ * on CI the dev server once kept serving the written text, so the page and the file disagreed (L52).
+ */
+async function showsSource(page: Page, file: { rewrite(): Promise<void> }, target: Locator, text: string) {
+  await expect(async () => {
+    if ((await target.textContent()) !== text) { await file.rewrite(); await page.reload(); }
+    await expect(target).toHaveText(text, { timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
 }
 
 /** Text mode on target, then edit it with the keyboard; ends with the popover open. */
@@ -129,6 +145,7 @@ test('if the write fails after the check, the edit falls back to a text note for
   const file = await editable(f, 'src/EditZone.tsx');
   try {
     await openOverlay(page, f);
+    await showsSource(page, file, page.getByTestId('edit-heading'), 'Static heading');
     await edit(page, page.getByTestId('edit-heading'), async () => { await page.keyboard.press('Control+A'); await page.keyboard.type('Better heading'); });
     const apply = ui(page, '.pop .btn.apply');
     await expect(apply).toBeEnabled();
