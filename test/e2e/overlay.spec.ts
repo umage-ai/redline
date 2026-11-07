@@ -368,3 +368,16 @@ test('a server can hide the copy prompt or give its own text (D47)', async ({ pa
   await expect(ui(page, '.toast')).toContainText('coding agent');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Use the redline MCP tools: 1 open on /.');
 });
+
+test('a reply from the panel joins the note thread in the markdown (D52)', async ({ page }) => {
+  await openOverlay(page, f);
+  const saved = await comment(page, page.getByTestId('agent-save'), 'Make it bigger');
+  await page.keyboard.press('n');
+  const card = ui(page, `.card[data-id="${saved.id}"]`);
+  await card.locator('textarea.reply-box').fill('And bold, please');
+  await card.getByRole('button', { name: 'Send' }).click();
+  await expect(card.locator('.msg.reviewer')).toContainText('And bold, please');
+  // In the note's anchor JSON, stamped by the store; heading and body are untouched.
+  await expect.poll(() => readPage(f)).toMatch(/"messages":\[\{"body":"And bold, please","kind":"reviewer","at":"\d{4}-\d\d-\d\d \d\d:\d\d"\}\]/);
+  expect(await readPage(f)).toMatch(/^### \[ \] Comment/m);
+});

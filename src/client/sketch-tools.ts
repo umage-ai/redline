@@ -20,6 +20,7 @@ export const sketchPart: Part<'startSketch' | 'endSketch' | 'renderTools' | 'ske
   function startSketch() {
     const layer = new SketchLayer(ctx.ui, () => renderTools(), ctx.el.bar);
     layer.labelPlaceholder = t('sketchLabel');
+    layer.extTools = ctx.ext.sketchTools;   // the live list: tools added later show up too
     const saved = ctx.store.get('sketchColor', COLORS[0].c);
     layer.color = COLORS.some(x => x.c === saved) ? saved : COLORS[0].c;
     layer.el.addEventListener('pointerdown', () => setPalette(false));   // drawing folds it away
@@ -69,9 +70,12 @@ export const sketchPart: Part<'startSketch' | 'endSketch' | 'renderTools' | 'ske
       h('button', { class: sk.tool === tl ? 'on' : '', onclick: () => { sk.tool = tl; renderTools(); } }, label, h('kbd', {}, key));
     // The drag handle (D51), like the toolbar's icon.
     const grip = ctx.config.draggable ? [h('div', { class: 'brand grab', title: t('dragBar'), html: ICON })] : [];
+    if (sk.tool.startsWith('ext:') && !ctx.ext.sketchTools.some(x => `ext:${x.id}` === sk.tool)) sk.tool = 'rect';   // removed meanwhile
     tools.replaceChildren(
       ...grip,
       tool('rect', t('box'), '1'), tool('arrow', t('arrow'), '2'), tool('pen', t('pen'), '3'), tool('text', t('sketchText'), '4'),
+      // Extension tools (v4) on the next number keys.
+      ...ctx.ext.sketchTools.slice(0, 5).map((x, i) => tool(`ext:${x.id}`, x.label, String(5 + i))),
       colors(sk),
       h('button', { title: t('undoTitle'), onclick: () => sk.undo(), disabled: !sk.shapes.length }, t('undo')),
       h('button', { onclick: () => sk.clear(), disabled: !sk.shapes.length }, t('clear')),
@@ -109,7 +113,8 @@ export const sketchPart: Part<'startSketch' | 'endSketch' | 'renderTools' | 'ske
     const sk = sketch();
     if (state.mode !== 'sketch' || !sk || ctx.el.popLayer.querySelector('.pop')) return false;
     if (isTyping(e, ctx.shadow)) return true;
-    const tool = TOOL_KEYS[e.key];
+    const ext = /^[5-9]$/.test(e.key) ? ctx.ext.sketchTools[+e.key - 5] : undefined;
+    const tool = TOOL_KEYS[e.key] ?? (ext ? `ext:${ext.id}` as Tool : undefined);
     if (tool) { sk.tool = tool; renderTools(); }
     else if (e.key === 'c' || e.key === 'C') setColor(COLORS[(COLORS.findIndex(x => x.c === sk.color) + (e.shiftKey ? COLORS.length - 1 : 1)) % COLORS.length].c);
     else if (e.key === 'z' && e.ctrlKey) sk.undo();

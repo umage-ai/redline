@@ -4,7 +4,10 @@
 
 import type { Note, NoteType } from '../shared/types.ts';
 import type { LabelDef } from '../shared/labels.ts';
-import type { RedlineButton, RedlineEvents, RedlineGate, RedlinePanelSection, RedlinePanelState, RedlineSlot } from '../shared/extension.ts';
+import type {
+  RedlineBeforeSave, RedlineButton, RedlineCardAction, RedlineCardDecorator, RedlineEvents, RedlineGate, RedlineMode, RedlineModeDef,
+  RedlineOp, RedlinePanelSection, RedlinePanelState, RedlinePinStyle, RedlineSketchTool, RedlineSlot,
+} from '../shared/extension.ts';
 import type { Life, Store } from './dom.ts';
 import type { Shield } from './shield.ts';
 import type { Mark } from './capture.ts';
@@ -13,7 +16,7 @@ import type { OverlayConfig, StatusDef } from './options.ts';
 import type { Translate } from './strings.ts';
 import type { Inspection, RedlineTransport, StoredNote } from './transport.ts';
 
-export type Mode = 'idle' | 'comment' | 'text' | 'sketch';
+export type Mode = RedlineMode;
 
 export interface Draft {
   type: NoteType; el?: Element | null; whole?: boolean; x: number; y: number;
@@ -59,7 +62,12 @@ export interface Ctx {
   focusId: string | null;
   /** A save or source write is running: picking pauses. */
   busy: boolean;
-  ext: { buttons: RedlineButton[]; sections: RedlinePanelSection[]; slots: RedlineSlot[] };
+  ext: {
+    buttons: RedlineButton[]; sections: RedlinePanelSection[]; slots: RedlineSlot[];
+    /* v4 */
+    beforeSave: RedlineBeforeSave[]; cardDecorators: RedlineCardDecorator[]; cardActions: RedlineCardAction[];
+    modes: RedlineModeDef[]; sketchTools: RedlineSketchTool[]; pinStyle: RedlinePinStyle | null;
+  };
   /** A gate waiting to be passed (D50): no notes, no modes. `running`: the one on screen. */
   gate: { fn: RedlineGate | null; running: RedlineGate | null };
 
@@ -78,6 +86,14 @@ export interface Ctx {
   isResolved(n: Note): boolean;
   markSeen(n: Note): void;
   statusOf(n: Note): StatusDef | undefined;
+  /** Store calls from the UI (v4): emit noteUpdated/noteRemoved/messageSent or error, toast on failure, then reload. True when it worked. */
+  updateNote(id: string, patch: Partial<Note>): Promise<boolean>;
+  removeNote(id: string): Promise<boolean>;
+  sendMessage(id: string, body: string): Promise<boolean>;
+  /** Reports a failed store call: the `error` event (and the console). */
+  fail(op: RedlineOp, error: unknown, id?: string): Error;
+  /** The extension mode behind `state.mode` (`ext:<id>`), if any. */
+  extMode(): RedlineModeDef | undefined;
   locked(): boolean;
   lock(gate: RedlineGate): void;
 

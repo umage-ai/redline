@@ -87,6 +87,29 @@ test('store: status, messages and meta survive the markdown; PATCH sets and clea
   assert.equal(got.status, undefined);
 });
 
+test('store: a message patch appends to the thread; the page sets body and kind only, never the author (D52)', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-'));
+  const store = createStore({ root });
+  const n = await store.create({ note: { type: 'comment', page: '/', url: 'u', body: 'One' } });
+  // Cleaning: trimmed body, a short kind word (else "reviewer"), no author or time from the page, empty bodies dropped.
+  assert.deepEqual(cleanPatch({ message: { body: '  Bigger please ', author: 'mallory', at: '2000-01-01', kind: 'x y' } }), { message: { body: 'Bigger please', kind: 'reviewer' } });
+  assert.deepEqual(cleanPatch({ message: { body: 'ok', kind: 'agent' } }), { message: { body: 'ok', kind: 'agent' } });
+  assert.deepEqual(cleanPatch({ message: { body: '   ' } }), {});
+  assert.deepEqual(cleanPatch({ message: 'not an object' }), {});
+  assert.equal(cleanPatch({ message: { body: 'x'.repeat(5000) } }).message!.body.length, 4000);
+
+  await store.update(n.id, cleanPatch({ message: { body: 'Bigger please' } }));
+  await store.update(n.id, cleanPatch({ message: { body: 'Done, 20px now', kind: 'agent' }, done: true }));
+  const [got] = await store.list();
+  assert.deepEqual(got.messages!.map(m => [m.body, m.kind]), [['Bigger please', 'reviewer'], ['Done, 20px now', 'agent']]);
+  assert.match(got.messages![0].at!, /^\d{4}-\d\d-\d\d \d\d:\d\d$/);   // stamped by the store
+  assert.equal(got.done, true);
+  // In the anchor JSON: the markdown round-trips and the heading/reply lines are unchanged.
+  const md = await fs.readFile(path.join(root, '.redline/pages/index.md'), 'utf8');
+  assert.equal(parsePage(md)[0].messages!.length, 2);
+  assert.match(md, /^### \[x\] /m);
+});
+
 test('source paths are repo-relative even when root is reached through a link', async () => {
   // Frameworks may report the canonical path while root came from cwd through a symlink/junction
   // (macOS /var → /private/var, Windows 8.3 short names). Used to give ../../../<abs path>.

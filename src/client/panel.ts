@@ -30,12 +30,8 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
 
   const assetUrl = (rel?: string) => rel ? transport.assetUrl(rel) : '';
 
-  async function patch(id: string, p: Partial<Note>) {
-    try { await transport.update(id, p); await ctx.poll(true); } catch (e) { ctx.toast(t('updateFailed', { error: (e as Error).message }), true); }
-  }
-  async function remove(id: string) {
-    try { await transport.remove(id); await ctx.poll(true); } catch (e) { ctx.toast(t('deleteFailed', { error: (e as Error).message }), true); }
-  }
+  const patch = (id: string, p: Partial<Note>) => ctx.updateNote(id, p);
+  const remove = (id: string) => ctx.removeNote(id);
 
   function goTo(n: StoredNote, here: boolean) {
     if (!here) { location.href = n.url; return; }
@@ -78,10 +74,26 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
         href ? h('a', { href, target: '_blank', rel: 'noopener noreferrer', title: t('openIn', { dir: config.dir }), class: 'out' }, '⧉') : null,
         config.statuses?.length ? statusMenu(n)
           : h('button', { title: n.done ? t('reopen') : t('markDone'), onclick: () => patch(n.id, { done: !n.done }) }, n.done ? '↺' : '✓'),
+        ...cardActions(n),
         h('button', { title: t('edit'), onclick: () => editCard(c(), n) }, '✎'),
         deleteButton(n.id),
       ),
     );
+  }
+
+  // Extensions' card buttons (v4), before edit and delete.
+  function cardActions(n: StoredNote): HTMLElement[] {
+    return ctx.ext.cardActions.filter(a => safely(() => a.show?.(n) ?? true, false)).map(a =>
+      h('button', { 'data-ext': a.id, title: a.title ?? a.label, onclick: () => safely(() => a.onClick({ ...n }), undefined) }, a.label));
+  }
+
+  // Extensions' own elements on the card (v4), each in its own box above the meta line.
+  function cardDecorations(n: StoredNote): HTMLElement[] {
+    return ctx.ext.cardDecorators.map(d => {
+      const box = h('div', { class: 'ext-card', 'data-ext': d.id });
+      safely(() => d.render({ ...n }, box), undefined);
+      return box;
+    }).filter(b => b.childNodes.length);
   }
 
   // The product's statuses (D50) in place of the done button: picking one sets its `done` too.
@@ -112,9 +124,8 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
       const body = ta.value.trim();
       if (!body) return;
       ta.disabled = true;
-      try { await transport.message!(n.id, body); ta.value = ''; await ctx.poll(true); }
-      catch (e) { ctx.toast(t('sendFailed', { error: (e as Error).message }), true); }
-      finally { ta.disabled = false; renderPanel(true); }
+      if (await ctx.sendMessage(n.id, body)) ta.value = '';
+      ta.disabled = false; renderPanel(true);
     };
     ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void go(); } });
     return h('div', { class: 'reply-row' }, ta, h('button', { class: 'btn', onclick: go }, t('send')));
@@ -138,6 +149,7 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
       n.reply ? h('div', { class: 'reply', 'data-who': t('agent') }, n.reply) : null,
       ...thread(n),
       replyBox(n),
+      ...cardDecorations(n),
       cardMeta(n, here),
     );
     c.addEventListener('mouseenter', () => { const target = here ? ctx.targetOf(n) : null; if (target && !ctx.draft) ctx.showHl(target, null); });

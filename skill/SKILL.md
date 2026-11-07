@@ -43,7 +43,8 @@ Make this secondary; Publish should be the primary action.
 - A word before the type (`### [ ] Bug · Comment · …`) is the reviewer's label (`label` in the
   anchor): Bug, UX, Idea, Copy, or the team's own. It says what kind of change they mean.
   A `status`, `messages` or `meta` in the anchor belongs to the product that keeps the notes:
-  read them for context, but `[x]` is still what closes a note.
+  read them for context, but `[x]` is still what closes a note. `messages` is the reviewer's
+  follow-up thread (newest last): act on the latest and answer with the `> ` reply as usual.
 
 ## Finding the code — in this order
 

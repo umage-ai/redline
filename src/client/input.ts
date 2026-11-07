@@ -9,13 +9,15 @@ import type { Ctx } from './context.ts';
 export function installInput(ctx: Ctx) {
   const { state, life, el } = ctx;
   const fromUs = (e: Event) => e.composedPath().includes(ctx.host);
-  const picking = () => state.open && (state.mode === 'comment' || state.mode === 'text') && !ctx.busy;
+  // Comment, text, and extension modes (v4) pick an element; sketch draws instead.
+  const picking = () => state.open && (state.mode === 'comment' || state.mode === 'text' || !!ctx.extMode()) && !ctx.busy;
 
   // The page's own buttons: `<button data-redline-open>` toggles the overlay; the value picks what
   // ("open", "close", "comment", "text", "sketch", "notes"). The attribute follows the namespace.
   const attr = `data-${ctx.ns}-open`;
   const trigger = (e: Event) => e.composedPath().find((n): n is Element => n instanceof Element && n.hasAttribute(attr));
   let tookPress = false;   // a press used while picking: the click after it is not a second one
+  let eatClick = false;    // a pick that ended picking (an extension mode): its click must not reach the app
   function runTrigger(t: Element) {
     const v = (t.getAttribute(attr) ?? '').trim().toLowerCase();
     if (v === 'comment' || v === 'text' || v === 'sketch') ctx.setMode(v);
@@ -23,8 +25,9 @@ export function installInput(ctx: Ctx) {
     else if (v === 'open' || v === 'close') ctx.setOpen(v === 'open');
     else ctx.setOpen(!state.open);
   }
-  life.on(window, 'pointerdown', () => { tookPress = false; }, true);
+  life.on(window, 'pointerdown', () => { tookPress = false; eatClick = false; }, true);
   life.on(window, 'click', e => {
+    if (eatClick) { eatClick = false; if (e.cancelable) e.preventDefault(); e.stopImmediatePropagation(); return; }
     if (tookPress) { tookPress = false; return; }
     if (picking() || fromUs(e)) return;
     const t = trigger(e);
@@ -83,6 +86,14 @@ export function installInput(ctx: Ctx) {
     }
     if (e.altKey && t.parentElement && t.parentElement !== document.documentElement) t = t.parentElement;
     const whole = e.shiftKey || t === document.body || t === document.documentElement;
+    const ext = ctx.extMode();
+    if (ext) {
+      // An extension's pick (v4): handed over, and the mode ends unless it stays.
+      ctx.hideHl();
+      if (!ext.stay) { eatClick = true; ctx.setMode('idle'); }
+      safely(() => ext.onPick({ el: whole ? null : t, whole, x: e.clientX, y: e.clientY }), undefined);
+      return;
+    }
     ctx.openDraft({ type: 'comment', el: whole ? null : t, whole, x: e.clientX, y: e.clientY });
   }
 
@@ -105,9 +116,11 @@ function onKey(ctx: Ctx, e: KeyboardEvent) {
   else if (k === 's' || k === 'k') ctx.setMode('sketch');
   else if (k === 'n') ctx.togglePanel();
   else {
-    const b = ctx.ext.buttons.find(x => x.key?.toLowerCase() === k);
-    if (!b) return;
-    safely(() => b.onClick(), undefined);
+    const m = ctx.ext.modes.find(x => x.key?.toLowerCase() === k);
+    const b = m ? null : ctx.ext.buttons.find(x => x.key?.toLowerCase() === k);
+    if (m) ctx.setMode(`ext:${m.id}`);
+    else if (b) safely(() => b.onClick(), undefined);
+    else return;
   }
   e.preventDefault(); e.stopImmediatePropagation();
 }

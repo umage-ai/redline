@@ -2,6 +2,7 @@
 // and saving it with its target, screenshot and sketch.
 
 import type { LabelDef } from '../shared/labels.ts';
+import type { NewNoteRequest } from '../shared/types.ts';
 import { cmsInfo, describe, labelFor, sourceInfo } from './anchor.ts';
 import { startTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, sketchFile } from './sketch.ts';
@@ -211,7 +212,13 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
     const stopNotice = ctx.savingNotice();
     let ok = false;
     try {
-      const saved = await ctx.transport.create(await buildRequest(ctx, d, body, wantShot));
+      const req = await beforeSave(await buildRequest(ctx, d, body, wantShot));
+      if (!req) {   // an extension said no: the draft stays open as it was
+        stopNotice();
+        if (d.editor) d.editor.style.visibility = '';
+        return;
+      }
+      const saved = await ctx.transport.create(req);
       stopNotice();
       d.editor?.remove(); d.sketch?.destroy();
       ctx.draft = null;
@@ -223,7 +230,7 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
       ok = true;
     } catch (err) {
       stopNotice();
-      ctx.toast(t('saveFailed', { error: (err as Error).message }), true, 5000);
+      ctx.toast(t('saveFailed', { error: ctx.fail('create', err).message }), true, 5000);
       if (d.editor) d.editor.style.visibility = '';
     } finally {
       ctx.busy = false;
@@ -233,6 +240,17 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
     // After the toolbar shows idle and picking is free again: a slow reload must not leave a stale
     // "Comment" button that ignores the next tap.
     if (ok) await ctx.poll(true);
+  }
+
+  /** Extensions' beforeSave hooks (v4), in order: each may change the request, or cancel with false. A throwing hook is skipped. */
+  async function beforeSave(req: NewNoteRequest): Promise<NewNoteRequest | null> {
+    for (const fn of ctx.ext.beforeSave) {
+      let r: NewNoteRequest | void | false;
+      try { r = await fn(req); } catch (err) { console.warn('[redline] beforeSave hook failed:', err); continue; }
+      if (r === false) return null;
+      if (r && typeof r === 'object' && r.note) req = r;
+    }
+    return req;
   }
 
   return { openDraft, cancelDraft, renderPop, placePop, labelDef, tinted };

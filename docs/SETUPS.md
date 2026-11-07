@@ -178,9 +178,10 @@ rl.api.open();                                      // the extension API (D21); 
 
 A transport is `config`, `load(etag)`, `create`, `update`, `remove`, `assetUrl`, plus optional `edit` (Apply to file),
 `subscribe` (live changes) and `message` (a reply box under each note's `messages` thread). Notes may carry
-`status`, `messages` and `meta`; the markdown store keeps them. `rl.gate(fn)` locks again (sign-out). Building
-blocks: `overlay/anchor`, `sketch`, `capture`, `shield`, `styles`, `transport`, `strings`. **Status:** ✅
-`embed.spec.ts` (Chrome); the separate package is not on npm yet.
+`status`, `messages` and `meta`; the markdown store keeps them. `rl.gate(fn)` locks again (sign-out). API v4 (D52):
+`rl.on('error', ({ op, error }) => …)` (a 401 on `load` → `rl.gate(signIn)`), `beforeSave`, card decorators and actions,
+`setPinStyle`, `addMode` (your own pick mode), `addSketchTool`. Building blocks: `overlay/anchor`, `sketch`, `capture`,
+`shield`, `styles`, `transport`, `strings`. **Status:** ✅ `embed.spec.ts` (Chrome); on npm as `@umage.ai/redline-overlay`.
 
 ---
 
