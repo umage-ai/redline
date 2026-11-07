@@ -16,9 +16,10 @@ export interface OverlayConfig {
    */
   launcher: boolean;
   /**
-   * The launcher and the toolbar can be moved (D51): the launcher by dragging it, the toolbar by its
-   * icon on the left (up and down only when it spans the width, as on phones). Kept per viewer;
-   * double-clicking the toolbar's icon puts both back. Default false.
+   * The launcher, the toolbar and the sketch tools can be moved (D51): the launcher by dragging it,
+   * the bars by their icon on the left (up and down only when they span the width, as on phones).
+   * Kept per viewer; double-clicking an icon puts them all back. The gate and toasts sit next to a
+   * moved toolbar. Default false.
    */
   draggable?: boolean;
   labels?: LabelDef[];

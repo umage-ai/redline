@@ -94,6 +94,9 @@ export interface Ctx {
   /* drag.ts */
   placeLauncher(): void;
   placeBar(): void;
+  placeTools(): void;
+  /** The gate or a toast next to a moved toolbar; the stylesheet's place otherwise. */
+  placeNearBar(node: HTMLElement): void;
   /* pins.ts */
   renderPins(): void;
   targetOf(n: Note): Element | null;

@@ -1,20 +1,23 @@
-// Moving the launcher and the toolbar (the `draggable` option, D51). The launcher drags as a
-// whole; the toolbar by its icon on the left. Where they were left is kept per viewer
-// (`<ns>:pos:launcher`, `<ns>:pos:bar`); double-clicking the toolbar's icon puts both back.
-// A toolbar that spans (nearly) the whole width, as on phones, moves only up and down.
+// Moving the launcher, the toolbar and the sketch tools (the `draggable` option, D51). The
+// launcher drags as a whole; the toolbar and the sketch tools by their icon on the left. Where
+// they were left is kept per viewer (`<ns>:pos:launcher|bar|tools`); double-clicking an icon puts
+// all of them back. A bar that spans (nearly) the whole width, as on phones, moves only up and
+// down. The gate and toasts sit next to a moved toolbar instead of at the bottom centre.
 
 import type { Part } from './context.ts';
 
 /** Top-left corner in px; `x: null` keeps the stylesheet's horizontal layout (vertical-only). */
 type Pos = { x: number | null; y: number };
-type Which = 'launcher' | 'bar';
+type Which = 'launcher' | 'bar' | 'tools';
+const ALL: Which[] = ['launcher', 'bar', 'tools'];
 
 const THRESHOLD = 4;   // px before a press on the launcher counts as a drag, not a click
-const EDGE = 4;        // px kept between the viewport edge and the dragged element
+const EDGE = 4;        // px kept between the viewport edge and a dragged element
+const GAP = 10;        // px between a moved toolbar and the gate or toast next to it
 
-export const dragPart: Part<'placeLauncher' | 'placeBar'> = ctx => {
-  const { el, config, store, life } = ctx;
-  if (!config.draggable) return { placeLauncher() {}, placeBar() {} };
+export const dragPart: Part<'placeLauncher' | 'placeBar' | 'placeTools' | 'placeNearBar'> = ctx => {
+  const { el, config, store, life, ui } = ctx;
+  if (!config.draggable) return { placeLauncher() {}, placeBar() {}, placeTools() {}, placeNearBar() {} };
 
   const load = (k: Which): Pos | null => {
     try {
@@ -22,28 +25,45 @@ export const dragPart: Part<'placeLauncher' | 'placeBar'> = ctx => {
       return p && typeof p.y === 'number' && (p.x === null || typeof p.x === 'number') ? { x: p.x, y: p.y } : null;
     } catch { return null; }
   };
-  const pos: Record<Which, Pos | null> = { launcher: load('launcher'), bar: load('bar') };
+  const pos = Object.fromEntries(ALL.map(k => [k, load(k)])) as Record<Which, Pos | null>;
   const save = (k: Which) => store.set(`pos:${k}`, JSON.stringify(pos[k]));
+  const nodeOf = (k: Which): HTMLElement | null => k === 'tools' ? ui.querySelector<HTMLElement>('.tools') : el[k];
 
-  /** The toolbar fills (nearly) the width: only vertical moves make sense. */
-  const wide = () => innerWidth <= 560 || el.bar.offsetWidth >= innerWidth - 48;
+  /** A bar that fills (nearly) the width: only vertical moves make sense. */
+  const wide = (k: Which, node: HTMLElement) => k !== 'launcher' && (innerWidth <= 560 || node.offsetWidth >= innerWidth - 48);
   const clampX = (x: number, w: number) => Math.round(Math.max(EDGE, Math.min(x, innerWidth - w - EDGE)));
   const clampY = (y: number, hgt: number) => Math.round(Math.max(EDGE, Math.min(y, innerHeight - hgt - EDGE)));
 
   function place(k: Which) {
-    const node = el[k], p = pos[k], s = node.style;
-    if (!p) { s.left = s.top = s.right = s.bottom = s.margin = ''; return; }
-    const horizontal = p.x !== null && !(k === 'bar' && wide());
-    s.top = `${clampY(p.y, node.offsetHeight)}px`;
-    s.bottom = 'auto';
-    if (horizontal) { s.left = `${clampX(p.x!, node.offsetWidth)}px`; s.right = 'auto'; s.margin = '0'; }
-    else { s.left = s.right = s.margin = ''; }
+    const node = nodeOf(k), p = pos[k];
+    if (!node) return;
+    const s = node.style;
+    if (!p) s.left = s.top = s.right = s.bottom = s.margin = s.transform = '';
+    else {
+      s.top = `${clampY(p.y, node.offsetHeight)}px`;
+      s.bottom = 'auto';
+      if (p.x !== null && !wide(k, node)) { s.left = `${clampX(p.x, node.offsetWidth)}px`; s.right = 'auto'; s.margin = '0'; s.transform = 'none'; }
+      else s.left = s.right = s.margin = s.transform = '';
+    }
+    if (k === 'bar') { follow(el.gate); follow(el.toast); }
+  }
+
+  /** The gate or a toast: next to a moved, visible toolbar (above it in the lower half, else below). */
+  function follow(node: HTMLElement) {
+    const s = node.style;
+    if (!pos.bar || el.bar.style.display === 'none' || node.style.display === 'none') { s.left = s.top = s.bottom = s.transform = ''; return; }
+    const r = el.bar.getBoundingClientRect(), w = node.offsetWidth;
+    s.transform = 'none';
+    s.left = `${clampX(r.left + r.width / 2 - w / 2, w)}px`;
+    if (r.top > innerHeight / 2) { s.top = 'auto'; s.bottom = `${Math.round(innerHeight - r.top + GAP)}px`; }
+    else { s.bottom = 'auto'; s.top = `${Math.round(r.bottom + GAP)}px`; }
   }
 
   /** Follows the pointer from `e` on; `onDone(moved)` when it lets go. */
   function drag(e: PointerEvent, k: Which, onDone?: (moved: boolean) => void) {
-    if (e.button !== 0) return;
-    const node = el[k], r = node.getBoundingClientRect(), vertical = k === 'bar' && wide();
+    const node = nodeOf(k);
+    if (e.button !== 0 || !node) return;
+    const r = node.getBoundingClientRect(), vertical = wide(k, node);
     const sx = e.clientX, sy = e.clientY;
     let moved = false;
     const target = e.target as Element;
@@ -67,6 +87,7 @@ export const dragPart: Part<'placeLauncher' | 'placeBar'> = ctx => {
     target.addEventListener('pointerup', up);
     target.addEventListener('pointercancel', up);
     e.preventDefault();   // no text selection, no scroll start
+    e.stopPropagation();  // not a stroke on the sketch layer
   }
 
   // The launcher: a press that moves is a drag, and the click that follows it doesn't open.
@@ -77,16 +98,22 @@ export const dragPart: Part<'placeLauncher' | 'placeBar'> = ctx => {
     el.launcher.addEventListener('click', eat, { capture: true, once: true });
     setTimeout(() => el.launcher.removeEventListener('click', eat, { capture: true }), 400);
   }));
-  // The toolbar is rebuilt on every render, so listen on it and look for the handle.
-  const handle = (e: Event) => (e.target as Element | null)?.closest?.('.brand');
-  life.on(el.bar, 'pointerdown', e => { if (handle(e)) drag(e as PointerEvent, 'bar'); });
-  life.on(el.bar, 'dblclick', e => {
-    if (!handle(e)) return;
-    pos.launcher = pos.bar = null;
-    store.set('pos:launcher', 'null'); store.set('pos:bar', 'null');
-    place('launcher'); place('bar');
+  // The toolbar and the sketch tools are rebuilt on every render: listen above them for the handle.
+  const handleOf = (e: Event): Which | null => {
+    const brand = (e.target as Element | null)?.closest?.('.brand');
+    return !brand ? null : brand.closest('.bar') ? 'bar' : brand.closest('.tools') ? 'tools' : null;
+  };
+  life.on(ui, 'pointerdown', e => { const k = handleOf(e); if (k) drag(e as PointerEvent, k); });
+  life.on(ui, 'dblclick', e => {
+    if (!handleOf(e)) return;
+    for (const k of ALL) { pos[k] = null; store.set(`pos:${k}`, 'null'); place(k); }
   });
-  life.on(window, 'resize', () => { place('launcher'); place('bar'); });
+  life.on(window, 'resize', () => ALL.forEach(place));
 
-  return { placeLauncher: () => place('launcher'), placeBar: () => place('bar') };
+  return {
+    placeLauncher: () => place('launcher'),
+    placeBar: () => place('bar'),
+    placeTools: () => place('tools'),
+    placeNearBar: (node: HTMLElement) => follow(node),
+  };
 };

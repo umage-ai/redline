@@ -229,8 +229,20 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
   // Dragging a button instead does nothing.
   await dragBy('.bar button >> nth=0', 0, -100);
   expect(Math.round((await box('.bar')).y)).toBe(Math.round(b1.y));
-  // Double-clicking the icon puts both back.
-  await ui('.bar .brand').dblclick();
+  // The sketch tools have their own handle and place; dragging them draws nothing.
+  await page.keyboard.press('s');
+  const t0 = await box('.tools');
+  await dragBy('.tools .brand', -200, 300);
+  const t1 = await box('.tools');
+  expect([Math.round(t1.x - t0.x), Math.round(t1.y - t0.y)]).toEqual([-200, 300]);
+  await expect(ui('.tools button').filter({ hasText: 'Undo' })).toBeDisabled();   // no stroke
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('s');
+  expect(Math.round((await box('.tools')).y)).toBe(Math.round(t1.y));   // remembered
+  // Double-clicking an icon puts them all back.
+  await ui('.tools .brand').dblclick();
+  expect(Math.round((await box('.tools')).y)).toBe(Math.round(t0.y));
+  await page.keyboard.press('Escape');
   expect(Math.round((await box('.bar')).y)).toBe(Math.round(b0.y));
   expect(await stored('drag:pos:launcher')).toBe('null');
 
@@ -242,6 +254,13 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
   expect([Math.round(p1.x - p0.x), Math.round(p1.y - p0.y)]).toEqual([0, -300]);
   expect(JSON.parse((await stored('drag:pos:bar'))!).x).toBeNull();
   await page.setViewportSize({ width: 1280, height: 720 });
+
+  // A toolbar moved to the top: toasts show right below it, not at the bottom.
+  await dragBy('.bar .brand', 0, -700);
+  const top = await box('.bar');
+  expect(Math.round(top.y)).toBe(4);
+  await page.evaluate(() => (window as unknown as W & { handle: { api: { toast(m: string): void } } }).handle.api.toast('Hello'));
+  expect(Math.round((await box('.toast')).y)).toBe(Math.round(top.y + top.height + 10));
 
   // The page's own buttons (data-<namespace>-open): toggle, and pick a mode.
   await page.locator('#mine').click();
@@ -255,9 +274,17 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
   expect(await isOpen()).toBe(false);
   await expect(ui('.pop')).toHaveCount(0);
 
+  // The gate (sign-in) opens next to the moved toolbar too.
+  await page.evaluate(() => (window as unknown as Record<string, any>).handle.api.gate((el: HTMLElement) => { el.innerHTML = '<p>Sign in</p>'; return new Promise(() => {}); }));   // eslint-disable-line @typescript-eslint/no-explicit-any
+  await page.locator('#mine').click();
+  await expect(ui('.gate')).toBeVisible();
+  const bar = await box('.bar');
+  expect(Math.round((await box('.gate')).y)).toBe(Math.round(bar.y + bar.height + 10));
+
   // launcher: false hides the button; the page's button still opens the overlay.
   await page.evaluate(async () => {
     const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+    w.handle.api.close();   // (the open state is kept per tab, and the toggle below should open)
     w.handle.unmount();
     w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { launcher: false } });
   });

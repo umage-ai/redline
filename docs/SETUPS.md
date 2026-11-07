@@ -46,7 +46,7 @@ Rules that hold in every setup:
   (unit and browser) but unpublished.
 - **Not for:** sharing notes between people. Each checkout has its own `.redline/`.
 - **Network:** the API has no login, so the plugins answer this machine only. See below for anything else.
-- **Launcher and toolbar:** `draggable: true` lets reviewers move both (D51). `launcher: false` hides the round
+- **Launcher and toolbar:** `draggable: true` lets reviewers move them and the sketch tools (D51). `launcher: false` hides the round
   button; open with the hotkey or your own button: `<button data-redline-open>` (or `="comment"`, `"notes"`, …).
 - **Details:** [README.md](../README.md) "Setup in a repo" and "Launcher and toolbar".
 

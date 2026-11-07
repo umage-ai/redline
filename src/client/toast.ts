@@ -1,4 +1,4 @@
-// Short messages at the bottom ("Saved → …"), and the spinner while a slow save runs.
+// Short messages at the bottom (or next to a moved toolbar) ("Saved → …"), and the spinner while a slow save runs.
 
 import type { Part } from './context.ts';
 
@@ -11,6 +11,7 @@ export const toastPart: Part<'toast' | 'savingNotice'> = ctx => {
     el.textContent = msg;
     el.className = 'toast' + (err ? ' err' : '');
     el.style.display = '';
+    ctx.placeNearBar(el);
     clearTimeout(timer);
     timer = window.setTimeout(() => (el.style.display = 'none'), ms);
   }
@@ -25,6 +26,7 @@ export const toastPart: Part<'toast' | 'savingNotice'> = ctx => {
       el.textContent = msg;
       el.className = 'toast wait';
       el.style.display = '';
+      ctx.placeNearBar(el);
     };
     const timers = [
       window.setTimeout(() => show(ctx.t('saving')), 500),

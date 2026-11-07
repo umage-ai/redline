@@ -246,6 +246,7 @@ function core(ctx: Ctx, keyNow: () => string) {
     if (ctx.life.ended) return;
     ctx.renderLauncher(); ctx.renderBar(); ctx.renderPanel(); ctx.renderPins(); ctx.syncPanel();
     ctx.el.gate.style.display = state.open && ctx.gate.running ? '' : 'none';
+    ctx.placeNearBar(ctx.el.gate);
   }
 
   // Route changes (and setPageKey): a new page key means a new notes file and pin set.

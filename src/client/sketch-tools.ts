@@ -3,7 +3,7 @@
 
 import { bboxOf, COLORS, SketchLayer, type Tool } from './sketch.ts';
 import { h, isTyping } from './dom.ts';
-import type { Part } from './context.ts';
+import { ICON, type Part } from './context.ts';
 import type { StringKey } from './strings.ts';
 
 const TOOL_KEYS: Record<string, Tool> = { '1': 'rect', '2': 'arrow', '3': 'pen', '4': 'text' };
@@ -67,7 +67,10 @@ export const sketchPart: Part<'startSketch' | 'endSketch' | 'renderTools' | 'ske
     if (!sk) { tools.remove(); tools = null; return; }
     const tool = (tl: Tool, label: string, key: string) =>
       h('button', { class: sk.tool === tl ? 'on' : '', onclick: () => { sk.tool = tl; renderTools(); } }, label, h('kbd', {}, key));
+    // The drag handle (D51), like the toolbar's icon.
+    const grip = ctx.config.draggable ? [h('div', { class: 'brand grab', title: t('dragBar'), html: ICON })] : [];
     tools.replaceChildren(
+      ...grip,
       tool('rect', t('box'), '1'), tool('arrow', t('arrow'), '2'), tool('pen', t('pen'), '3'), tool('text', t('sketchText'), '4'),
       colors(sk),
       h('button', { title: t('undoTitle'), onclick: () => sk.undo(), disabled: !sk.shapes.length }, t('undo')),
@@ -75,6 +78,7 @@ export const sketchPart: Part<'startSketch' | 'endSketch' | 'renderTools' | 'ske
       h('button', { title: t('cancelTitle'), onclick: () => endSketch(false) }, t('cancel')),
       h('button', { class: 'done', onclick: () => endSketch(true) }, t('done'), h('kbd', {}, '↵')),
     );
+    ctx.placeTools();
     keepPaletteOnScreen(tools);
   }
 
