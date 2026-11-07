@@ -1,6 +1,6 @@
 # Setups
 
-Last updated: 2026-11-05 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
+Last updated: 2026-11-07 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
 
 Redline has one overlay (the browser part) and one note format. What changes between setups is **where
 the overlay runs** and **where the notes are kept**. Pick the first row that fits.
@@ -46,7 +46,9 @@ Rules that hold in every setup:
   (unit and browser) but unpublished.
 - **Not for:** sharing notes between people. Each checkout has its own `.redline/`.
 - **Network:** the API has no login, so the plugins answer this machine only. See below for anything else.
-- **Details:** [README.md](../README.md) "Setup in a repo".
+- **Launcher and toolbar:** `draggable: true` lets reviewers move both (D51). `launcher: false` hides the round
+  button; open with the hotkey or your own button: `<button data-redline-open>` (or `="comment"`, `"notes"`, …).
+- **Details:** [README.md](../README.md) "Setup in a repo" and "Launcher and toolbar".
 
 ### Reaching the dev server from elsewhere
 
@@ -166,7 +168,8 @@ const rl = await mount({
   screenshot: (req, next) => next(req),             // or your own capture (strict CSP, an extension worker)
   theme: { '--ink': '#0a84ff' },
   strings: { comment: 'Kommentar' },                // any UI text: the keys are in overlay/strings
-  config: { statuses: [{ id: 'open' }, { id: 'fixed', label: 'Fixed', done: true, color: '#3ecf8e' }] },
+  config: { statuses: [{ id: 'open' }, { id: 'fixed', label: 'Fixed', done: true, color: '#3ecf8e' }],
+            launcher: false, draggable: true },     // your button opens it (data-my-review-open or rl.api.open()); D51
   gate: async el => { el.append(signInForm()); await signedIn(); },   // before notes load; modes off until then
 });
 rl.api.addSlot({ id: 'ws', render: el => el.append(workspaceChip()) });   // your element in the toolbar

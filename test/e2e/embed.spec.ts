@@ -188,3 +188,81 @@ test('gate, toolbar slot, statuses, thread and strings (D50)', async ({ page }) 
   await expect(page.locator('gate-root .gate')).toBeHidden();
   await expect.poll(() => w(x => [x.handle.api.locked(), x.handle.api.notes().length])).toEqual([false, 1]);
 });
+
+test('draggable launcher and toolbar, page buttons open it, launcher can be hidden (D51)', async ({ page }) => {
+  await page.evaluate(async () => {
+    const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+    w.handle.unmount();
+    document.body.insertAdjacentHTML('beforeend', '<nav><button id="mine" data-drag-open>Review</button> <button id="mine-c" data-drag-open="comment">Comment</button></nav>');
+    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { draggable: true } });
+  });
+  const ui = (sel: string) => page.locator(`drag-root ${sel}`);
+  const box = async (sel: string) => (await ui(sel).boundingBox())!;
+  const isOpen = () => page.evaluate(() => (window as unknown as W).handle.api.isOpen());
+  const stored = (k: string) => page.evaluate(k => localStorage.getItem(k), k);
+  const dragBy = async (sel: string, dx: number, dy: number) => {
+    const b = await box(sel);
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + dx / 2, b.y + b.height / 2 + dy / 2, { steps: 3 });
+    await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2 + dy, { steps: 3 });
+    await page.mouse.up();
+  };
+
+  // The launcher moves, and the press that moved it doesn't open the overlay; a plain click still does.
+  const l0 = await box('.launcher');
+  await dragBy('.launcher', -300, -200);
+  const l1 = await box('.launcher');
+  // (within a few px: the hovered launcher is scaled up a little)
+  expect(l0.x - l1.x).toBeCloseTo(300, -1);
+  expect(l0.y - l1.y).toBeCloseTo(200, -1);
+  expect(await isOpen()).toBe(false);
+  expect(JSON.parse((await stored('drag:pos:launcher'))!)).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
+  await ui('.launcher').click();
+  expect(await isOpen()).toBe(true);
+
+  // The toolbar moves by its icon, both ways on a wide screen.
+  const b0 = await box('.bar');
+  await dragBy('.bar .brand', 150, -250);
+  const b1 = await box('.bar');
+  expect([Math.round(b1.x - b0.x), Math.round(b1.y - b0.y)]).toEqual([150, -250]);
+  // Dragging a button instead does nothing.
+  await dragBy('.bar button >> nth=0', 0, -100);
+  expect(Math.round((await box('.bar')).y)).toBe(Math.round(b1.y));
+  // Double-clicking the icon puts both back.
+  await ui('.bar .brand').dblclick();
+  expect(Math.round((await box('.bar')).y)).toBe(Math.round(b0.y));
+  expect(await stored('drag:pos:launcher')).toBe('null');
+
+  // Phone width: the toolbar spans the screen, so it only moves up and down.
+  await page.setViewportSize({ width: 390, height: 760 });
+  const p0 = await box('.bar');
+  await dragBy('.bar .brand', 120, -300);
+  const p1 = await box('.bar');
+  expect([Math.round(p1.x - p0.x), Math.round(p1.y - p0.y)]).toEqual([0, -300]);
+  expect(JSON.parse((await stored('drag:pos:bar'))!).x).toBeNull();
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  // The page's own buttons (data-<namespace>-open): toggle, and pick a mode.
+  await page.locator('#mine').click();
+  expect(await isOpen()).toBe(false);
+  await page.locator('#mine').click();
+  expect(await isOpen()).toBe(true);
+  await page.locator('#mine-c').click();
+  await expect(ui('.bar button.on')).toContainText('Comment');
+  // While picking, the page's button still works (and isn't picked as a note target).
+  await page.locator('#mine').click();
+  expect(await isOpen()).toBe(false);
+  await expect(ui('.pop')).toHaveCount(0);
+
+  // launcher: false hides the button; the page's button still opens the overlay.
+  await page.evaluate(async () => {
+    const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+    w.handle.unmount();
+    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { launcher: false } });
+  });
+  await expect(ui('.launcher')).toBeHidden();
+  await page.locator('#mine').click();
+  expect(await isOpen()).toBe(true);
+  await expect(ui('.bar .brand')).not.toHaveClass(/grab/);   // not draggable unless asked
+});

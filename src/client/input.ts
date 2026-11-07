@@ -1,5 +1,6 @@
 // Page input while the overlay is open: hovering and picking an element (comment/text mode),
-// and the keyboard shortcuts. The app never sees a pick (picks happen on pointerup, L3).
+// the keyboard shortcuts, and the page's own open buttons (`data-redline-open`, D51). The app
+// never sees a pick (picks happen on pointerup, L3).
 
 import { labelFor, textBlockFor } from './anchor.ts';
 import { isTyping, matchHotkey, safely } from './dom.ts';
@@ -9,6 +10,26 @@ export function installInput(ctx: Ctx) {
   const { state, life, el } = ctx;
   const fromUs = (e: Event) => e.composedPath().includes(ctx.host);
   const picking = () => state.open && (state.mode === 'comment' || state.mode === 'text') && !ctx.busy;
+
+  // The page's own buttons: `<button data-redline-open>` toggles the overlay; the value picks what
+  // ("open", "close", "comment", "text", "sketch", "notes"). The attribute follows the namespace.
+  const attr = `data-${ctx.ns}-open`;
+  const trigger = (e: Event) => e.composedPath().find((n): n is Element => n instanceof Element && n.hasAttribute(attr));
+  let tookPress = false;   // a press used while picking: the click after it is not a second one
+  function runTrigger(t: Element) {
+    const v = (t.getAttribute(attr) ?? '').trim().toLowerCase();
+    if (v === 'comment' || v === 'text' || v === 'sketch') ctx.setMode(v);
+    else if (v === 'notes') { if (!state.open) ctx.setOpen(true); ctx.togglePanel(); }
+    else if (v === 'open' || v === 'close') ctx.setOpen(v === 'open');
+    else ctx.setOpen(!state.open);
+  }
+  life.on(window, 'pointerdown', () => { tookPress = false; }, true);
+  life.on(window, 'click', e => {
+    if (tookPress) { tookPress = false; return; }
+    if (picking() || fromUs(e)) return;
+    const t = trigger(e);
+    if (t) runTrigger(t);
+  }, true);
 
   life.on(window, 'pointermove', ev => {
     const e = ev as PointerEvent;
@@ -31,7 +52,9 @@ export function installInput(ctx: Ctx) {
       if (!picking() || fromUs(e)) return;
       if (!scrolls && e.cancelable) e.preventDefault();
       e.stopImmediatePropagation();
-      if (type === 'pointerup' && (e as PointerEvent).button === 0) onPick(e as MouseEvent);
+      if (type !== 'pointerup' || (e as PointerEvent).button !== 0) return;
+      const t = trigger(e);
+      if (t) { tookPress = true; runTrigger(t); } else onPick(e as MouseEvent);
     }, { capture: true, passive: scrolls });
   }
   life.on(window, 'pointercancel', () => { if (picking() && !ctx.draft) ctx.hideHl(); }, true);

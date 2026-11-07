@@ -76,7 +76,7 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 
 **Client** (`src/client/`, bundled to one ESM file `dist/client.js`, and as modules in `dist/overlay/`; shadow root `<redline-root>` on `<html>`):
 - `index.ts`: the injected entry; it calls `mount(opts)` (`mount.ts`, D49: replaceable `options.ts` + parts sharing `context.ts`:
-  `bar`, `panel`, `pins`, `draft`, `text`, `sketch-tools`, `input`, `toast`, `api`; all registered with `Life` for `unmount()`). `transport.ts`: store calls. `strings.ts`: all UI text (`ctx.t`, D50).
+  `bar`, `panel`, `pins`, `draft`, `text`, `sketch-tools`, `input` (+ `data-redline-open` buttons), `toast`, `drag` (D51), `api`; all registered with `Life` for `unmount()`). `transport.ts`: store calls. `strings.ts`: all UI text (`ctx.t`, D50).
 - `anchor.ts`: describes an element (selector, xpath, test id, role/name, html excerpt, **source + components**)
   and resolves a stored target back to an element. `capture.ts`: screenshots (modern-screenshot or tab capture). `sketch.ts`: drawing.
 

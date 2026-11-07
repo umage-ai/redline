@@ -209,6 +209,7 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
     ctx.hideHl();
     if (d.editor) d.editor.style.visibility = 'hidden';
     const stopNotice = ctx.savingNotice();
+    let ok = false;
     try {
       const saved = await ctx.transport.create(await buildRequest(ctx, d, body, wantShot));
       stopNotice();
@@ -219,7 +220,7 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
       ctx.toast(t('saved', { file: saved.file ?? config.dir }));
       state.mode = 'idle'; ctx.persist();   // one note per pick: the next tap goes to the app again (D15)
       ctx.emit('noteCreated', saved);
-      await ctx.poll(true);
+      ok = true;
     } catch (err) {
       stopNotice();
       ctx.toast(t('saveFailed', { error: (err as Error).message }), true, 5000);
@@ -229,6 +230,9 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
       popLayer.style.display = '';
       ctx.renderAll();
     }
+    // After the toolbar shows idle and picking is free again: a slow reload must not leave a stale
+    // "Comment" button that ignores the next tap.
+    if (ok) await ctx.poll(true);
   }
 
   return { openDraft, cancelDraft, renderPop, placePop, labelDef, tinted };

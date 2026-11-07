@@ -244,6 +244,7 @@ public sealed class RedlineMiddleware
         {
             ["hotkey"] = _rt.Options.Hotkey,
             ["launcher"] = _rt.Options.Launcher,
+            ["draggable"] = _rt.Options.Draggable,
             ["dir"] = _rt.Store.Dir,
             ["app"] = _rt.Context.App,
             ["directEdit"] = _rt.Writers.Count > 0,

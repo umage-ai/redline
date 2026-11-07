@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-03 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-07 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -9,8 +9,7 @@ Prune entries whose cause is gone from the code.
 
 ## L2 — Astro: no source location although the HTML has `data-astro-source-*`
 - **Cause:** Astro's dev toolbar strips those attributes from the DOM after load.
-- **Fix:** the injector adds an inline classic `<script>` that snapshots them into `window.__redlineSrc` (WeakMap) during parsing, before any module script runs.
-- **Guard:** `frameworks.spec.ts` (astro cases).
+- **Fix:** the injector adds an inline classic `<script>` that snapshots them into `window.__redlineSrc` (WeakMap) during parsing, before any module script runs. **Guard:** `frameworks.spec.ts` (astro cases).
 
 ## L3 — Clicking some buttons opened no popover
 - **Cause:** browsers fire no `click` on disabled form controls. Pointer events still fire.
@@ -18,13 +17,11 @@ Prune entries whose cause is gone from the code.
 
 ## L4 — `C`/`T`/`S` typed into the page instead of switching mode
 - **Cause:** pages with an autofocused input (e.g. a login form). Mode keys are correctly ignored while typing.
-- **Fix:** opening the overlay blurs the active page element.
-- **Guard:** `overlay.spec.ts` "blurs an autofocused input".
+- **Fix:** opening the overlay blurs the active page element. **Guard:** `overlay.spec.ts` "blurs an autofocused input".
 
 ## L5 — Lowercase JSX isn't always HTML
 - **Cause:** react-three-fiber uses `<mesh>`, `<line>`, `<audio>`. An unknown `data-*` prop is applied to the three.js object and breaks.
-- **Fix:** `jsx-source.ts` stamps only an HTML-tag allowlist (no `audio`, `video`, `object`, `line`).
-- **Guard:** unit "jsx stamping touches only html tags".
+- **Fix:** `jsx-source.ts` stamps only an HTML-tag allowlist (no `audio`, `video`, `object`, `line`). **Guard:** unit "jsx stamping touches only html tags".
 
 ## L6 — Vitest runs Vite in serve mode
 - `apply: 'serve'` alone would load Redline into unit-test runs (any app that uses Vitest). The plugin returns `[]` when `process.env.VITEST` is set.
@@ -197,3 +194,6 @@ Prune entries whose cause is gone from the code.
 
 ## L50 — Closed shadow root (`shadowMode: 'closed'`): typing a note ran the mode shortcuts
 - **Cause / fix:** seen from `window`, `composedPath()` stops at the host of a closed root, so `isTyping` never saw the overlay's textarea, and the shield would have re-dispatched its copies to the host (and caught them again). Both now ask the shadow root: `shadow.activeElement` for keys, `shadow.elementFromPoint` for pointers; copies are marked and skipped. **Guard:** `embed.spec.ts` "mount(): own transport, closed shadow root…" (a comment and a sketch).
+
+## L51 — After a save, the Comment button stayed lit and the next tap did nothing
+- **Cause / fix:** `saveDraft` showed "Saved →" and set the mode to idle, but re-rendered and cleared `busy` (which pauses picking) only after the follow-up notes reload; a slow reload left a stale toolbar, so a test's or reviewer's next pick went nowhere (flaky "slow save" test, 1 run in 3). The reload now runs after the render. **Guard:** `capture.spec.ts` "after a save the toolbar shows idle at once…" (fails without the fix).

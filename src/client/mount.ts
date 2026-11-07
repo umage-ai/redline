@@ -25,6 +25,7 @@ import { panelPart } from './panel.ts';
 import { draftPart } from './draft.ts';
 import { textPart } from './text.ts';
 import { sketchPart } from './sketch-tools.ts';
+import { dragPart } from './drag.ts';
 import { installInput } from './input.ts';
 
 export type { MountOptions, OverlayConfig, RedlineHandle, ScreenshotRequest, StatusDef } from './options.ts';
@@ -76,7 +77,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   const ctx = {
     config, transport, store, life, shield, host, shadow, ui, el,
     app: config.app ?? '',
-    errors, t,
+    errors, t, ns,
     shoot: mark => shoot({ ...mark, host }),
     state, notes: [] as StoredNote[], version: '', draft: null, page: keyNow(), focusId: null, busy: false,
     ext: { buttons: [], sections: [], slots: [] },
@@ -86,7 +87,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   } as Partial<Ctx> as Ctx;
 
   Object.assign(ctx, core(ctx, keyNow));
-  Object.assign(ctx, toastPart(ctx), barPart(ctx), pinsPart(ctx), panelPart(ctx), draftPart(ctx), textPart(ctx), sketchPart(ctx));
+  Object.assign(ctx, toastPart(ctx), barPart(ctx), pinsPart(ctx), panelPart(ctx), draftPart(ctx), textPart(ctx), sketchPart(ctx), dragPart(ctx));
   installInput(ctx);
   startLoop(ctx);
 
@@ -128,7 +129,7 @@ function createHost(opts: MountOptions, life: Life) {
 
 function layers(config: OverlayConfig, t: Translate): Layers {
   return {
-    launcher: h('button', { class: 'launcher', title: t('launcherTitle', { hotkey: config.hotkey }), html: ICON }),
+    launcher: h('button', { class: 'launcher', title: t('launcherTitle', { hotkey: config.hotkey }) + (config.draggable ? ` · ${t('dragLauncher')}` : ''), html: ICON }),
     hl: h('div', { class: 'hl', style: 'display:none' }),
     hlLabel: h('div', { class: 'hl-label', style: 'display:none' }),
     pins: h('div'),

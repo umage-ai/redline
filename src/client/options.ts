@@ -10,8 +10,17 @@ import type { RedlineTransport } from './transport.ts';
 /** Settings the overlay reads, normally from the dev server's `/__redline/config`. */
 export interface OverlayConfig {
   hotkey: string;
-  /** The floating button bottom-right while closed. */
+  /**
+   * The floating button bottom-right while closed. false hides it: open the overlay with the hotkey,
+   * a `data-redline-open` element on the page, or `api.open()`.
+   */
   launcher: boolean;
+  /**
+   * The launcher and the toolbar can be moved (D51): the launcher by dragging it, the toolbar by its
+   * icon on the left (up and down only when it spans the width, as on phones). Kept per viewer;
+   * double-clicking the toolbar's icon puts both back. Default false.
+   */
+  draggable?: boolean;
   labels?: LabelDef[];
   /** The "copy prompt for your agent" text; false hides it, a string replaces it ({open}, {page}). */
   prompt?: string | false;

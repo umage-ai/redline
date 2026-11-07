@@ -15,6 +15,8 @@ export const STRINGS = {
   notes: 'Notes',
   notesTitle: 'Notes (N)',
   close: 'Close ({hotkey})',
+  dragLauncher: 'drag to move',
+  dragBar: 'Drag to move · double-click to put back',
   // gate
   gateFirst: 'Finish the step above first',
   gateFailed: 'Could not continue: {error}',

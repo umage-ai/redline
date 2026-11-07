@@ -86,11 +86,24 @@ Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serve
 
 **Other Node dev servers**: `redlineMiddleware()` → `{ api, inject }` from `@umage.ai/redline/server`. **Working on Redline**: `npm link` a built checkout.
 
-Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, labels: [...], jsxSource: true, vueSource: true })`. `root` is
-where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false` hides the round button.
+Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, draggable: false, labels: [...], jsxSource: true, vueSource: true })`. `root` is
+where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher` and `draggable`: see below.
 `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`). `pageKey: 'path'` makes hash routes (a deck's `#/3`)
 share one notes file. `labels` may be a function of the request. `prompt` replaces the **Copy prompt** text (`{open}`, `{page}`), or `false`
 hides it (the default with a remote store). The overlay and its API answer this machine only; **`network`** adds addresses, subnets and host names (`['192.168.1.20', '172.17.0.1', 'myapp.test']`), or `true` for everyone (`redlineMiddleware`'s default). Phones, Docker, nginx: [docs/SETUPS.md](docs/SETUPS.md#reaching-the-dev-server-from-elsewhere).
+
+**Launcher and toolbar.** `draggable: true` lets each reviewer move the round launcher (drag it) and the toolbar (drag its icon on
+the left; at phone width, where it spans the screen, only up and down). Where they were left is remembered in that browser;
+double-click the toolbar's icon to put both back. `launcher: false` hides the round button. Open the overlay with the hotkey,
+or with a button of your own: any element with `data-redline-open` works, no script needed, in any framework or Razor view:
+
+```html
+<button data-redline-open>Review</button>              <!-- toggles the overlay -->
+<button data-redline-open="comment">Comment</button>   <!-- or "text", "sketch", "notes", "open", "close" -->
+```
+
+From script, the extension queue hands you the API: `(window.redlineExtensions ||= []).push(rl => { myBtn.onclick = () => rl.open(); rl.on('close', …); })`.
+With `mount()` it's `rl.api.open()`, and the attribute follows the namespace (`data-<namespace>-open`).
 
 **Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one `.redline/`
 at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's **All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).

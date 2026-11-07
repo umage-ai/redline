@@ -43,6 +43,8 @@ export interface Ctx {
   el: Layers;
   /** This app's notes are pinned and numbered; others are only listed (D17). */
   app: string;
+  /** Storage prefix and `data-<ns>-open` trigger attribute (MountOptions.namespace). */
+  ns: string;
   errors(): string[];
   /** UI text (strings.ts), with the caller's replacements. */
   t: Translate;
@@ -89,6 +91,9 @@ export interface Ctx {
   panelState(): RedlinePanelState;
   showHl(el: Element, label: string | null, cls?: string): void;
   hideHl(): void;
+  /* drag.ts */
+  placeLauncher(): void;
+  placeBar(): void;
   /* pins.ts */
   renderPins(): void;
   targetOf(n: Note): Element | null;

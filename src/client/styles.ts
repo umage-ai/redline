@@ -24,6 +24,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 }
 .launcher:hover { opacity: 1; transform: scale(1.06); }
 .launcher svg { width: 18px; height: 18px; }
+/* draggable (D51): the launcher whole, the toolbar by its icon; no page scroll starts on them */
+.launcher.grab, .bar .brand.grab { cursor: grab; touch-action: none; user-select: none; }
+.launcher.dragging, .bar.dragging, .bar.dragging .brand { cursor: grabbing; transition: none; }
+.launcher.dragging { opacity: 1; }
 .badge { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
   background: var(--ink); color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
 

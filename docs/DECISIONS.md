@@ -1,16 +1,14 @@
 # Decisions
 
-Last updated: 2026-11-05 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-11-07 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
-- **Decision:** ship as a Vite plugin (plus an Astro wrapper and a generic connect middleware) that serves the client and writes files.
-- **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process. **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
+- **Decision:** ship as a Vite plugin (plus an Astro wrapper and a generic connect middleware) that serves the client and writes files. **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process. **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
 
 ## D2 — Markdown is the source of truth, with JSON anchors in HTML comments (2026-10-13)
 - **Decision:** one `.md` per page; each note is a `### [ ]` heading, a `<!-- redline {json} -->` anchor, the body and a `> ` reply. No separate JSON store.
-- **Why:** agents read, grep, diff and edit it directly; humans can read it. The format is modelled on an earlier in-house
-  slide-review tool (a REVIEW.md checklist with sketches, applied by an agent skill), where it had already proven itself. **Revisit if:** concurrent multi-user editing is needed (D40 added remote stores).
+- **Why:** agents read, grep, diff and edit it directly; humans can read it. The format is modelled on an earlier in-house slide-review tool (a REVIEW.md checklist with sketches, applied by an agent skill), where it had already proven itself. **Revisit if:** concurrent multi-user editing is needed (D40 added remote stores).
 
 ## D3 — `.redline/` is gitignored (2026-10-13)
 - **Decision:** `redline init` adds `.redline/` to `.gitignore`. **Why:** user call. Feedback is a local work queue, merge collisions on shared markdown would be painful, and team knowledge belongs elsewhere.
@@ -19,18 +17,16 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** publish to npmjs under MIT; apps add it as a normal devDependency and import `@umage.ai/redline/vite` (or `/astro`, `/server`). **Before:** consumers imported `dist/` from a sibling checkout (a `file:` devDependency breaks `npm ci` without it). **Why changed:** more teams want it, and a registry package needs no checkout. `redline` is taken; the npm org is `umage.ai`.
 
 ## D5 — Inject via HTTP response buffering, not framework hooks (2026-10-13)
-- **Decision:** a middleware buffers `text/html` responses and inserts the script before `</body>`.
-- **Why:** Vite's `transformIndexHtml` doesn't run for SvelteKit SSR or Astro pages. One mechanism covers all of them. **Cost:** must handle `writeHead` and content-length correctly (L1). Compressed responses are skipped.
+- **Decision:** a middleware buffers `text/html` responses and inserts the script before `</body>`. **Why:** Vite's `transformIndexHtml` doesn't run for SvelteKit SSR or Astro pages. One mechanism covers all of them. **Cost:** must handle `writeHead` and content-length correctly (L1). Compressed responses are skipped.
 
 ## D6 — Text mode suggests by default; source writes are opt-in (2026-10-13, amended 2026-10-15)
-- **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched. With `directEdit` on, a source writer may write the change to the file instead (D20); the default is unchanged.
-- **Why:** mapping DOM text back to source is unreliable across frameworks and content stores (i18n, CMS). Mutating framework-owned DOM breaks React reconciliation. The agent applies it with full context.
+- **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched. With `directEdit` on, a source writer may write the change to the file instead (D20); the default is unchanged. **Why:** mapping DOM text back to source is unreliable across frameworks and content stores (i18n, CMS). Mutating framework-owned DOM breaks React reconciliation. The agent applies it with full context.
 
 ## D7 — Source location via framework dev metadata, plus a JSX stamp for React (2026-10-13, amended 2026-10-16)
 - **Decision:** use `__svelte_meta` and `data-astro-source-*` as given. For React, a dev-only transform stamps `data-redline-src` on known HTML tags. Extended to Vue, Solid, Preact and Angular in D23. **Why:** React 19 removed `_debugSource`. An allowlist avoids breaking renderers that use lowercase JSX (react-three-fiber).
 
 ## D8 — DOM screenshots by default, tab capture opt-in (2026-10-13)
-- **Decision:** modern-screenshot renders the viewport and recreates page and inner scroll offsets. A panel toggle switches to `getDisplayMedia` tab capture. **Why:** no prompts in the common case. Tab capture is pixel-perfect (WebGL, maps) but Chrome asks once per page load.
+- **Decision:** modern-screenshot renders the viewport and recreates page and inner scroll offsets; a panel toggle switches to `getDisplayMedia` tab capture. **Why:** no prompts in the common case. Tab capture is pixel-perfect (WebGL, maps) but Chrome asks once per page load.
 
 ## D9 — Mutations require an `x-redline: 1` header, not an Origin check; plugins answer this machine only (2026-10-13, amended 2026-10-27)
 - **Why:** behind a reverse proxy (e.g. YARP) the Host doesn't match the browser Origin. A custom header forces a CORS preflight from other sites, which we never answer. **Amended:** the dev-server plugins refuse the API and skip injection unless the caller is loopback with a local Host (`localCall`); `network` adds addresses, subnets and host names (a host name only for a caller on this machine, since another can fake its Host), or `true`. No `X-Forwarded-For`: anyone can send it. Under Next the address comes from a stamp (D48). `redlineMiddleware` defaults to `network: true`, since deployed review gates reviewers itself.
@@ -197,3 +193,7 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D50 — Statuses, threads and meta on notes; a gate and toolbar slots; `strings`; `@umage.ai/redline-overlay` (2026-11-05)
 - **Decision:** `Note` gains optional `status` (a product's own id; config `statuses: [{ id, label, color, done }]` swaps the done button for a menu that patches `{ status, done }`), `messages[]` (`{ body, author, kind, at }`, shown as a thread; `transport.message` adds a reply box) and pass-through `meta`. They are anchor JSON fields, so both markdown stores keep them, and PATCH takes `status` (Node and .NET; the hub ignores it). `mount({ gate })` or `rl.gate(fn)` (API v3) holds notes and modes until the caller's step, rendered above the toolbar, resolves; `rl.addSlot` puts an element in the toolbar. Every UI word is a key in `strings.ts` (`strings` option or config, `{name}` placeholders). `overlay/` publishes dist/overlay and its types as `@umage.ai/redline-overlay`: no dependencies, its own version, published by CI when new.
 - **Why:** issue #16: what AnnotateTheWeb needs to drop its fork. `done` stays the one closed flag, so agents, MCP and the markdown work unchanged and a status only labels it; threads live in stores that have them, the markdown keeps its one `> ` reply. **Revisit if:** the markdown should carry threads, or the hub should store statuses.
+
+## D51 — Launcher and toolbar can be dragged (opt-in); the page's own buttons open the overlay (2026-11-07)
+- **Decision:** `draggable` (server option, .NET `Draggable`, Angular schema, or mount `config`; default false): the launcher drags as a whole (a press that moves past 4 px is a drag, so its click doesn't open), the toolbar by its icon, up and down only when it spans the width (≤ 560 px or nearly full). Positions are per viewer in localStorage (`<ns>:pos:launcher|bar`), clamped to the viewport; double-clicking the toolbar icon resets both. `launcher: false` plus any element with `data-<ns>-open` (`""` toggles; `open`, `close`, `comment`, `text`, `sketch`, `notes`) replaces the button; it works while picking too, and isn't picked.
+- **Why:** the fixed bottom-right button and bottom-centre bar cover some apps' own controls (chat widgets, sticky footers); an attribute needs no script and works in every framework and in Razor, where the extension queue (`rl.open()`) needs JS. Opt-in, so nothing moves for teams that didn't ask. **Revisit if:** most setups turn it on (make it the default), or the gate and toasts should follow a moved toolbar.

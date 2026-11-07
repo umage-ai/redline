@@ -1,7 +1,7 @@
 // Screenshots on a big page (test/fixtures/vanilla): what ends up in them, and what is left out.
 import { test, expect, type Page } from '@playwright/test';
 import { FIXTURES } from './fixtures.ts';
-import { comment, openOverlay, resetNotes, ui, waitForSave, type SavedNote } from './helpers.ts';
+import { comment, mouseAt, openOverlay, resetNotes, ui, waitForSave, type SavedNote } from './helpers.ts';
 
 const f = FIXTURES.vanilla;
 test.beforeEach(() => resetNotes(f));
@@ -96,4 +96,19 @@ test('tab capture: another note\'s pin is not in the shot, even when the page pa
   // A whole-page note: no crop and no red outline, so any pin-coloured pixel is the pin.
   const note = await wholePageNote(page, 'Second note');
   expect(await pixels(page, note, PIN)).toBe(0);
+});
+
+test('after a save the toolbar shows idle at once, even while the notes reload slowly', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.route('**/__redline/notes', async r => {
+    if (r.request().method() === 'GET') await new Promise(res => setTimeout(res, 1500));
+    await r.continue();
+  });
+  await comment(page, page.getByTestId('agent-save'), 'Reload is slow');
+  await expect(ui(page, '.toast')).toContainText('Saved →');
+  // Before the fix the Comment button stayed lit (and picking stayed paused) until the reload finished.
+  await expect(ui(page, '.bar button.on')).toHaveCount(0, { timeout: 500 });
+  await page.keyboard.press('c');
+  await mouseAt(page, page.locator('h1').first());
+  await expect(ui(page, '.pop textarea')).toBeFocused({ timeout: 1000 });
 });

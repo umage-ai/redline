@@ -9,6 +9,7 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
 
   function renderLauncher() {
     el.launcher.style.display = !state.open && config.launcher ? '' : 'none';
+    ctx.placeLauncher();
     el.launcher.querySelector('.badge')?.remove();
     const open = ctx.pageNotes().filter(n => !n.done).length;
     if (open) el.launcher.append(h('span', { class: 'badge' }, String(open)));
@@ -39,7 +40,7 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     const btn = (m: Mode, label: string, key: string, how: string) =>
       h('button', { class: state.mode === m ? 'on' : '', disabled: locked, title: `${label} (${key}): ${how}`, onclick: () => ctx.setMode(m) }, label, h('kbd', {}, key));
     el.bar.replaceChildren(
-      h('div', { class: 'brand', html: ICON + `<span>${esc(t('brand'))}</span>` }),
+      h('div', { class: config.draggable ? 'brand grab' : 'brand', title: config.draggable ? t('dragBar') : undefined, html: ICON + `<span>${esc(t('brand'))}</span>` }),
       h('div', { class: 'sep' }),
       btn('comment', t('comment'), 'C', t('commentHow')),
       btn('text', t('text'), 'T', t('textHow')),
@@ -52,6 +53,7 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     );
     // Astro's dev toolbar also lives bottom-centre; sit above it.
     ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
+    ctx.placeBar();
   }
 
   // The panel's footprint: the bar and toasts move left of it, and extensions hear about it
