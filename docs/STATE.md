@@ -83,11 +83,16 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 ## Next up
 
 1. Verify a dev server behind a reverse proxy (HTML through the proxy, `/__redline` routing, HMR unaffected).
-   Run the publish workflow once on GitHub (dry run): the e2e and package tests have only run on Windows so far.
 2. Presentations (static Reveal decks on `redlineMiddleware` + a deck writer + an extension): drop its workarounds now
    that Redline has the entity set, nth, API v2 and `pageKey` (D24–D26).
-3. AnnotateTheWeb moves onto `@umage.ai/redline-overlay` and drops its fork (D49, D50); publish the package first. A Chrome extension on `mount` + `captureVisibleTab`.
+3. AnnotateTheWeb moves onto `@umage.ai/redline-overlay` (0.1.0 on npm) and drops its fork (D49, D50); the mapping and plan are on annotatetheweb#2. A Chrome extension on `mount` + `captureVisibleTab`.
 4. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
 5. Try `redline mcp` (stdio and HTTP) with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.
 6. Labels (D46): change one after saving, filter the panel by label, colour the pins; see how long lists feel.
 7. .NET: a package test (pack → install → browser) like `test:package`; an Optimizely 13 sample; CI for `dotnet test` and the .NET smoke.
+8. Extensibility, from mapping AnnotateTheWeb onto `mount` (each now needs a workaround or the product's own transport):
+   - An `error` event (`{ op, error }`): a failing `load()` is silent (kept polling), so 401/expired handling must live in the transport.
+   - Events for `noteUpdated`, `noteRemoved` and `messageSent` (only `noteCreated` today), so an extension needn't diff `notes`.
+   - A `beforeSave(req)` hook in the API: changing a note before it's saved (ticket ids, workspace) means wrapping `transport.create`.
+   - Per-note extras: a card decorator / card actions and a pin label or colour hook (an expiry chip from `meta`, a note number).
+   - Extension modes and sketch tools (only buttons today); threads in the markdown store and statuses in the hub.
