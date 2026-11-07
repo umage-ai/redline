@@ -31,7 +31,8 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | `redline mcp` (opt-in via `init --mcp`): list/get (with screenshot)/update notes through the running dev server, any store; markdown fallback; dev servers self-register (D22). Same tools over HTTP at `POST /__redline/mcp` (loopback, or `mcpTokens` bearer, D37) | ✅ | `mcp.test.ts` |
 | Overlay extensions (`extensions`, `window.redlineExtensions`): buttons + keys, panel sections, events (D21); API v2: `removeButton`, `panelState` + `panel` event, `setPageKey` + `page` event (D26) | ✅ | `extend.test.ts`, `extend.spec.ts` |
 | Embeddable overlay: `@umage.ai/redline/overlay` `mount(opts)` → `{ api, unmount }` with a pluggable `transport`, `screenshot` hook, `captureErrors`, closed shadow root, own host tag, namespace and theme tokens; building blocks as `overlay/*` subpaths (D49). Issue #16 items 1–5 and 9 | ✅ Chrome | `embed.spec.ts`; types in `test:package` |
-| Embedding, rest of issue #16 (D50): note `status` (config `statuses`, a menu on each card; PATCH in Node and .NET, not the hub), `messages[]` thread + `transport.message` reply box, pass-through `meta`; `gate` / `rl.gate()` before notes load and `rl.addSlot()` (API v3); every UI word in `strings`; `@umage.ai/redline-overlay` (`overlay/`, not published yet: needs its npm Trusted Publisher entry) | ✅ Chrome | `embed.spec.ts`, `strings.test.ts`, `format.test.ts`, `StoreTests.cs`, `test-overlay-package.mjs` |
+| Embedding, rest of issue #16 (D50): note `status` (config `statuses`, a menu on each card; PATCH in Node, .NET and the hub), `messages[]` thread + `transport.message` reply box, pass-through `meta`; `gate` / `rl.gate()` before notes load and `rl.addSlot()` (API v3); every UI word in `strings`; `@umage.ai/redline-overlay` (`overlay/`, not published yet: needs its npm Trusted Publisher entry) | ✅ Chrome | `embed.spec.ts`, `strings.test.ts`, `format.test.ts`, `StoreTests.cs`, `test-overlay-package.mjs` |
+| Extension API v4 (D52): `error` / `noteUpdated` / `noteRemoved` / `messageSent` events, `beforeSave`, card decorators and actions, `setPinStyle`, `addMode` (pick modes), `addSketchTool`; thread replies as a `message` patch in every store (markdown, hub, .NET, remote) and a reply box in local dev; the hub keeps `status` | ✅ | `embed.spec.ts`, `overlay.spec.ts`, `format.test.ts`, `hub.test.ts`, `StoreTests.cs` |
 | Launcher, toolbar and sketch tools can be dragged (`draggable`, opt-in; bars by their icon, up/down only at phone width; kept per viewer, double-click resets; gate and toasts follow a moved toolbar); `launcher: false` + `data-redline-open` buttons on the page (toggle, or a mode / notes) (D51) | ✅ | `embed.spec.ts`, `extend.test.ts` |
 | Page key option `pageKey: 'route' \| 'path'` (hash routes as pages, or not) (D26) | ✅ | `page.test.ts`, `extend.test.ts`, `extend.spec.ts` |
 | Toolbar centred left of the open notes panel, wraps when short of room (phones: one scrolling row); `HEAD` answered on GET routes | ✅ | `extend.spec.ts`, `mobile.spec.ts`, `extend.test.ts` |
@@ -83,11 +84,11 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 ## Next up
 
 1. Verify a dev server behind a reverse proxy (HTML through the proxy, `/__redline` routing, HMR unaffected).
-   Run the publish workflow once on GitHub (dry run): the e2e and package tests have only run on Windows so far.
 2. Presentations (static Reveal decks on `redlineMiddleware` + a deck writer + an extension): drop its workarounds now
    that Redline has the entity set, nth, API v2 and `pageKey` (D24–D26).
-3. AnnotateTheWeb moves onto `@umage.ai/redline-overlay` and drops its fork (D49, D50); publish the package first. A Chrome extension on `mount` + `captureVisibleTab`.
+3. AnnotateTheWeb moves onto `@umage.ai/redline-overlay` (0.1.0 on npm) and drops its fork (D49, D50); the mapping and plan are on annotatetheweb#2. A Chrome extension on `mount` + `captureVisibleTab`.
 4. Route-pattern grouping (SvelteKit route id, React Router match) so dynamic URLs share one notes file.
 5. Try `redline mcp` (stdio and HTTP) with Claude Code, Codex and Copilot on a real app; consider showing in the copied prompt when MCP is set up.
 6. Labels (D46): change one after saving, filter the panel by label, colour the pins; see how long lists feel.
 7. .NET: a package test (pack → install → browser) like `test:package`; an Optimizely 13 sample; CI for `dotnet test` and the .NET smoke.
+8. Extensibility left after D52: threads as markdown lines for agents (today in the anchor JSON), non-pick extension modes.

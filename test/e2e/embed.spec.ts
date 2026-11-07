@@ -293,3 +293,108 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
   expect(await isOpen()).toBe(true);
   await expect(ui('.bar .brand')).not.toHaveClass(/grab/);   // not draggable unless asked
 });
+
+test('API v4: error and change events, beforeSave, card decorators and actions, pin style, an extension mode and sketch tool (D52)', async ({ page }) => {
+  await page.evaluate(async () => {
+    const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+    w.handle.unmount();
+    const at = new Date().toISOString();
+    const notes: Record<string, unknown>[] = [
+      { id: 'n1', type: 'comment', page: '/', url: location.href, at, body: 'Heading', reply: '', done: false, meta: { number: 7 }, target: { tag: 'h1', selector: 'h1' } },
+      { id: 'n2', type: 'comment', page: '/', url: location.href, at, body: 'Second', reply: '', done: false, target: { tag: 'p', selector: '#clicks' } },
+    ];
+    let rev = 0;
+    w.fail = ''; w.events = []; w.created = []; w.acted = []; w.picks = [];
+    const transport = {
+      ...w.memory,
+      load: async () => { if (w.fail) throw new Error(w.fail); return { version: String(rev), root: 'memory', notes: structuredClone(notes) }; },
+      create: async (req: { note: Record<string, unknown> }) => { w.created.push(req); const n = { ...req.note, id: 'n' + (notes.length + 1), at, reply: '', done: false }; notes.push(n); rev++; return n; },
+      update: async (id: string, p: object) => { Object.assign(notes.find(n => n.id === id)!, p); rev++; return {}; },
+      remove: async (id: string) => { notes.splice(notes.findIndex(n => n.id === id), 1); rev++; return {}; },
+      message: async (id: string, body: string) => { const n = notes.find(x => x.id === id)!; n.messages = [...((n.messages as unknown[]) ?? []), { body }]; rev++; return {}; },
+    };
+    w.handle = await w.mount({ transport, captureErrors: false, hostTag: 'v4-root', namespace: 'v4' });
+    const rl = w.handle.api;
+    for (const e of ['error', 'noteUpdated', 'noteRemoved', 'messageSent'])
+      rl.on(e, (x: Record<string, unknown>) => w.events.push([e, e === 'error' ? { op: x.op, message: (x.error as Error).message } : x]));
+    rl.beforeSave((req: { note: Record<string, unknown> }) => req.note.body === 'nope' ? false : { ...req, note: { ...req.note, meta: { ticket: 'T-1' } } });
+    rl.addCardDecorator({ id: 'num', render: (n: { meta?: { number?: number } }, el: HTMLElement) => { if (n.meta?.number) el.textContent = `#${n.meta.number}`; } });
+    rl.addCardAction({ id: 'copy', label: '⎘', title: 'Copy id', show: (n: { id: string }) => n.id === 'n1', onClick: (n: { id: string }) => w.acted.push(n.id) });
+    rl.setPinStyle((n: { id: string }) => n.id === 'n1' ? { label: 'A', color: 'rgb(0, 0, 255)' } : null);
+    rl.addMode({ id: 'measure', label: 'Measure', key: 'm', onPick: (p: { el: Element | null; whole: boolean }) => w.picks.push([p.el?.tagName ?? null, p.whole]) });
+    rl.addSketchTool({ id: 'oval', label: 'Oval', svg: (b: { x1: number; y1: number; x2: number; y2: number }, c: string) =>
+      `<ellipse cx="${(b.x1 + b.x2) / 2}" cy="${(b.y1 + b.y2) / 2}" rx="${Math.abs(b.x2 - b.x1) / 2}" ry="${Math.abs(b.y2 - b.y1) / 2}" stroke="${c}" stroke-width="3"/>` });
+    w.rl = rl;
+  });
+  // Runs `fn` in the page with the window (as a loose record) as its argument.
+  const w = <T,>(fn: (w: Record<string, any>) => T) => page.evaluate(`(${fn.toString()})(window)`) as Promise<T>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+  const ui = (sel: string) => page.locator(`v4-root ${sel}`);
+  expect(await w(x => x.rl.version)).toBe(4);
+
+  // error: once per failure streak (polling goes on quietly), and again only after a success.
+  await w(x => { x.fail = 'Unauthorized'; });
+  await w(x => x.rl.refresh());
+  await w(x => x.rl.refresh());
+  expect(await w(x => x.events)).toEqual([['error', { op: 'load', message: 'Unauthorized' }]]);
+  await w(x => { x.fail = ''; x.events.length = 0; });
+  await w(x => x.rl.refresh());
+
+  // Pin style: the extension's label and colour on n1; n2 keeps its number.
+  await expect(ui('.pin').filter({ hasText: 'A' })).toHaveCSS('background-color', 'rgb(0, 0, 255)');
+  await expect(ui('.pin').filter({ hasText: '2' })).toHaveCount(1);
+
+  // Cards: the decorator's chip and the action (only where show() says so); then the change events.
+  await page.keyboard.press('Alt+Shift+E');
+  await page.keyboard.press('n');
+  const c1 = ui('.card[data-id="n1"]'), c2 = ui('.card[data-id="n2"]');
+  await expect(c1.locator('.ext-card[data-ext="num"]')).toHaveText('#7');
+  await expect(c2.locator('.ext-card')).toHaveCount(0);   // rendered nothing: no empty box
+  await expect(c2.locator('[data-ext="copy"]')).toHaveCount(0);
+  await c1.locator('[data-ext="copy"]').click();
+  expect(await w(x => x.acted)).toEqual(['n1']);
+  await c1.locator('textarea.reply-box').fill('Looks good');
+  await c1.getByRole('button', { name: 'Send' }).click();
+  await expect(c1.locator('.msg')).toContainText('Looks good');
+  await c1.getByTitle('Mark done').click();
+  await c2.getByTitle('Delete').click();
+  await c2.getByTitle('Delete').click();
+  await expect.poll(() => w(x => x.events)).toEqual([
+    ['messageSent', { id: 'n1', body: 'Looks good' }],
+    ['noteUpdated', { id: 'n1', patch: { done: true } }],
+    ['noteRemoved', { id: 'n2' }],
+  ]);
+  await page.keyboard.press('n');
+
+  // beforeSave: false keeps the draft open and saves nothing; otherwise its change is what's saved.
+  await page.keyboard.press('c');
+  await page.locator('#app-btn').click();
+  await expect(ui('.pop textarea')).toBeFocused();
+  await page.keyboard.type('nope');
+  await page.keyboard.press('Control+Enter');
+  await expect(ui('.pop textarea')).toBeVisible();
+  expect(await w(x => x.created.length)).toBe(0);
+  await ui('.pop textarea').fill('Fine');
+  await page.keyboard.press('Control+Enter');
+  await expect.poll(() => w(x => x.created.map((r: { note: { body: string; meta?: unknown } }) => [r.note.body, r.note.meta]))).toEqual([['Fine', { ticket: 'T-1' }]]);
+
+  // An extension mode: its button and key, a pick the app never sees, then back to idle.
+  await page.keyboard.press('m');
+  await expect(ui('.bar [data-mode="measure"]')).toHaveClass(/on/);
+  await page.locator('#app-btn').click();
+  expect(await w(x => x.picks)).toEqual([['BUTTON', false]]);
+  await expect(page.locator('#clicks')).toHaveText('0');
+  await expect(ui('.bar [data-mode="measure"]')).not.toHaveClass(/on/);
+
+  // An extension sketch tool on key 5: its shape is drawn by its svg() and kept in the sketch.
+  await page.keyboard.press('s');
+  const oval = ui('.tools button').filter({ hasText: 'Oval' });
+  await expect(oval).toContainText('5');
+  await page.keyboard.press('5');
+  await expect(oval).toHaveClass(/on/);
+  await page.mouse.move(300, 300);
+  await page.mouse.down();
+  await page.mouse.move(420, 380, { steps: 4 });
+  await page.mouse.up();
+  await expect(ui('svg.rl-sketch ellipse')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+});

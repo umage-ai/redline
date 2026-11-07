@@ -56,6 +56,8 @@ export function httpTransport(base = API_BASE): RedlineTransport {
     create: req => api('POST', '/notes', req),
     update: (id, patch) => api('PATCH', `/notes/${id}`, patch),
     remove: id => api('DELETE', `/notes/${id}`),
+    // A thread reply (D52): a patch that appends to the note's messages.
+    message: (id, body) => api('PATCH', `/notes/${id}`, { message: { body } }),
     assetUrl: rel => `${base}/assets/${rel.split('/').pop()}`,
     edit: (req, mode) => api('POST', mode === 'apply' ? '/edit' : mode === 'dry' ? '/edit?dry=1' : '/edit?inspect=1', req),
     subscribe(changed, live) {

@@ -23,10 +23,26 @@ export function events() {
   };
 }
 
+/** Adds `item` to `list`, replacing one with the same id. */
+function upsert<T extends { id: string }>(list: T[], item: T) {
+  const i = list.findIndex(x => x.id === item.id);
+  if (i >= 0) list[i] = item; else list.push(item);
+}
+/** Removes the item with `id`; true when there was one. */
+function drop<T extends { id: string }>(list: T[], id: string) {
+  const i = list.findIndex(x => x.id === id);
+  if (i >= 0) list.splice(i, 1);
+  return i >= 0;
+}
+
 export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void, setPageKey: (fn: RedlinePageKey | null) => void): RedlineApi {
   const { ext, state } = ctx;
+  const keyTaken = (key: string | undefined, id: string) => {
+    const k = key?.toLowerCase();
+    if (k && BUILTIN_KEYS.includes(k)) console.warn(`[redline] key "${key}" for "${id}" is taken by the overlay; use the button`);
+  };
   return {
-    version: 3,
+    version: 4,
     addButton(b) {
       const key = b.key?.toLowerCase();
       if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
@@ -56,6 +72,24 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     },
     gate: fn => { if (typeof fn === 'function') ctx.lock(fn); },
     locked: () => ctx.locked(),
+    /* v4 */
+    beforeSave(fn) {
+      if (typeof fn !== 'function') return () => {};
+      ext.beforeSave.push(fn);
+      return () => { const i = ext.beforeSave.indexOf(fn); if (i >= 0) ext.beforeSave.splice(i, 1); };
+    },
+    addCardDecorator(d) { upsert(ext.cardDecorators, d); ctx.renderPanel(true); },
+    removeCardDecorator(id) { if (drop(ext.cardDecorators, id)) ctx.renderPanel(true); },
+    addCardAction(a) { upsert(ext.cardActions, a); ctx.renderPanel(true); },
+    removeCardAction(id) { if (drop(ext.cardActions, id)) ctx.renderPanel(true); },
+    setPinStyle(fn) { ext.pinStyle = typeof fn === 'function' ? fn : null; ctx.renderPins(); },
+    addMode(m) { keyTaken(m.key, m.id); upsert(ext.modes, m); ctx.renderBar(); },
+    removeMode(id) {
+      if (state.mode === `ext:${id}`) ctx.setMode('idle');
+      if (drop(ext.modes, id)) ctx.renderBar();
+    },
+    addSketchTool(t) { upsert(ext.sketchTools, t); ctx.renderTools(); },
+    removeSketchTool(id) { if (drop(ext.sketchTools, id)) ctx.renderTools(); },
     on: (e, fn) => on(e, fn as Listener),
     open: () => ctx.setOpen(true),
     close: () => ctx.setOpen(false),

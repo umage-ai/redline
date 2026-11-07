@@ -112,7 +112,7 @@ All optional; without them Redline behaves as described above. Types come from `
   `onRemove`, `onSourceWrite`. **`buildSource: true`** keeps source stamps in `vite build` (a review build behind `redlineMiddleware`); **`build`** records the commit.
 - **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
   A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto
-  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`. **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text ([docs/SETUPS.md](docs/SETUPS.md)).
+  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`; v4: `beforeSave`, card decorators and actions, `setPinStyle`, `addMode`, `addSketchTool`, and the `error`/`noteUpdated`/`noteRemoved`/`messageSent` events. **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text ([docs/SETUPS.md](docs/SETUPS.md)).
 
 ## Coding agents
 

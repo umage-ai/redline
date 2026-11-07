@@ -71,6 +71,27 @@ test('protocol per project: the token names the author, mine is per caller, forg
   } finally { await h.close(); }
 });
 
+test('hub: statuses and thread messages are kept; a message is signed by the token person, never the page (D50, D52)', async () => {
+  const h = await start();
+  try {
+    const p = await h.project('Statuses');
+    const alice = remoteStore({ url: p.store, token: (await h.token(p.slug, 'alice@example.com')).token });
+    const n = await alice.create(note('Check mobile'));
+    await alice.update(n.id, { status: 'in-review' });
+    await alice.update(n.id, { message: { body: 'Seen on iOS too', author: 'mallory' } as never });
+    let [got] = await alice.list();
+    assert.equal(got.status, 'in-review');
+    assert.equal(got.messages!.length, 1);
+    assert.equal(got.messages![0].body, 'Seen on iOS too');
+    assert.equal(got.messages![0].author, 'alice@example.com');
+    assert.equal(got.messages![0].kind, 'reviewer');
+    assert.ok(got.messages![0].at);
+    await alice.update(n.id, { status: '' });
+    [got] = await alice.list();
+    assert.equal(got.status, undefined);
+  } finally { await h.close(); }
+});
+
 test('tokens are scoped to their project: wrong, missing or another project\'s token is refused; unknown project is a 404', async () => {
   const h = await start();
   try {

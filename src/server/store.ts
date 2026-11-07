@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type { Note, NewNoteRequest } from '../shared/types.ts';
+import type { Note, NewNoteRequest, NoteMessage } from '../shared/types.ts';
 import { pageFile, parsePage, serializeIndex, serializePage } from './format.ts';
 
 export interface StoreOptions {
@@ -19,7 +19,8 @@ export interface StoreOptions {
  * `seen`: the author has seen the note resolved (remote stores, D42); the markdown store ignores it.
  * `status`: a product's own status (the overlay's `statuses`, D50); "" removes it.
  */
-export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen' | 'status'>>;
+/** A note change. `message` is not a field: it appends one message to the note's thread (D52). */
+export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen' | 'status'>> & { message?: NoteMessage };
 
 /** Keep only the fields a patch may carry, with the right types (the API takes them from the page). */
 export function cleanPatch(p: unknown): NotePatch {
@@ -27,6 +28,10 @@ export function cleanPatch(p: unknown): NotePatch {
   const out: NotePatch = {};
   for (const k of ['body', 'reply', 'to'] as const) if (typeof src[k] === 'string') out[k] = src[k] as string;
   if (typeof src.status === 'string') out.status = src.status.trim().slice(0, 40);
+  // A thread message: the body and a short kind word; the author is the server's to set (D52).
+  const msg = src.message as Record<string, unknown> | undefined;
+  const body = typeof msg?.body === 'string' ? msg.body.trim().slice(0, 4000) : '';
+  if (body) out.message = { body, kind: typeof msg!.kind === 'string' && /^[\w-]{1,20}$/.test(msg!.kind) ? msg!.kind : 'reviewer' };
   for (const k of ['done', 'seen'] as const) if (typeof src[k] === 'boolean') out[k] = src[k] as boolean;
   return out;
 }
@@ -65,6 +70,9 @@ export interface NoteStore {
 
 /** Note ids are lowercase base36, 4–24 chars; custom stores should keep to it (the API routes on it). */
 export const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-z0-9]{4,24}$/.test(id);
+
+/** A thread message as stored: its own `at` unless it brought one. */
+export const withTime = (m: NoteMessage): NoteMessage => ({ ...m, at: m.at ?? stamp() });
 
 const stamp = (d = new Date()) => {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -197,6 +205,7 @@ export function createStore(opts: StoreOptions) {
         if (typeof patch.to === 'string' && n.type === 'text') n.to = patch.to;
         if (typeof patch.done === 'boolean') n.done = patch.done;
         if (typeof patch.status === 'string') n.status = patch.status || undefined;
+        if (patch.message) n.messages = [...(Array.isArray(n.messages) ? n.messages : []), withTime(patch.message)];
         await writeFile(hit.file, hit.notes);
         await writeIndex();
         return n;

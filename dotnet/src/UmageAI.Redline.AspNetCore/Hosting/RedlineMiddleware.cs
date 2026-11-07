@@ -198,6 +198,8 @@ public sealed class RedlineMiddleware
         if (m.Success && HttpMethods.IsPatch(method))
         {
             var patch = NotePatch.FromJson(await ReadJson(http));
+            // Online, a thread message is signed by the reviewer who sent it (D52).
+            if (patch.Message is not null && _rt.Options.Online && reviewer.Identity?.Name is { } signer) patch.Message["author"] = signer;
             var n = await store.UpdateAsync(m.Groups[1].Value, patch, http.RequestAborted);
             if (n is null) { await NotFound(http); return; }
             await _rt.Hook(h => h.OnUpdateAsync(n, patch), "onUpdate");

@@ -66,6 +66,7 @@ export function notesProtocol(store: NoteStore, opts: ProtocolOptions = {}): Mid
         const patch = cleanPatch(await readJson(req, max));
         // `seen` means the author has seen it resolved (D42): from anyone else it is dropped.
         if (patch.seen !== undefined && (await store.list({ req })).find(x => x.id === m[1])?.author !== user) delete patch.seen;
+        if (patch.message && user) patch.message.author = user;   // a thread message is signed by who sent it (D52)
         const n = await store.update(m[1], patch, { req });
         return n ? send(res, 200, { ...n, mine: user !== undefined && n.author === user }) : send(res, 404, { error: 'not found' });
       }

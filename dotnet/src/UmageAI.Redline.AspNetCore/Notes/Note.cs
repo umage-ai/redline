@@ -112,6 +112,11 @@ public sealed class NotePatch
     public bool? Seen { get; set; }
     /// <summary>A product's own status (the overlay's <c>statuses</c>, D50); "" removes it.</summary>
     public string? Status { get; set; }
+    /// <summary>
+    /// Not a field: one message (<c>{ body, kind, author? }</c>) to append to the note's <c>messages</c> thread (D52).
+    /// From a page only body and kind are taken; the server sets the author.
+    /// </summary>
+    public JsonObject? Message { get; set; }
 
     public static NotePatch FromJson(JsonObject? o)
     {
@@ -125,10 +130,21 @@ public sealed class NotePatch
             To = S(o?["to"]),
             Seen = B(o?["seen"]),
             Status = S(o?["status"]) is { } st ? (st.Trim() is var t && t.Length > 40 ? t[..40] : t) : null,
+            Message = MessageFrom(o?["message"] as JsonObject),
         };
     }
 
-    public bool IsEmpty => Body is null && Reply is null && Done is null && To is null && Seen is null && Status is null;
+    // As cleanPatch in src/server/store.ts: a trimmed body (max 4000), a short kind word (default "reviewer").
+    static JsonObject? MessageFrom(JsonObject? m)
+    {
+        var body = m?["body"] is JsonValue bv && bv.TryGetValue<string>(out var b) ? b.Trim() : "";
+        if (body.Length == 0) return null;
+        if (body.Length > 4000) body = body[..4000];
+        var kind = m!["kind"] is JsonValue kv && kv.TryGetValue<string>(out var k) && System.Text.RegularExpressions.Regex.IsMatch(k, @"^[\w-]{1,20}$") ? k : "reviewer";
+        return new JsonObject { ["body"] = body, ["kind"] = kind };
+    }
+
+    public bool IsEmpty => Body is null && Reply is null && Done is null && To is null && Seen is null && Status is null && Message is null;
 
     public JsonObject ToJson()
     {
@@ -139,6 +155,7 @@ public sealed class NotePatch
         if (To is not null) o["to"] = To;
         if (Seen is not null) o["seen"] = Seen;
         if (Status is not null) o["status"] = Status;
+        if (Message is not null) o["message"] = Message.DeepClone();
         return o;
     }
 
@@ -150,6 +167,13 @@ public sealed class NotePatch
         if (To is not null && n.Type == "text") n.To = To;
         if (Done is not null) n.Done = Done.Value;
         if (Status is not null) n.Set("status", Status.Length > 0 ? Status : null);
+        if (Message is not null)
+        {
+            if (n.Data["messages"] is not JsonArray list) n.Data["messages"] = list = new JsonArray();
+            var m = (JsonObject)Message.DeepClone();
+            m["at"] ??= NoteIds.Stamp();
+            list.Add(m);
+        }
     }
 }
 
