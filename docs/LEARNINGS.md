@@ -32,12 +32,10 @@ Prune entries whose cause is gone from the code.
 - **Related:** after a config change Vite re-optimises once and may log transient errors (seen with Keystatic in an Astro site). A second start is clean.
 
 ## L8 — SvelteKit: element found but no `__svelte_meta`
-- **Cause:** the SSR HTML is visible before hydration, and the meta is attached during hydration.
-- **Fix (tests):** `openOverlay` waits for `networkidle`. A real user won't click within milliseconds of load.
+- **Cause:** the SSR HTML is visible before hydration, and the meta is attached during hydration. **Fix (tests):** `openOverlay` waits for `networkidle`. A real user won't click within milliseconds of load.
 
 ## L9 — Theme detected as dark on a light page
-- **Cause:** the fallback used `prefers-color-scheme`, and headless/OS settings are often dark.
-- **Fix:** explicit markers (`.dark`, `data-theme`) first, then page background luminance, then the media query.
+- **Cause:** the fallback used `prefers-color-scheme`, and headless/OS settings are often dark. **Fix:** explicit markers (`.dark`, `data-theme`) first, then page background luminance, then the media query.
 
 ## L10 — Inner scroll containers in DOM screenshots
 - **Problem:** modern-screenshot clones the DOM, and clones lose their `scrollTop`.
@@ -46,8 +44,7 @@ Prune entries whose cause is gone from the code.
 
 ## L11 — Sketch label added twice; Escape kept it anyway
 - **Cause:** removing a focused `<input>` fires `blur` synchronously. Enter → commit → `remove()` → blur → commit again (and `remove()` threw); Escape → `remove()` → blur → commit.
-- **Fix:** a `closed` guard in `SketchLayer.textAt`, so the first close wins.
-- **Guard:** `overlay.spec.ts` "sketch text label: Enter adds it once, Escape drops it".
+- **Fix:** a `closed` guard in `SketchLayer.textAt`, so the first close wins. **Guard:** `overlay.spec.ts` "sketch text label: Enter adds it once, Escape drops it".
 
 ## L12 — Source path came out as `../../../../Users/…/index.astro`
 - **Cause:** root came from cwd as a Windows 8.3 short path (`C:\Users\MORTEN~1\…`) while the framework reported the long one, and `path.relative` compares strings. Symlinks do the same (macOS `/var` → `/private/var`).
@@ -197,3 +194,6 @@ Prune entries whose cause is gone from the code.
 
 ## L51 — After a save, the Comment button stayed lit and the next tap did nothing
 - **Cause / fix:** `saveDraft` showed "Saved →" and set the mode to idle, but re-rendered and cleared `busy` (which pauses picking) only after the follow-up notes reload; a slow reload left a stale toolbar, so a test's or reviewer's next pick went nowhere (flaky "slow save" test, 1 run in 3). The reload now runs after the render. **Guard:** `capture.spec.ts` "after a save the toolbar shows idle at once…" (fails without the fix).
+
+## L52 — CI only: the React fixture kept serving a heading an earlier test had written and restored
+- **Cause / fix:** "if the write fails after the check…" found the page and `EditZone.tsx` out of step before its own change, on every CI attempt (Linux; never on Windows), so the release v0.8.0 run stopped. Same Vite and watcher as the green v0.7.1. Tests that need the source text now call `showsSource`: rewrite the file and reload until the page matches. **Guard:** that test (`extend.spec.ts`), green in the CI dry run.
