@@ -1,0 +1,66 @@
+{
+  "name": "@umage.ai/redline-overlay",
+  "version": "0.1.0",
+  "description": "The Redline review overlay as browser modules: mount() it in your own product with your own note store. Pin comments, text changes and sketches on any page. No server parts, no dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "author": "umage.ai <morten@umage.ai>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umage-ai/redline.git",
+    "directory": "overlay"
+  },
+  "homepage": "https://github.com/umage-ai/redline/tree/main/overlay#readme",
+  "bugs": "https://github.com/umage-ai/redline/issues",
+  "keywords": [
+    "redline",
+    "annotation",
+    "feedback",
+    "overlay",
+    "design-review",
+    "shadow-dom",
+    "browser-extension"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/types/client/mount.d.ts",
+      "default": "./dist/mount.js"
+    },
+    "./anchor": {
+      "types": "./dist/types/client/anchor.d.ts",
+      "default": "./dist/anchor.js"
+    },
+    "./sketch": {
+      "types": "./dist/types/client/sketch.d.ts",
+      "default": "./dist/sketch.js"
+    },
+    "./capture": {
+      "types": "./dist/types/client/capture.d.ts",
+      "default": "./dist/capture.js"
+    },
+    "./shield": {
+      "types": "./dist/types/client/shield.d.ts",
+      "default": "./dist/shield.js"
+    },
+    "./styles": {
+      "types": "./dist/types/client/styles.d.ts",
+      "default": "./dist/styles.js"
+    },
+    "./transport": {
+      "types": "./dist/types/client/transport.d.ts",
+      "default": "./dist/transport.js"
+    },
+    "./strings": {
+      "types": "./dist/types/client/strings.d.ts",
+      "default": "./dist/strings.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ]
+}

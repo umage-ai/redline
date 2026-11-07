@@ -60,6 +60,12 @@ export interface Note {
   errors?: string[];        // recent console errors at capture time
   author?: string;          // signed-in reviewer (online mode, or whoever a remote store's token belongs to); set by the server
   build?: string;           // the build the page was served from (the `build` option), so source lines are read at that revision
+  /** A product's own status ("open", "in-review", "wontfix"…, the overlay's `statuses` config); `done` still says closed. */
+  status?: string;
+  /** A conversation on the note, oldest first (stores with threads; the markdown store keeps the one `reply`). */
+  messages?: NoteMessage[];
+  /** Pass-through data for the product that stores the note (an expiry, its own number…); the overlay never reads it. */
+  meta?: Record<string, unknown>;
   // Set by a remote store (docs/PROTOCOL.md, D40-D42), never by the page, never written to markdown:
   resolvedAt?: string;      // ISO time it was resolved; the overlay shows it green while the store still lists it
   mine?: boolean;           // the caller is the note's author
@@ -69,6 +75,14 @@ export interface Note {
   body: string;
   reply: string;
   done: boolean;
+}
+
+export interface NoteMessage {
+  body: string;
+  author?: string;
+  /** Who wrote it: 'reviewer', 'agent', 'owner', or a product's own kind. Styles the bubble. */
+  kind?: string;
+  at?: string;
 }
 
 export interface NewNoteRequest {

@@ -1,6 +1,6 @@
 # Setups
 
-Last updated: 2026-10-27 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
+Last updated: 2026-11-07 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
 
 Redline has one overlay (the browser part) and one note format. What changes between setups is **where
 the overlay runs** and **where the notes are kept**. Pick the first row that fits.
@@ -46,7 +46,9 @@ Rules that hold in every setup:
   (unit and browser) but unpublished.
 - **Not for:** sharing notes between people. Each checkout has its own `.redline/`.
 - **Network:** the API has no login, so the plugins answer this machine only. See below for anything else.
-- **Details:** [README.md](../README.md) "Setup in a repo".
+- **Launcher and toolbar:** `draggable: true` lets reviewers move them and the sketch tools (D51). `launcher: false` hides the round
+  button; open with the hotkey or your own button: `<button data-redline-open>` (or `="comment"`, `"notes"`, …).
+- **Details:** [README.md](../README.md) "Setup in a repo" and "Launcher and toolbar".
 
 ### Reaching the dev server from elsewhere
 
@@ -148,6 +150,37 @@ services.AddRedline(o => { o.Online = true; o.Policy = "Reviewers"; o.UseSqlStor
   scope every call to what that person may see (project, tenant); drop `seen` from anyone but the author;
   list resolved notes only for a while (PROTOCOL.md "Which notes to list"); delete closed notes after a
   retention period, and notes of deleted tenants; cap sizes (note JSON, screenshot, sketch).
+
+### Embedding the overlay in your product
+
+For a browser extension or a product with its own notes backend (D49, D50). `mount` runs nothing on import; each
+part is an option with a default you can wrap or replace. The same modules come without the server parts as
+`@umage.ai/redline-overlay`. With your own transport the page talks to your backend,
+so the "own site only" rule above is then yours to keep.
+
+```ts
+import { mount, httpTransport } from '@umage.ai/redline/overlay';
+const base = httpTransport();                       // the dev server's /__redline API, the default
+const rl = await mount({
+  transport: { ...base, create: req => base.create({ ...req, note: { ...req.note, body: req.note.body + ' #123' } }) },
+  shadowMode: 'closed', hostTag: 'my-review', namespace: 'my-review',   // two overlays on one page don't collide
+  captureErrors: false,                             // or () => errorsYouCollected
+  screenshot: (req, next) => next(req),             // or your own capture (strict CSP, an extension worker)
+  theme: { '--ink': '#0a84ff' },
+  strings: { comment: 'Kommentar' },                // any UI text: the keys are in overlay/strings
+  config: { statuses: [{ id: 'open' }, { id: 'fixed', label: 'Fixed', done: true, color: '#3ecf8e' }],
+            launcher: false, draggable: true },     // your button opens it (data-my-review-open or rl.api.open()); D51
+  gate: async el => { el.append(signInForm()); await signedIn(); },   // before notes load; modes off until then
+});
+rl.api.addSlot({ id: 'ws', render: el => el.append(workspaceChip()) });   // your element in the toolbar
+rl.api.open();                                      // the extension API (D21); rl.unmount() undoes everything
+```
+
+A transport is `config`, `load(etag)`, `create`, `update`, `remove`, `assetUrl`, plus optional `edit` (Apply to file),
+`subscribe` (live changes) and `message` (a reply box under each note's `messages` thread). Notes may carry
+`status`, `messages` and `meta`; the markdown store keeps them. `rl.gate(fn)` locks again (sign-out). Building
+blocks: `overlay/anchor`, `sketch`, `capture`, `shield`, `styles`, `transport`, `strings`. **Status:** ✅
+`embed.spec.ts` (Chrome); the separate package is not on npm yet.
 
 ---
 

@@ -37,8 +37,10 @@ export interface RedlineOptions {
   dir?: string;
   /** Keyboard shortcut to toggle the overlay, e.g. "alt+shift+r" (default). */
   hotkey?: string;
-  /** Show the small launcher button when the overlay is closed. Default true. */
+  /** Show the small launcher button when the overlay is closed. Default true. Without it: the hotkey, or a `data-redline-open` element. */
   launcher?: boolean;
+  /** The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51). Default false. */
+  draggable?: boolean;
   /**
    * The labels a reviewer can tag a note with (chips in the popover, D46): names, or { name, color }.
    * Default Bug, UX, Idea and Copy; false turns labels off. A function is asked on every /config
@@ -248,7 +250,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     try { return normalizeLabels(await (opts.labels as Extract<LabelsSource<IncomingMessage>, Function>)({ req })); }
     catch (e) { console.warn('[redline] labels() failed:', e); return []; }
   };
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable === true, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);

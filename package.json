@@ -67,6 +67,38 @@
       "default": "./dist/next-script.js"
     },
     "./client.js": "./dist/client.js",
+    "./overlay": {
+      "types": "./dist/types/client/mount.d.ts",
+      "default": "./dist/overlay/mount.js"
+    },
+    "./overlay/anchor": {
+      "types": "./dist/types/client/anchor.d.ts",
+      "default": "./dist/overlay/anchor.js"
+    },
+    "./overlay/sketch": {
+      "types": "./dist/types/client/sketch.d.ts",
+      "default": "./dist/overlay/sketch.js"
+    },
+    "./overlay/capture": {
+      "types": "./dist/types/client/capture.d.ts",
+      "default": "./dist/overlay/capture.js"
+    },
+    "./overlay/shield": {
+      "types": "./dist/types/client/shield.d.ts",
+      "default": "./dist/overlay/shield.js"
+    },
+    "./overlay/styles": {
+      "types": "./dist/types/client/styles.d.ts",
+      "default": "./dist/overlay/styles.js"
+    },
+    "./overlay/transport": {
+      "types": "./dist/types/client/transport.d.ts",
+      "default": "./dist/overlay/transport.js"
+    },
+    "./overlay/strings": {
+      "types": "./dist/types/client/strings.d.ts",
+      "default": "./dist/overlay/strings.js"
+    },
     "./package.json": "./package.json"
   },
   "peerDependencies": {
@@ -94,7 +126,7 @@
     "test:e2e": "npm run build && playwright test",
     "check:docs": "node scripts/check-docs.mjs",
     "check": "npm run typecheck && npm test && npm run test:e2e",
-    "test:package": "node scripts/test-package.mjs && node scripts/test-hub-package.mjs",
+    "test:package": "node scripts/test-package.mjs && node scripts/test-hub-package.mjs && node scripts/test-overlay-package.mjs",
     "release": "node scripts/release.mjs",
     "prepublishOnly": "npm run check && npm run test:package",
     "smoke": "node scripts/smoke.mjs",

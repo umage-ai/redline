@@ -35,7 +35,7 @@ npm run typecheck      # tsc --noEmit (src, test/unit, test/e2e)
 npm test               # unit tests (node:test, runs .ts directly) + docs check
 npm run test:e2e       # build + Playwright against 10 fixture servers (installed Chrome; PW_CHROMIUM=1 for bundled; PW_FIXTURES=vue,angular starts only those)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
-npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests (slow; runs on prepublishOnly)
+npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests; also the hub and overlay packages (slow; runs on prepublishOnly)
 # Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
 node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22); dev servers also answer POST /__redline/mcp (D37)
@@ -74,15 +74,15 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 `assets/`. `root` defaults to the nearest `.git` folder (`src/server/root.ts`); in a monorepo each dev server tags notes with its
 `app` folder and page files get an app prefix (D17).
 
-**Client** (`src/client/`, bundled to one ESM file, shadow root `<redline-root>` on `<html>`):
-- `index.ts`: state, modes (comment/text/sketch), event capture, popover, pins, panel, polling.
+**Client** (`src/client/`, bundled to one ESM file `dist/client.js`, and as modules in `dist/overlay/`; shadow root `<redline-root>` on `<html>`):
+- `index.ts`: the injected entry; it calls `mount(opts)` (`mount.ts`, D49: replaceable `options.ts` + parts sharing `context.ts`:
+  `bar`, `panel`, `pins`, `draft`, `text`, `sketch-tools`, `input` (+ `data-redline-open` buttons), `toast`, `drag` (D51), `api`; all registered with `Life` for `unmount()`). `transport.ts`: store calls. `strings.ts`: all UI text (`ctx.t`, D50).
 - `anchor.ts`: describes an element (selector, xpath, test id, role/name, html excerpt, **source + components**)
-  and resolves a stored target back to an element.
-- `capture.ts`: screenshots (DOM render via modern-screenshot, or tab capture). `sketch.ts`: the SVG drawing layer.
+  and resolves a stored target back to an element. `capture.ts`: screenshots (modern-screenshot or tab capture). `sketch.ts`: drawing.
 
 **Remote stores** (D40–D45, docs/PROTOCOL.md, docs/SETUPS.md): `src/server/remote.ts` (client), `protocol.ts` (reference
 server), `/__redline/events` fans one feed out to every overlay; .NET `Notes/RemoteNoteStore.cs`. Store methods take an
-optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`; `examples/review-frontend`: deployed review, shapes A–C.
+optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`, `overlay/` a third (dist/overlay, D50); `examples/review-frontend`: deployed review, shapes A–C.
 
 **Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);

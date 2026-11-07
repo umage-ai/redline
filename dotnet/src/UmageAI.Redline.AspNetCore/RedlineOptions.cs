@@ -16,6 +16,8 @@ public sealed class RedlineOptions
     public string Hotkey { get; set; } = "alt+shift+r";
     /// <summary>Show the small launcher button when the overlay is closed.</summary>
     public bool Launcher { get; set; } = true;
+    /// <summary>The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51).</summary>
+    public bool Draggable { get; set; }
     /// <summary>
     /// The labels a reviewer can tag a note with (chips in the popover, D46). Default Bug, UX, Idea and Copy;
     /// replace or add to the list, or <c>Labels.Clear()</c> to turn labels off.

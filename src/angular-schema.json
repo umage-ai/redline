@@ -160,6 +160,10 @@
           "type": "boolean",
           "description": "Show the launcher button. Default: true"
         },
+        "draggable": {
+          "type": "boolean",
+          "description": "The launcher and the toolbar (by its icon) can be dragged around. Default: false"
+        },
         "app": {
           "type": "string",
           "description": "Monorepos: the app name in notes."

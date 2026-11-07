@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pageSlug, parsePage, serializePage } from '../../src/server/format.ts';
-import { createStore } from '../../src/server/store.ts';
+import { cleanPatch, createStore } from '../../src/server/store.ts';
 import { stampJsx } from '../../src/server/jsx-source.ts';
 import { loadVueParser, stampVue } from '../../src/server/vue-source.ts';
 import { normaliseSource } from '../../src/server/handler.ts';
@@ -66,6 +66,25 @@ test('store: create, update keeps concurrent edits, remove cleans up', async () 
   await assert.rejects(fs.stat(path.join(root, `.redline/assets/${a.id}.png`)));
   await store.remove(b.id);
   await assert.rejects(fs.stat(file));
+});
+
+test('store: status, messages and meta survive the markdown; PATCH sets and clears status (D50)', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-'));
+  const store = createStore({ root });
+  const n = await store.create({ note: { type: 'comment', page: '/', url: 'u', body: 'One', status: 'open',
+    messages: [{ body: 'Looks off', author: 'ann', kind: 'reviewer' }], meta: { expiresAt: '2027-01-01', number: 7 } } });
+  assert.deepEqual(cleanPatch({ status: '  in-review  ', other: 1, done: 'yes' }), { status: 'in-review' });
+  await store.update(n.id, cleanPatch({ status: 'in-review', done: true }));
+  let [got] = await store.list();
+  assert.equal(got.status, 'in-review');
+  assert.equal(got.done, true);
+  assert.deepEqual(got.messages, [{ body: 'Looks off', author: 'ann', kind: 'reviewer' }]);
+  assert.deepEqual(got.meta, { expiresAt: '2027-01-01', number: 7 });
+  const md = await fs.readFile(path.join(root, '.redline/pages/index.md'), 'utf8');
+  assert.deepEqual(parsePage(md)[0].status, 'in-review');   // in the anchor JSON, so it round-trips
+  await store.update(n.id, cleanPatch({ status: '' }));
+  [got] = await store.list();
+  assert.equal(got.status, undefined);
 });
 
 test('source paths are repo-relative even when root is reached through a link', async () => {

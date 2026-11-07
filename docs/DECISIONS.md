@@ -1,40 +1,32 @@
 # Decisions
 
-Last updated: 2026-10-27 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-11-07 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
-- **Decision:** ship as a Vite plugin (plus an Astro wrapper and a generic connect middleware) that serves the client and writes files.
-- **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process. **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
+- **Decision:** ship as a Vite plugin (plus an Astro wrapper and a generic connect middleware) that serves the client and writes files. **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process. **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
 
 ## D2 — Markdown is the source of truth, with JSON anchors in HTML comments (2026-10-13)
 - **Decision:** one `.md` per page; each note is a `### [ ]` heading, a `<!-- redline {json} -->` anchor, the body and a `> ` reply. No separate JSON store.
-- **Why:** agents read, grep, diff and edit it directly; humans can read it. The format is modelled on an earlier in-house
-  slide-review tool (a REVIEW.md checklist with sketches, applied by an agent skill), where it had already proven itself. **Revisit if:** concurrent multi-user editing is needed (D40 added remote stores).
+- **Why:** agents read, grep, diff and edit it directly; humans can read it. The format is modelled on an earlier in-house slide-review tool (a REVIEW.md checklist with sketches, applied by an agent skill), where it had already proven itself. **Revisit if:** concurrent multi-user editing is needed (D40 added remote stores).
 
 ## D3 — `.redline/` is gitignored (2026-10-13)
 - **Decision:** `redline init` adds `.redline/` to `.gitignore`. **Why:** user call. Feedback is a local work queue, merge collisions on shared markdown would be painful, and team knowledge belongs elsewhere.
 
 ## D4 — Distribute as the public npm package `@umage.ai/redline` (2026-10-13, amended)
-- **Decision:** publish to npmjs under MIT; apps add it as a normal devDependency and import `@umage.ai/redline/vite` (or `/astro`, `/server`).
-- **Before:** consumers imported `dist/` from a sibling checkout (a `file:` devDependency breaks `npm ci` without it). **Why changed:** more teams want it, and a registry package needs no checkout. `redline` is taken; the npm org is `umage.ai`.
+- **Decision:** publish to npmjs under MIT; apps add it as a normal devDependency and import `@umage.ai/redline/vite` (or `/astro`, `/server`). **Before:** consumers imported `dist/` from a sibling checkout (a `file:` devDependency breaks `npm ci` without it). **Why changed:** more teams want it, and a registry package needs no checkout. `redline` is taken; the npm org is `umage.ai`.
 
 ## D5 — Inject via HTTP response buffering, not framework hooks (2026-10-13)
-- **Decision:** a middleware buffers `text/html` responses and inserts the script before `</body>`.
-- **Why:** Vite's `transformIndexHtml` doesn't run for SvelteKit SSR or Astro pages. One mechanism covers all of them.
-- **Cost:** must handle `writeHead` and content-length correctly (L1). Compressed responses are skipped.
+- **Decision:** a middleware buffers `text/html` responses and inserts the script before `</body>`. **Why:** Vite's `transformIndexHtml` doesn't run for SvelteKit SSR or Astro pages. One mechanism covers all of them. **Cost:** must handle `writeHead` and content-length correctly (L1). Compressed responses are skipped.
 
 ## D6 — Text mode suggests by default; source writes are opt-in (2026-10-13, amended 2026-10-15)
-- **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched. With `directEdit` on, a source writer may write the change to the file instead (D20); the default is unchanged.
-- **Why:** mapping DOM text back to source is unreliable across frameworks and content stores (i18n, CMS). Mutating framework-owned DOM breaks React reconciliation. The agent applies it with full context.
+- **Decision:** text edits happen in an overlay `contenteditable` copy and are saved as a `diff` note. The app DOM is never touched. With `directEdit` on, a source writer may write the change to the file instead (D20); the default is unchanged. **Why:** mapping DOM text back to source is unreliable across frameworks and content stores (i18n, CMS). Mutating framework-owned DOM breaks React reconciliation. The agent applies it with full context.
 
 ## D7 — Source location via framework dev metadata, plus a JSX stamp for React (2026-10-13, amended 2026-10-16)
-- **Decision:** use `__svelte_meta` and `data-astro-source-*` as given. For React, a dev-only transform stamps `data-redline-src` on known HTML tags. Extended to Vue, Solid, Preact and Angular in D23.
-- **Why:** React 19 removed `_debugSource`. An allowlist avoids breaking renderers that use lowercase JSX (react-three-fiber).
+- **Decision:** use `__svelte_meta` and `data-astro-source-*` as given. For React, a dev-only transform stamps `data-redline-src` on known HTML tags. Extended to Vue, Solid, Preact and Angular in D23. **Why:** React 19 removed `_debugSource`. An allowlist avoids breaking renderers that use lowercase JSX (react-three-fiber).
 
 ## D8 — DOM screenshots by default, tab capture opt-in (2026-10-13)
-- **Decision:** modern-screenshot renders the viewport and recreates page and inner scroll offsets. A panel toggle switches to `getDisplayMedia` tab capture.
-- **Why:** no prompts in the common case. Tab capture is pixel-perfect (WebGL, maps) but Chrome asks once per page load.
+- **Decision:** modern-screenshot renders the viewport and recreates page and inner scroll offsets; a panel toggle switches to `getDisplayMedia` tab capture. **Why:** no prompts in the common case. Tab capture is pixel-perfect (WebGL, maps) but Chrome asks once per page load.
 
 ## D9 — Mutations require an `x-redline: 1` header, not an Origin check; plugins answer this machine only (2026-10-13, amended 2026-10-27)
 - **Why:** behind a reverse proxy (e.g. YARP) the Host doesn't match the browser Origin. A custom header forces a CORS preflight from other sites, which we never answer. **Amended:** the dev-server plugins refuse the API and skip injection unless the caller is loopback with a local Host (`localCall`); `network` adds addresses, subnets and host names (a host name only for a caller on this machine, since another can fake its Host), or `true`. No `X-Forwarded-For`: anyone can send it. Under Next the address comes from a stamp (D48). `redlineMiddleware` defaults to `network: true`, since deployed review gates reviewers itself.
@@ -47,15 +39,14 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Why:** node:test runs `.ts` with no extra tooling. Fixture apps (vanilla, React, SvelteKit, Astro) catch framework-specific breakage that unit tests can't. They run serially because each fixture owns one `.redline/`. **Versions:** the fixtures track the apps we use it on: Vite 8 (7 also in use), SvelteKit pinned to 2.x (3.x exists), Svelte 5, React 19, Astro 6.
 
 ## D12 — Toggle with Alt+Shift+R; single-letter keys only while the overlay is open (2026-10-13)
-- **Decision:** a global chord opens and closes the overlay. `C`/`T`/`S`/`N`/`Esc` work only while it's open and focus isn't in a field. The hotkey is configurable (`hotkey` option).
-- **Why:** the slide-review tool used bare letters, which collide with typing and app shortcuts in real web apps. A small launcher button is shown by default (`launcher: false` hides it).
+- **Decision:** a global chord opens and closes the overlay. `C`/`T`/`S`/`N`/`Esc` work only while it's open and focus isn't in a field. The hotkey is configurable (`hotkey` option). **Why:** the slide-review tool used bare letters, which collide with typing and app shortcuts in real web apps. A small launcher button is shown by default (`launcher: false` hides it).
 
 ## D13 — Release from GitHub Actions with npm Trusted Publishing (2026-10-13, amended 2026-10-15)
 - **Decision:** `npm run release -- patch|minor|major` on an up-to-date main (`scripts/release.mjs`) bumps the version, commits "Release vX.Y.Z", tags `vX.Y.Z` and pushes. The tag runs `.github/workflows/publish.yml`: tag = package.json and on main, `npm run check`, `npm run test:package`, `npm publish` authenticated by OIDC, then a GitHub release with generated notes. A manual run defaults to `--dry-run`.
 - **Why:** one command on main (it used to be a hand-made GitHub release) keeps version, tag and notes in step. No long-lived npm token to leak or rotate (npm warns against bypass-2FA tokens), the account's 2FA stays on, and public-repo releases get provenance. The first version (0.1.0) was published by hand because a trusted publisher can only be configured on an existing package. **Revisit if:** releases need to come from somewhere other than this repo's workflow.
 
 ## D14 — Shield the app from the overlay's own events (2026-10-15)
-- **Decision:** `shieldApp` in `src/client/index.ts` hides overlay input from the app: bubble listeners are cut at the host, document capture listeners at `window` (our pointerdown/pointerup/keydown are re-dispatched as non-composed copies inside the shadow root), and app blur/focusout/pointerout towards the overlay are hidden. Opening the overlay only blurs text fields, quietly.
+- **Decision:** `shieldApp` (`src/client/shield.ts`) hides overlay input from the app: bubble listeners are cut at the host, document capture listeners at `window` (our pointerdown/pointerup/keydown are re-dispatched as non-composed copies inside the shadow root; with a closed root the real target comes from the shadow root: focused element for keys, `elementFromPoint` for pointers), and app blur/focusout/pointerout towards the overlay are hidden. Opening the overlay only blurs text fields, quietly.
 - **Why:** dropdowns, popovers and comboboxes close on any outside press, focus move or Escape, so reviewers couldn't comment on them. Alternatives: an iframe toolbar (window blur still closes Headless UI menus) or a "comment in 3 s" timer (clumsy; still a fallback for CSS `:hover` menus, which no event shield can keep open). **Revisit if:** an app listens on `window` in the capture phase before Redline loads, or a kit dismisses on `click` in the capture phase without a preceding pointerdown.
 
 ## D15 — Saving a note returns to idle (2026-10-15)
@@ -100,20 +91,17 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D24 — Full HTML entity table in the server bundle; plain edits keep the file's entity spelling (2026-10-16)
 - **Decision:** `decodeEntities` (`src/server/edit.ts`) knows all 2125 WHATWG named references, legacy names without `;`, and numeric ones (invalid → U+FFFD), from a packed table generated once into `src/server/entities.ts` (no runtime dependency). Plain and rich edits write a character the way the element's source already spelled it (`—` → `&mdash;`); `/edit?inspect=1` returns that map as `spell`.
-- **Why:** static decks use `&mdash;`/`&middot;`/`&rarr;` everywhere; with six known names their text never matched the page, and writes turned `&mdash;` into raw `—`. The table is ~29 KB per Node bundle (server/vite/astro), server-only and dev-only; the client bundle doesn't include it.
-- **.NET follows:** `scripts/entities-cs.mjs` writes the same table to `Entities.g.cs` (`WebUtility.HtmlDecode` knows only HTML4 names); `EditGoldenTests.cs` fails while the two differ.
+- **Why:** static decks use `&mdash;`/`&middot;`/`&rarr;` everywhere; with six known names their text never matched the page, and writes turned `&mdash;` into raw `—`. The table is ~29 KB per Node bundle (server/vite/astro), server-only and dev-only; the client bundle doesn't include it. **.NET follows:** `scripts/entities-cs.mjs` writes the same table to `Entities.g.cs` (`WebUtility.HtmlDecode` knows only HTML4 names); `EditGoldenTests.cs` fails while the two differ.
 - **Revisit if:** bundle size matters (ship the HTML4 subset), or the HTML standard adds names.
 
 ## D25 — Same-text elements on static pages: pick by position only when the counts agree (2026-10-16)
 - **Decision:** the overlay sends `nth: { index, count }` (position among same-tag elements with the same text, in document order) when there are several. `staticHtmlWriter` uses it only if the file has exactly `count` matching static elements; otherwise it still refuses.
-- **Why:** a selector path would break on any wrapper the runtime adds; equal counts are a cheap proof that source order and DOM order line up. A mismatch (one copy rendered by script) means the index can't be trusted.
-- **.NET follows:** the static-html writer takes `nth` the same way. The cases are shared in `test/golden/edit/cases.json` (both test suites).
+- **Why:** a selector path would break on any wrapper the runtime adds; equal counts are a cheap proof that source order and DOM order line up. A mismatch (one copy rendered by script) means the index can't be trusted. **.NET follows:** the static-html writer takes `nth` the same way. The cases are shared in `test/golden/edit/cases.json` (both test suites).
 - **Revisit if:** framework writers need it (they use line:col and don't).
 
 ## D26 — Extension API v2, page key option, toolbar beside the panel (2026-10-16)
 - **Decision:** `RedlineApi.version` is 2 (additive): `removeButton(id)`, `panelState()` and a `panel` event `{ open, width }`, `setPageKey(fn)` (fn gets the location and the built-in key; nullish keeps it) and a `page` event. Option `pageKey: 'route'` (default, unchanged: path + `#/…` routes) or `'path'` reaches the client via `/config`. The toolbar centres in the room left of the open panel (`--panel-w`) and wraps there; phones keep one scrolling row, and a full-width panel doesn't move it.
-- **Why:** a host page (a deck) must lay itself out beside the panel and group all slides as one page; a wide bar with extension buttons sat under the panel.
-- **.NET follows:** `RedlineOptions.PageKey` (`Route` | `Path`) in `/config`; HEAD answers on the GET routes there too.
+- **Why:** a host page (a deck) must lay itself out beside the panel and group all slides as one page; a wide bar with extension buttons sat under the panel. **.NET follows:** `RedlineOptions.PageKey` (`Route` | `Path`) in `/config`; HEAD answers on the GET routes there too.
 - **Revisit if:** route-pattern grouping lands (it could become a third `pageKey` mode).
 
 ## D30 — .NET: a C# port of the server, not a proxy to Node (2026-10-16)
@@ -197,3 +185,15 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 - **Decision:** `@umage.ai/redline/next` wraps the config; only in `next dev` (phase) it starts the handler on a random 127.0.0.1 port (once per process), adds a `beforeFiles` rewrite of `/__redline/*` to it (`basePath: false`), and adds `dist/next-loader.cjs` (the JSX stamp) as a webpack pre-loader and as Turbopack `rules` for `*.tsx`/`*.jsx` (`experimental.turbo` before 15.3). The script tag is `<Redline />` from `@umage.ai/redline/next/script`, null outside development. On Next pages the component chain is the element's client owners (`_debugOwner`), then the Server Components on the way up (`_debugInfo`), not the stamps: those miss components without an element of their own (pages, route-group layouts).
 - **Why:** `next dev` takes no middleware and has no HTML hook, but rewrites, loaders and both bundlers are public config. One CommonJS loader serves webpack and Turbopack; an SWC plugin would be tied to Next's SWC version. A layout component works in both bundlers and routers, where adding a webpack entry would not. Server Components never become fibers, and the parent chain is mostly Next's router; owners skip it. Next's proxy hides the caller (only `x-forwarded-host`, copied from the caller's own Host, in 15 and 16), and no hook can add it, so `withRedline` wraps `net.Server.prototype.emit` in its process: each `/__redline` request gets `x-redline-peer: <secret> <socket address>` before Next sees it, overwriting the caller's; the API server trusts it only with the secret. Below Next, so no Next internals; unstamped proxied MCP needs `mcpTokens`.
 - **Revisit if:** Next adds dev middleware or an HTML hook (drop the second server and the component), or Turbopack drops webpack loaders.
+
+## D49 — The overlay is mountable: `mount(opts)` with replaceable parts, building blocks as subpaths (2026-11-03)
+- **Decision:** `@umage.ai/redline/overlay` exports `mount(opts)` → `{ api, unmount() }`, with nothing on import; the injected `client.js` is a thin caller (once per page, top frame, errors captured from load). Each part is an option with a default to wrap or replace: `transport` (`httpTransport()`: config, load(etag), create, update, remove, assetUrl, optional edit/subscribe), `screenshot(req, next)`, `captureErrors`, `shadowMode`, `hostTag`, `namespace` (storage keys, `<ns>Extensions`), `theme` (CSS tokens, now on `:host`), `extensions`. `anchor`, `sketch`, `capture`, `shield`, `styles`, `transport` are `overlay/*` subpaths (dist/overlay, shared chunks). Internally `boot()` became parts (`bar`, `panel`, `pins`, `draft`, `text`, `sketch-tools`, `input`, `api`) that share one context (`context.ts`) and register everything with `Life` for unmount.
+- **Why:** issue #16: AnnotateTheWeb carries a 1,770-line fork of the overlay, and a 1,000-line closure could neither be embedded nor reviewed (Better: cognitive complexity 680). Wrapping a default (`{ ...httpTransport(), create }`) is how to change one call, so no separate hook system. **Revisit if:** the context grows past what the parts need. Issue #16's other items: D50.
+
+## D50 — Statuses, threads and meta on notes; a gate and toolbar slots; `strings`; `@umage.ai/redline-overlay` (2026-11-05)
+- **Decision:** `Note` gains optional `status` (a product's own id; config `statuses: [{ id, label, color, done }]` swaps the done button for a menu that patches `{ status, done }`), `messages[]` (`{ body, author, kind, at }`, shown as a thread; `transport.message` adds a reply box) and pass-through `meta`. They are anchor JSON fields, so both markdown stores keep them, and PATCH takes `status` (Node and .NET; the hub ignores it). `mount({ gate })` or `rl.gate(fn)` (API v3) holds notes and modes until the caller's step, rendered above the toolbar, resolves; `rl.addSlot` puts an element in the toolbar. Every UI word is a key in `strings.ts` (`strings` option or config, `{name}` placeholders). `overlay/` publishes dist/overlay and its types as `@umage.ai/redline-overlay`: no dependencies, its own version, published by CI when new.
+- **Why:** issue #16: what AnnotateTheWeb needs to drop its fork. `done` stays the one closed flag, so agents, MCP and the markdown work unchanged and a status only labels it; threads live in stores that have them, the markdown keeps its one `> ` reply. **Revisit if:** the markdown should carry threads, or the hub should store statuses.
+
+## D51 — Launcher, toolbar and sketch tools can be dragged (opt-in); the page's own buttons open the overlay (2026-11-07)
+- **Decision:** `draggable` (server option, .NET `Draggable`, Angular schema, or mount `config`; default false): the launcher drags as a whole (a press that moves past 4 px is a drag, so its click doesn't open), the toolbar and the sketch tools by their icon (each its own place), up and down only when they span the width (≤ 560 px or nearly full). Positions are per viewer in localStorage (`<ns>:pos:launcher|bar|tools`), clamped to the viewport; double-clicking an icon resets all. The gate and toasts sit next to a moved toolbar (above it in the lower half, else below). `launcher: false` plus any element with `data-<ns>-open` (`""` toggles; `open`, `close`, `comment`, `text`, `sketch`, `notes`) replaces the button; it works while picking too, and isn't picked.
+- **Why:** the fixed bottom-right button and bottom-centre bar cover some apps' own controls (chat widgets, sticky footers); an attribute needs no script and works in every framework and in Razor, where the extension queue (`rl.open()`) needs JS. Opt-in, so nothing moves for teams that didn't ask. Sketch tools get their own place: they sit top-centre, away from the bar, and cover a different part of the page. **Revisit if:** most setups turn it on (make it the default).

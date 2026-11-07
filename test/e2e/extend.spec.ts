@@ -170,7 +170,7 @@ test('extension API v2: removeButton, panel events and width; the toolbar moves 
   await openOverlay(page, f);
   const ping = ui(page, '.bar button[data-ext="ping"]');
   await expect(ping).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as Win).rl.version)).toBe(2);
+  expect(await page.evaluate(() => (window as unknown as Win).rl.version)).toBeGreaterThanOrEqual(2);   // additive: v3 (D50) keeps every v2 call
 
   await page.keyboard.press('n');
   const panel = ui(page, '.panel');

@@ -1,6 +1,6 @@
 # Remote store protocol
 
-Last updated: 2026-10-26 · Cap: 200 lines · The contract a hosted note store implements (D40–D42).
+Last updated: 2026-11-05 · Cap: 200 lines · The contract a hosted note store implements (D40–D42).
 
 Redline keeps notes as markdown in the repo by default. A **remote store** keeps them on another
 server instead, so everyone reviewing the same app sees the same notes, live. The dev server (or the
@@ -37,7 +37,7 @@ or personal token, so the store knows who is asking.
 | `GET /version` | `{ "version": "…" }`. Any string that changes whenever a **visible** note changes. Called on every overlay poll (every 2 s while the overlay is open, 6 s otherwise), so keep it cheap |
 | `GET /notes` | `{ "version": "…", "notes": [Note…] }`: the notes the caller may see (below) |
 | `POST /notes` | Body `{ "note": {…}, "screenshot"?: "data:image/png;base64,…", "sketch"?: "<svg…" }`. Answer: the stored note |
-| `PATCH /notes/{id}` | Body: any of `body`, `reply`, `to` (strings), `done`, `seen` (booleans). Answer: the note, or 404 |
+| `PATCH /notes/{id}` | Body: any of `body`, `reply`, `to`, `status` (strings; `""` clears a status, D50), `done`, `seen` (booleans). Answer: the note, or 404 |
 | `DELETE /notes/{id}` | `{ "ok": true }`, or 404 |
 | `GET /assets/{name}` | The screenshot (`<id>.png`) or sketch (`<id>.svg`), with its content type, or 404 |
 | `GET /events` | Optional change feed, below. 404 when there is none |

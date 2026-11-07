@@ -1,32 +1,27 @@
 # Learnings
 
-Last updated: 2026-11-03 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-07 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
 - **Cause:** the injector replaced `res.writeHead` to hold headers back. Node's own `end()` calls `res.writeHead` internally (`_implicitHeader`), and the wrapper swallowed it, so the body went out with no status line.
-- **Fix:** restore the original `writeHead` and `write` right before the final `end()` (`htmlInjector`).
-- **Guard:** every e2e test (the page wouldn't load).
+- **Fix:** restore the original `writeHead` and `write` right before the final `end()` (`htmlInjector`). **Guard:** every e2e test (the page wouldn't load).
 
 ## L2 — Astro: no source location although the HTML has `data-astro-source-*`
 - **Cause:** Astro's dev toolbar strips those attributes from the DOM after load.
-- **Fix:** the injector adds an inline classic `<script>` that snapshots them into `window.__redlineSrc` (WeakMap) during parsing, before any module script runs.
-- **Guard:** `frameworks.spec.ts` (astro cases).
+- **Fix:** the injector adds an inline classic `<script>` that snapshots them into `window.__redlineSrc` (WeakMap) during parsing, before any module script runs. **Guard:** `frameworks.spec.ts` (astro cases).
 
 ## L3 — Clicking some buttons opened no popover
 - **Cause:** browsers fire no `click` on disabled form controls. Pointer events still fire.
-- **Fix:** pick on `pointerup` (button 0); keep blocking `click` and the rest.
-- **Guard:** `overlay.spec.ts` "disabled buttons can be picked".
+- **Fix:** pick on `pointerup` (button 0); keep blocking `click` and the rest. **Guard:** `overlay.spec.ts` "disabled buttons can be picked".
 
 ## L4 — `C`/`T`/`S` typed into the page instead of switching mode
 - **Cause:** pages with an autofocused input (e.g. a login form). Mode keys are correctly ignored while typing.
-- **Fix:** opening the overlay blurs the active page element.
-- **Guard:** `overlay.spec.ts` "blurs an autofocused input".
+- **Fix:** opening the overlay blurs the active page element. **Guard:** `overlay.spec.ts` "blurs an autofocused input".
 
 ## L5 — Lowercase JSX isn't always HTML
 - **Cause:** react-three-fiber uses `<mesh>`, `<line>`, `<audio>`. An unknown `data-*` prop is applied to the three.js object and breaks.
-- **Fix:** `jsx-source.ts` stamps only an HTML-tag allowlist (no `audio`, `video`, `object`, `line`).
-- **Guard:** unit "jsx stamping touches only html tags".
+- **Fix:** `jsx-source.ts` stamps only an HTML-tag allowlist (no `audio`, `video`, `object`, `line`). **Guard:** unit "jsx stamping touches only html tags".
 
 ## L6 — Vitest runs Vite in serve mode
 - `apply: 'serve'` alone would load Redline into unit-test runs (any app that uses Vitest). The plugin returns `[]` when `process.env.VITEST` is set.
@@ -118,7 +113,7 @@ Prune entries whose cause is gone from the code.
 
 ## L25 — Same-text edit refused on a Reveal deck ("2 <p> elements have this text") though the DOM has 3
 - **Cause:** `nthOf` compared `innerText`, which is `''` for `visibility:hidden` elements, and Reveal hides every slide but the current one, so the hidden copies weren't counted and `nth` was never sent.
-- **Fix:** also match on normalised `textContent` (`src/client/index.ts` `nthOf`).
+- **Fix:** also match on normalised `textContent` (`src/client/page-dom.ts` `nthOf`).
 - **Guard:** `extend.spec.ts` ("same-text elements (one hidden, like a Reveal slide)").
 
 ## L30 — A note vanished after saving: U+2028 in its anchor JSON
@@ -188,8 +183,7 @@ Prune entries whose cause is gone from the code.
 - **Guard:** `next.test.ts` "through the rewrite the API server knows the caller's real address…" (a faked Host from this machine's LAN address); `network.test.ts`.
 
 ## L47 — A running `next dev` keeps failing with `Can't resolve …/dist/next-loader.cjs` after `npm run build`
-- **Cause / fix:** the build empties `dist/` first, and Next caches the failed resolution. Restart the Next fixture servers after a rebuild (Vite fixtures recover on reload).
-- **Guard:** none; e2e builds before starting the servers.
+- **Cause / fix:** the build empties `dist/` first, and Next caches the failed resolution. Restart the Next fixture servers after a rebuild (Vite fixtures recover on reload). **Guard:** none; e2e builds before starting the servers.
 
 ## L48 — CI: `Port 5207 is already in use` in `hub.spec.ts`; passed on Windows
 - **Cause:** the hub test starts its own Vite server on a fixed port, which the new Next fixture also took. Windows let both bind (IPv4 vs IPv6 `localhost`); Linux didn't.
@@ -197,3 +191,9 @@ Prune entries whose cause is gone from the code.
 
 ## L49 — Tab capture: another note's pin in the screenshot on a big or slow page
 - **Cause / fix:** the overlay was hidden, then a fixed ~170 ms wait; the stream runs at 5 fps and a slow page paints late, so the video still held an old frame. Now waits for a frame captured after the hide (`requestVideoFrameCallback`, max 800 ms). **Guard:** `capture.spec.ts` "tab capture" (Chrome `--auto-accept-this-tab-capture`; caught the old code 1 run in 3).
+
+## L50 — Closed shadow root (`shadowMode: 'closed'`): typing a note ran the mode shortcuts
+- **Cause / fix:** seen from `window`, `composedPath()` stops at the host of a closed root, so `isTyping` never saw the overlay's textarea, and the shield would have re-dispatched its copies to the host (and caught them again). Both now ask the shadow root: `shadow.activeElement` for keys, `shadow.elementFromPoint` for pointers; copies are marked and skipped. **Guard:** `embed.spec.ts` "mount(): own transport, closed shadow root…" (a comment and a sketch).
+
+## L51 — After a save, the Comment button stayed lit and the next tap did nothing
+- **Cause / fix:** `saveDraft` showed "Saved →" and set the mode to idle, but re-rendered and cleared `busy` (which pauses picking) only after the follow-up notes reload; a slow reload left a stale toolbar, so a test's or reviewer's next pick went nowhere (flaky "slow save" test, 1 run in 3). The reload now runs after the render. **Guard:** `capture.spec.ts` "after a save the toolbar shows idle at once…" (fails without the fix).

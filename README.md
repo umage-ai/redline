@@ -86,11 +86,15 @@ Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serve
 
 **Other Node dev servers**: `redlineMiddleware()` → `{ api, inject }` from `@umage.ai/redline/server`. **Working on Redline**: `npm link` a built checkout.
 
-Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, labels: [...], jsxSource: true, vueSource: true })`. `root` is
-where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher: false` hides the round button.
-`app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`). `pageKey: 'path'` makes hash routes (a deck's `#/3`)
+Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, draggable: false, labels: [...], jsxSource: true, vueSource: true })`. `root` is
+where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher` and `draggable`: see below. `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`). `pageKey: 'path'` makes hash routes (a deck's `#/3`)
 share one notes file. `labels` may be a function of the request. `prompt` replaces the **Copy prompt** text (`{open}`, `{page}`), or `false`
 hides it (the default with a remote store). The overlay and its API answer this machine only; **`network`** adds addresses, subnets and host names (`['192.168.1.20', '172.17.0.1', 'myapp.test']`), or `true` for everyone (`redlineMiddleware`'s default). Phones, Docker, nginx: [docs/SETUPS.md](docs/SETUPS.md#reaching-the-dev-server-from-elsewhere).
+
+**Launcher and toolbar.** `draggable: true` lets each reviewer move the launcher (drag it), the toolbar and the sketch tools (drag their icon; at phone width only up and down); the browser remembers where, and double-clicking an icon puts them back. `launcher: false`
+hides the round button: open with the hotkey or your own button, no script needed, in any framework or Razor view:
+`<button data-redline-open>Review</button>` toggles; `="comment"`, `"text"`, `"sketch"`, `"notes"`, `"open"`, `"close"` pick what.
+From script: `(window.redlineExtensions ||= []).push(rl => { myBtn.onclick = () => rl.open(); })`; with `mount()`, `rl.api.open()` and `data-<namespace>-open`.
 
 **Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one `.redline/`
 at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's **All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).
@@ -108,7 +112,7 @@ All optional; without them Redline behaves as described above. Types come from `
   `onRemove`, `onSourceWrite`. **`buildSource: true`** keeps source stamps in `vite build` (a review build behind `redlineMiddleware`); **`build`** records the commit.
 - **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
   A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto
-  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event.
+  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`. **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text ([docs/SETUPS.md](docs/SETUPS.md)).
 
 ## Coding agents
 
@@ -125,14 +129,12 @@ Redline isn't tied to one agent. The notes are plain markdown, and `npx redline 
 The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md` or `.gemini/`,
 `.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini` (`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade. In a terminal, `init` lists the changes and asks first (`--yes` skips the question); `--dry-run` only lists them.
 
-**Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline
-notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
+**Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
 `init`, the prompt spells out the note format itself, so any agent can work from it.
 
 **MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
 with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
-`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server
-also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere;
+`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere;
 through `next dev` too).
 
 ## What gets written
@@ -176,8 +178,7 @@ replies are never overwritten. The overlay polls about every 2 s, which is why r
 ## Screenshots
 
 By default the DOM is rendered to a canvas with [modern-screenshot](https://github.com/qq15725/modern-screenshot), page scroll and inner
-scroll containers included. WebGL canvases, cross-origin map tiles and video may come out blank this way. For those apps, tick
-**Pixel-perfect screenshots (tab capture)** in the panel: it captures the real tab pixels, and Chrome asks once per page load.
+scroll containers included. WebGL canvases, cross-origin map tiles and video may come out blank this way. For those apps, tick **Pixel-perfect screenshots (tab capture)** in the panel: it captures the real tab pixels, and Chrome asks once per page load.
 
 ## Develop
 
@@ -189,8 +190,7 @@ npm run check       # typecheck + unit + docs + e2e
 npm run test:package   # install the packed tarball into fresh apps per framework and test it end to end
 ```
 
-Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and
-pushes; [`publish.yml`](.github/workflows/publish.yml) runs every check, publishes via Trusted Publishing and creates the release.
+Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) runs every check, publishes via Trusted Publishing and creates the release.
 
 Contributor guidance: [CLAUDE.md](CLAUDE.md). State, decisions, learnings and roadmap: [docs/](docs/STATE.md#next-up).
 

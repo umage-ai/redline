@@ -42,6 +42,8 @@ Make this secondary; Publish should be the primary action.
 - `whole page` in the heading = the note is about the page, not one element.
 - A word before the type (`### [ ] Bug · Comment · …`) is the reviewer's label (`label` in the
   anchor): Bug, UX, Idea, Copy, or the team's own. It says what kind of change they mean.
+  A `status`, `messages` or `meta` in the anchor belongs to the product that keeps the notes:
+  read them for context, but `[x]` is still what closes a note.
 
 ## Finding the code — in this order
 
