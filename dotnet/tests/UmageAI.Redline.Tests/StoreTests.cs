@@ -43,6 +43,19 @@ public class StoreTests
         await store.UpdateAsync(a.Id!, new NotePatch { Status = "" });
         Assert.Null((await store.ListAsync()).Single(n => n.Id == a.Id).Get("status"));
 
+        // A thread message (D52): appended with a time; from a page only body and kind count (no author), empty is ignored.
+        var forged = NotePatch.FromJson((JsonObject)JsonNode.Parse("""{"message":{"body":"  Bigger please ","author":"mallory","kind":"x y"}}""")!);
+        Assert.Equal("Bigger please", forged.Message!["body"]!.GetValue<string>());
+        Assert.Equal("reviewer", forged.Message!["kind"]!.GetValue<string>());
+        Assert.Null(forged.Message!["author"]);
+        Assert.Null(NotePatch.FromJson((JsonObject)JsonNode.Parse("""{"message":{"body":"  "}}""")!).Message);
+        await store.UpdateAsync(a.Id!, forged);
+        await store.UpdateAsync(a.Id!, NotePatch.FromJson((JsonObject)JsonNode.Parse("""{"message":{"body":"Done","kind":"agent"}}""")!));
+        var thread = (await store.ListAsync()).Single(n => n.Id == a.Id).Data["messages"]!.AsArray();
+        Assert.Equal(new[] { "Bigger please", "Done" }, thread.Select(m => m!["body"]!.GetValue<string>()));
+        Assert.Equal("agent", thread[1]!["kind"]!.GetValue<string>());
+        Assert.Matches(@"^\d{4}-\d\d-\d\d \d\d:\d\d$", thread[0]!["at"]!.GetValue<string>());
+
         Assert.True(await store.RemoveAsync(a.Id!));
         Assert.False(await store.RemoveAsync(a.Id!));
         Assert.Null(await store.AssetAsync($"{a.Id}.png"));

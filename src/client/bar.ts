@@ -23,6 +23,16 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     }, b.label, b.key ? h('kbd', {}, b.key.toUpperCase()) : null))];
   }
 
+  // Extension pick modes (v4): highlighted like the built-in modes while on.
+  function extModes(): HTMLElement[] {
+    const locked = ctx.locked();
+    return ctx.ext.modes.map(m => {
+      const key = m.key?.toUpperCase();
+      return h('button', { class: state.mode === `ext:${m.id}` ? 'on' : '', 'data-mode': m.id, disabled: locked,
+        title: (m.title ?? m.label) + (key ? ` (${key})` : ''), onclick: () => ctx.setMode(`ext:${m.id}`) }, m.label, key ? h('kbd', {}, key) : null);
+    });
+  }
+
   // Toolbar slots (v3): the extension renders into its own element on every toolbar render.
   function slots(): HTMLElement[] {
     return ctx.ext.slots.map(s => {
@@ -45,6 +55,7 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
       btn('comment', t('comment'), 'C', t('commentHow')),
       btn('text', t('text'), 'T', t('textHow')),
       btn('sketch', t('sketch'), 'S', t('sketchHow')),
+      ...extModes(),
       ...extButtons(),
       ...slots(),
       h('div', { class: 'sep' }),

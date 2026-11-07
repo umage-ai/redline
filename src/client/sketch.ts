@@ -4,11 +4,16 @@
 
 export type Shape = (
   | { t: 'rect' | 'arrow'; x1: number; y1: number; x2: number; y2: number }
+  // An extension tool's shape (v4): drawn once by its `svg()` and kept as markup.
+  | { t: 'ext'; id: string; x1: number; y1: number; x2: number; y2: number; svg: string }
   | { t: 'pen'; pts: [number, number][] }
   | { t: 'text'; x: number; y: number; s: string }
 ) & { c?: string };   // colour; default INK
 
-export type Tool = 'rect' | 'arrow' | 'pen' | 'text';
+export type Tool = 'rect' | 'arrow' | 'pen' | 'text' | `ext:${string}`;
+
+/** A drag-shaped tool from an extension (RedlineSketchTool, v4). */
+export interface ExtTool { id: string; svg(box: { x1: number; y1: number; x2: number; y2: number }, color: string, halo: string): string }
 
 const NS = 'http://www.w3.org/2000/svg';
 const INK = '#ff2d55';
@@ -32,6 +37,7 @@ function arrowPath(x1: number, y1: number, x2: number, y2: number) {
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
 export function shapeSvg(s: Shape): string {
+  if (s.t === 'ext') return s.svg;
   const c = s.c ?? INK, halo = haloOf(c);
   if (s.t === 'text')
     return `<text x="${r1(s.x)}" y="${r1(s.y)}" font-family="system-ui,sans-serif" font-size="20" font-weight="600" fill="${c}" stroke="${halo}" stroke-width="4" paint-order="stroke">${esc(s.s)}</text>`;
@@ -61,6 +67,13 @@ export function sketchFile(shapes: Shape[], w: number, h: number, title: string)
     `<g fill="none" stroke-linecap="round" stroke-linejoin="round">${shapes.map(shapeSvg).join('')}</g>\n</svg>\n`;
 }
 
+/** An extension tool's markup for a shape; a throwing tool draws nothing. */
+function drawExt(tool: ExtTool, s: { x1: number; y1: number; x2: number; y2: number; c?: string }): string {
+  const c = s.c ?? INK;
+  try { return String(tool.svg({ x1: r1(s.x1), y1: r1(s.y1), x2: r1(s.x2), y2: r1(s.y2) }, c, haloOf(c)) ?? ''); }
+  catch (err) { console.warn('[redline] sketch tool failed:', err); return ''; }
+}
+
 export class SketchLayer {
   readonly el: SVGSVGElement;
   readonly shapes: Shape[] = [];
@@ -68,6 +81,8 @@ export class SketchLayer {
   color = INK;
   /** The text tool's input placeholder (the overlay passes its translation). */
   labelPlaceholder = 'Label…';
+  /** Extension tools, chosen as `tool = 'ext:<id>'` (the overlay passes its live list). */
+  extTools: ExtTool[] = [];
   private live: Shape | null = null;
   private input: HTMLInputElement | null = null;
 
@@ -91,13 +106,18 @@ export class SketchLayer {
       else this.el.addEventListener('pointerup', () => this.textAt(x, y), { once: true });
       return;
     }
-    this.live = this.tool === 'pen' ? { t: 'pen', pts: [[x, y]], c: this.color } : { t: this.tool, x1: x, y1: y, x2: x, y2: y, c: this.color };
+    const tool = this.tool, ext = tool.startsWith('ext:') ? this.extTools.find(t => `ext:${t.id}` === tool) : undefined;
+    if (tool.startsWith('ext:') && !ext) return;   // its extension removed it
+    this.live = tool === 'pen' ? { t: 'pen', pts: [[x, y]], c: this.color }
+      : ext ? { t: 'ext', id: ext.id, x1: x, y1: y, x2: x, y2: y, svg: '', c: this.color }
+      : { t: tool as 'rect' | 'arrow', x1: x, y1: y, x2: x, y2: y, c: this.color };
     this.el.setPointerCapture(e.pointerId);
     const move = (m: PointerEvent) => {
       if (m.pointerId !== e.pointerId) return;
       const s = this.live!;
       if (s.t === 'pen') s.pts.push([m.clientX, m.clientY]);
       else if (s.t !== 'text') { s.x2 = m.clientX; s.y2 = m.clientY; }
+      if (s.t === 'ext' && ext) s.svg = drawExt(ext, s);
       this.render();
     };
     const up = (u: PointerEvent) => {

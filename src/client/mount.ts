@@ -6,7 +6,7 @@
 //   rl.api.open(); … rl.unmount();
 
 import type { Note } from '../shared/types.ts';
-import type { RedlineGate, RedlinePageKey } from '../shared/extension.ts';
+import type { RedlineGate, RedlineOp, RedlinePageKey } from '../shared/extension.ts';
 import { pageKey } from '../shared/page.ts';
 import { screenshot as builtInShot, stopTabCapture } from './capture.ts';
 import { h, Life, safely, storage } from './dom.ts';
@@ -56,7 +56,8 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   life.add(stopTabCapture);
 
   const state = store.session<ViewState>({ open: false, mode: 'idle', panel: false, scope: 'page', showDone: false });
-  if (state.mode === 'sketch' || opts.gate) state.mode = 'idle';
+  // Sketches and extension modes don't survive a reload (their state, or the extension, is gone).
+  if (state.mode === 'sketch' || state.mode.startsWith('ext:') || opts.gate) state.mode = 'idle';
   // Page key: built-in ('route' or 'path', from the pageKey option), or an extension's function.
   let customKey: RedlinePageKey | null = null;
   const keyNow = () => {
@@ -80,7 +81,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
     errors, t, ns,
     shoot: mark => shoot({ ...mark, host }),
     state, notes: [] as StoredNote[], version: '', draft: null, page: keyNow(), focusId: null, busy: false,
-    ext: { buttons: [], sections: [], slots: [] },
+    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null },
     gate: { fn: opts.gate ?? null, running: null },
     emit: bus.emit,
     persist: () => store.saveSession({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone }),
@@ -157,7 +158,44 @@ function core(ctx: Ctx, keyNow: () => string) {
       config.dir = data.root;
       ctx.renderAll();
       if (changed) ctx.emit('notes', ctx.notes);
-    } catch { /* dev server restarting */ }
+      loadFailed = '';
+    } catch (e) {
+      // Polling goes on quietly (a restarting dev server); `error` fires once per streak, and again
+      // if the reason changes (signed out → workspace gone).
+      const msg = (e as Error)?.message ?? String(e);
+      if (msg !== loadFailed) { loadFailed = msg; fail('load', e); }
+    }
+  }
+  let loadFailed = '';
+
+  function fail(op: RedlineOp, e: unknown, id?: string): Error {
+    const error = e instanceof Error ? e : new Error(String(e));
+    ctx.emit('error', { op, error, ...(id ? { id } : {}) });
+    return error;
+  }
+
+  /* ---------- store calls from the UI (v4): one place for the events, errors and reload ---------- */
+  async function updateNote(id: string, patch: Partial<Note>) {
+    try { await ctx.transport.update(id, patch); }
+    catch (e) { ctx.toast(ctx.t('updateFailed', { error: fail('update', e, id).message }), true); return false; }
+    ctx.emit('noteUpdated', { id, patch: { ...patch } });
+    await poll(true);
+    return true;
+  }
+  async function removeNote(id: string) {
+    try { await ctx.transport.remove(id); }
+    catch (e) { ctx.toast(ctx.t('deleteFailed', { error: fail('remove', e, id).message }), true); return false; }
+    ctx.emit('noteRemoved', { id });
+    await poll(true);
+    return true;
+  }
+  async function sendMessage(id: string, body: string) {
+    if (!ctx.transport.message) return false;
+    try { await ctx.transport.message(id, body); }
+    catch (e) { ctx.toast(ctx.t('sendFailed', { error: fail('message', e, id).message }), true); return false; }
+    ctx.emit('messageSent', { id, body });
+    await poll(true);
+    return true;
   }
 
   // A remote store keeps listing a note for a while after it is resolved (D42): it stays on the
@@ -179,7 +217,7 @@ function core(ctx: Ctx, keyNow: () => string) {
     ctx.gate.fn = fn;
     ctx.notes = []; ctx.version = '';
     if (ctx.draft) ctx.cancelDraft();
-    if (state.mode !== 'idle') { state.mode = 'idle'; ctx.persist(); ctx.emit('mode', 'idle'); }
+    if (state.mode !== 'idle') { stopExt(); state.mode = 'idle'; ctx.persist(); ctx.emit('mode', 'idle'); }
     renderAll();
     ctx.emit('notes', ctx.notes);
     if (state.open) void runGate();
@@ -223,20 +261,28 @@ function core(ctx: Ctx, keyNow: () => string) {
     const was = state.open;
     state.open = v;
     if (v) releaseTextFocus();
-    if (!v) { ctx.cancelDraft(); state.mode = 'idle'; state.panel = false; ctx.hideHl(); }
+    if (!v) { ctx.cancelDraft(); stopExt(); state.mode = 'idle'; state.panel = false; ctx.hideHl(); }
     ctx.persist(); ctx.renderAll();
     if (was !== v) ctx.emit(v ? 'open' : 'close');
     if (v) void runGate();
   }
 
+  /** Leaving an extension mode some other way than setMode (closing, a gate): it hears onStop. */
+  function stopExt() { const m = extMode(); if (m?.onStop) safely(() => m.onStop!(), undefined); }
+  const extMode = (m = state.mode) => m.startsWith('ext:') ? ctx.ext.modes.find(x => `ext:${x.id}` === m) : undefined;
+
   function setMode(m: Mode) {
+    if (m.startsWith('ext:') && !extMode(m)) return;   // no such extension mode (removed, or never added)
     if (m !== 'idle' && locked()) {
       if (!state.open) setOpen(true); else ctx.toast(ctx.t('gateFirst'), true);
       return;
     }
     if (ctx.draft) ctx.cancelDraft();
     if (m !== 'idle' && !state.open) { state.open = true; ctx.emit('open'); }
+    const before = extMode();
     state.mode = state.mode === m ? 'idle' : m;
+    const after = extMode();
+    if (before !== after) { if (before?.onStop) safely(() => before.onStop!(), undefined); if (after?.onStart) safely(() => after.onStart!(), undefined); }
     if (state.mode === 'sketch') ctx.startSketch();
     ctx.hideHl(); ctx.persist(); ctx.renderAll();
     ctx.emit('mode', state.mode);
@@ -260,7 +306,7 @@ function core(ctx: Ctx, keyNow: () => string) {
     return true;
   }
 
-  return { poll, isResolved, markSeen, statusOf, locked, lock, pageNotes, numberOf, openCount, releaseTextFocus, setOpen, setMode, renderAll, checkPage };
+  return { poll, fail, updateNote, removeNote, sendMessage, extMode, isResolved, markSeen, statusOf, locked, lock, pageNotes, numberOf, openCount, releaseTextFocus, setOpen, setMode, renderAll, checkPage };
 }
 
 /** Pins follow scrolling; route changes and the store are watched (change feed, then polling). */

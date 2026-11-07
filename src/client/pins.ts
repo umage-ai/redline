@@ -2,7 +2,7 @@
 
 import type { Note } from '../shared/types.ts';
 import { clip, resolve } from './anchor.ts';
-import { esc, h } from './dom.ts';
+import { esc, h, safely } from './dom.ts';
 import type { Part } from './context.ts';
 
 export const pinsPart: Part<'renderPins' | 'targetOf'> = ctx => {
@@ -39,7 +39,10 @@ export const pinsPart: Part<'renderPins' | 'targetOf'> = ctx => {
 
   function place(pin: HTMLElement, n: Note, r: DOMRect) {
     pin.className = `pin ${n.type}${ctx.isResolved(n) ? ' resolved' : n.done ? ' done' : ''}`;
-    pin.textContent = String(ctx.numberOf(n));
+    // An extension's style (v4): its own label (short; the pin stays round) and colour.
+    const fn = ctx.ext.pinStyle, style = fn ? safely(() => fn({ ...n }), null) : null;
+    pin.textContent = typeof style?.label === 'string' && style.label ? style.label.slice(0, 4) : String(ctx.numberOf(n));
+    pin.style.background = typeof style?.color === 'string' ? style.color : '';
     const fx = Math.min(Math.max(n.target!.fx ?? 1, 0), 1), fy = Math.min(Math.max(n.target!.fy ?? 0, 0), 1);
     // Kept on screen: full-width targets on a phone would put the pin past the right edge.
     const size = pin.offsetWidth || 24;

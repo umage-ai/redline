@@ -132,6 +132,9 @@ export function projectStore(db: Db, project: Project, o: {
       const now = o.now();
       const data = JSON.parse(r.data);
       if (typeof patch.to === 'string') data.to = patch.to;
+      // A product's status and thread messages (D50, D52) live in the note's data like its other fields.
+      if (typeof patch.status === 'string') { if (patch.status) data.status = patch.status; else delete data.status; }
+      if (patch.message) data.messages = [...(Array.isArray(data.messages) ? data.messages : []), { ...patch.message, at: patch.message.at ?? new Date(now).toISOString() }];
       const done = typeof patch.done === 'boolean' ? patch.done : !!r.done;
       const resolved = done ? (r.done ? r.resolved : now) : null;
       // Seen counts only for a resolved note, once; the author's overlay sends it.
