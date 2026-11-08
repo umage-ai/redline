@@ -2,7 +2,8 @@
 // the browser overlay as one self-contained ESM file (what the dev server injects) and as
 // side-effect-free ESM modules for embedding (dist/overlay, D49), and type declarations in dist/types.
 // Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44), and
-// overlay/dist: @umage.ai/redline-overlay, the same overlay modules and their types on their own (D50).
+// overlay/dist: @umage.ai/redline-overlay, the same overlay modules and their types on their own (D50),
+// and agent/dist: @umage.ai/redline-agent, the agent panel (D53).
 import * as esbuild from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +13,7 @@ const watch = process.argv.includes('--watch');
 rmSync('dist', { recursive: true, force: true });
 rmSync('hub/dist', { recursive: true, force: true });
 rmSync('overlay/dist', { recursive: true, force: true });
+rmSync('agent/dist', { recursive: true, force: true });
 
 const node = {
   entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts', next: 'src/next.ts', 'next-script': 'src/next-script.ts' },
@@ -29,10 +31,11 @@ const client = {
   outdir: 'dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
   minify: !watch, sourcemap: 'inline', logLevel: 'info', legalComments: 'none',
 };
-// The agent panel (D53): the overlay extension, and the terminal page it frames (xterm.js inlined, CSS as text).
+// @umage.ai/redline-agent (agent/, D53): the overlay extension and the terminal page it frames (xterm.js
+// inlined, CSS as text), and the server part as one CommonJS file (node-pty stays external, it is native).
 const agent = {
-  entryPoints: { 'agent-panel': 'src/agent/panel.ts', 'agent-terminal': 'src/agent/terminal.ts' },
-  outdir: 'dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
+  entryPoints: { panel: 'agent/src/panel.ts', terminal: 'agent/src/terminal.ts' },
+  outdir: 'agent/dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
   minify: !watch, sourcemap: watch ? 'inline' : false, logLevel: 'info', legalComments: 'none', loader: { '.css': 'text' },
 };
 // @umage.ai/redline/overlay and its building blocks: shared code in chunks, nothing starts on import.
@@ -43,6 +46,13 @@ const overlay = {
   chunkNames: 'chunks/[name]-[hash]', sourcemap: true, logLevel: 'info', legalComments: 'none',
 };
 
+const agentServer = {
+  entryPoints: { index: 'agent/src/index.ts' },
+  outdir: 'agent/dist', bundle: true, platform: 'node', format: 'cjs', target: 'node20',
+  external: ['node-pty', '@lydell/node-pty'], logLevel: 'info',
+  define: { 'import.meta.url': 'undefined' },   // the CommonJS build finds its folder through __dirname
+};
+
 const hub = {
   entryPoints: { cli: 'hub/src/cli.ts' },
   outdir: 'hub/dist', bundle: true, platform: 'node', format: 'esm', target: 'node22',
@@ -50,9 +60,9 @@ const hub = {
 };
 
 if (watch) {
-  for (const o of [node, nextLoader, client, agent, overlay, hub]) await (await esbuild.context(o)).watch();
+  for (const o of [node, nextLoader, client, agent, agentServer, overlay, hub]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(overlay), esbuild.build(hub)]);
+  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(agentServer), esbuild.build(overlay), esbuild.build(hub)]);
   emitTypes();
   overlayPackage();
 }

@@ -5,7 +5,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import css from '@xterm/xterm/css/xterm.css';
-import { API_BASE } from '../shared/types.ts';
+import { API_BASE } from '../../src/shared/types.ts';
 
 const BASE = `${API_BASE}/agent`;
 

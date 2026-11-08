@@ -160,17 +160,22 @@ function stageScript() {
   const add = () => {
     const root = document.documentElement;
     const css = document.createElement('style');
+    // The look of the main promo (promo/stage.html): its fonts, colours, the pen mark and a white "Redline".
+    const SANS = '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif', MONO = '"Cascadia Code", Consolas, ui-monospace, monospace';
     css.textContent = `
       .pr-cap { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 2147483640; pointer-events: none;
-        background: rgba(19,19,22,.92); color: #ececf1; border-radius: 14px; padding: 12px 20px 14px; font: 600 22px/1.3 ui-sans-serif, system-ui, sans-serif;
+        background: rgba(14,14,17,.94); color: #f2f2f6; border-radius: 14px; padding: 12px 22px 14px; font: 700 22px/1.25 ${SANS}; letter-spacing: -.01em;
         box-shadow: 0 10px 30px rgba(0,0,0,.25); text-align: center; transition: opacity .25s; min-width: 420px; }
-      .pr-cap small { display: block; font: 700 12px/1 ui-monospace, Consolas, monospace; letter-spacing: .08em; color: #ff6b85; margin-bottom: 7px; text-transform: uppercase; }
-      .pr-cap kbd { display: inline-block; font: 600 14px ui-monospace, Consolas, monospace; background: #26262d; border: 1px solid #3a3a46; border-bottom-width: 3px; border-radius: 6px; padding: 2px 8px; margin: 8px 3px 0; }
-      .pr-card { position: fixed; inset: 0; z-index: 2147483645; display: grid; place-content: center; text-align: center; gap: 16px; background: #131316; color: #ececf1;
-        font: 500 26px/1.35 ui-sans-serif, system-ui, sans-serif; transition: opacity .4s; }
-      .pr-card h1 { margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -.02em; } .pr-card h1 span { color: #ff2d55; }
-      .pr-card code { font: 600 24px ui-monospace, Consolas, monospace; background: #26262d; padding: 8px 16px; border-radius: 10px; }
-      .pr-card p { margin: 0; color: #a3a3ad; }`;
+      .pr-cap small { display: block; font: 600 12px/1 ${MONO}; letter-spacing: .04em; color: #ff2d55; margin-bottom: 8px; text-transform: uppercase; }
+      .pr-cap kbd { display: inline-block; font: 600 14px ${MONO}; background: #22222a; border: 1px solid #2e2e37; border-bottom-width: 3px; border-radius: 6px; padding: 2px 8px; margin: 8px 3px 0; }
+      .pr-card { position: fixed; inset: 0; z-index: 2147483645; display: grid; place-content: center; text-align: center; gap: 18px; color: #f2f2f6;
+        background: radial-gradient(600px 400px at 50% 40%, #3a0f1d 0%, #0e0e11 70%); font: 600 26px/1.25 ${SANS}; transition: opacity .4s; }
+      .pr-card .logo { display: inline-flex; align-items: center; justify-content: center; gap: 14px; font-size: 68px; font-weight: 800; letter-spacing: -.03em; }
+      .pr-card .logo svg { width: 64px; height: 64px; }
+      .pr-card .logo em { font-style: normal; color: #a3a3ad; font-weight: 600; }
+      .pr-card code { justify-self: center; font: 600 22px ${MONO}; background: #22222a; border: 1px solid #2e2e37; padding: 12px 20px; border-radius: 10px; }
+      .pr-card p { margin: 0; } .pr-card p.sub { font-size: 20px; font-weight: 400; color: #a3a3ad; }
+      .pr-card .url { font: 17px ${MONO}; color: #a3a3ad; }`;
     root.append(css);
     const cap = document.createElement('div'); cap.className = 'pr-cap'; cap.style.opacity = '0'; root.append(cap);
     const cardEl = document.createElement('div'); cardEl.className = 'pr-card'; cardEl.style.opacity = '0'; cardEl.style.pointerEvents = 'none'; root.append(cardEl);
@@ -188,19 +193,21 @@ function stageScript() {
       requestAnimationFrame(() => { r.style.transform = 'scale(1.6)'; r.style.opacity = '0'; });
       setTimeout(() => r.remove(), 500);
     }, true);
+    const MARK = '<svg viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 7l3 3"/></svg>';   // stage.html's mark
     window.__stage = {
       caption(step, title, keys) {
         cap.innerHTML = `<small>${step}</small>${title}${keys.length ? `<div>${keys.map(k => `<kbd>${k}</kbd>`).join('')}</div>` : ''}`;
         cap.style.opacity = '1';
       },
       card(kind) {
+        // Redline sits above everything: hidden while a card shows.
+        const overlay = document.querySelector('redline-root');
+        if (overlay) overlay.style.visibility = kind ? 'hidden' : '';
         if (!kind) { cardEl.style.opacity = '0'; return; }
         cap.style.opacity = '0';
-        const overlay = document.querySelector('redline-root');
-        if (overlay && kind === 'end') overlay.style.visibility = 'hidden';   // it sits above everything
         cardEl.innerHTML = kind === 'title'
-          ? '<h1>Red<span>line</span> · Agent</h1><p>Hand your notes to your AI agent.<br>No terminal needed.</p>'
-          : '<h1>Red<span>line</span></h1><code>redline({ agent: true })</code><p>Your own agent CLI · live status from Claude Code<br>github.com/umage-ai/redline</p>';
+          ? `<div class="logo">${MARK}Redline <em>Agent</em></div><p>Hand your notes to your AI agent.<br>No terminal needed.</p>`
+          : `<div class="logo">${MARK}Redline</div><p class="sub">Your own agent CLI, run from the overlay.<br>Live status from Claude Code.</p><code>npm i -D @umage.ai/redline-agent</code><div class="url">github.com/umage-ai/redline</div>`;
         cardEl.style.opacity = '1';
       },
     };

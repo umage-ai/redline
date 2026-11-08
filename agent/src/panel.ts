@@ -8,9 +8,9 @@
 // from the program's OSC 7501 status. Built on the public extension API (v5), so a product can write
 // its own panel the same way.
 
-import type { Note } from '../shared/types.ts';
-import type { RedlineApi, RedlineStatus, RedlineWindow } from '../shared/extension.ts';
-import { API_BASE } from '../shared/types.ts';
+import type { Note } from '../../src/shared/types.ts';
+import type { RedlineApi, RedlineStatus, RedlineWindow } from '../../src/shared/extension.ts';
+import { API_BASE } from '../../src/shared/types.ts';
 
 const BASE = `${API_BASE}/agent`;
 

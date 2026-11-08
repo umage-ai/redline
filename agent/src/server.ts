@@ -6,39 +6,23 @@
 //
 // Local dev only: every call must come from this machine (whatever `network` allows), POSTs need
 // the x-redline header (a cross-site page can't send it without a preflight) and the session token,
-// and the stream needs the token too. node-pty is an optional peer dependency, loaded on first start.
+// and the stream needs the token too. node-pty (an optional dependency of this package) is loaded on first start.
 
 import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { json, readBody } from './http.ts';
+import { json, readBody } from '../../src/server/http.ts';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState, type ProgramStatus } from './program-status.ts';
 
-/** A button in the agent toolbar that sends a prompt; `{page}`, `{url}` and `{ids}` (the open notes on the page) are filled in. A prompt with `{ids}` shows their count and tags those notes "sent". */
-export interface AgentCommand { label: string; prompt: string; title?: string }
+import type { AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
 
-export interface AgentOptions {
-  /** The CLI to run, looked up on PATH (Windows: PATHEXT, so `claude` finds claude.exe or claude.cmd). Default `claude`. */
-  command?: string;
-  args?: string[];
-  /** Extra environment for the CLI. */
-  env?: Record<string, string>;
-  /** The name in the window title and tooltips. Default: the command's base name and arguments (`claude`, `node fake-agent.mjs`). */
-  label?: string;
-  /** Working directory. Default: the project root. */
-  cwd?: string;
-  /** The agent toolbar's prompt buttons. Default: one "Apply notes" button for the open notes on the page. */
-  commands?: AgentCommand[];
-  /**
-   * The keys the agent toolbar's Allow and Deny send while the program waits for approval (OSC 7501
-   * blocked, permission). Default Enter and Esc (Claude Code's prompt); false hides both buttons.
-   */
-  keys?: { allow?: string; deny?: string } | false;
-  /** The shortcut that opens the overlay straight in the agent toolbar. Default alt+shift+a; false for none. */
-  hotkey?: string | false;
-}
+// This file's folder: dist/ in the package (CommonJS), src/ when run from source (tests). The browser files are in dist/.
+const HERE = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+const DIST = path.basename(HERE) === 'dist' ? HERE : path.join(HERE, '../dist');
 
 export const DEFAULT_COMMANDS: AgentCommand[] = [
   { label: 'Apply notes', title: 'Ask the agent to apply the open notes on this page', prompt: 'Apply the open Redline notes {ids} on page {page}, following the redline skill. Mark each one done when it is applied.' },
@@ -77,7 +61,7 @@ const ACTIVE_MS = 1500;
  * CommonJS), not `import(name)`: bundlers parsing a config's dependencies (Next) warn on that.
  */
 function loadPty(root: string): PtyModule | null {
-  for (const from of [path.join(root, 'package.json'), import.meta.url]) {
+  for (const from of [path.join(root, 'package.json'), path.join(HERE, 'index.js')]) {
     const req = createRequire(from);
     for (const name of ['node-pty', '@lydell/node-pty']) {
       try {
@@ -345,18 +329,14 @@ function sessionFor(opts: AgentOptions, cwd: string): AgentSession {
   return s;
 }
 
-export interface AgentRoutes {
-  /** Answers `/agent/*` (the path after /__redline). `allowed` = the caller is on this machine. */
-  handle(req: IncomingMessage, res: ServerResponse, p: string, allowed: boolean): Promise<void>;
-}
 
 /** The terminal page the agent window frames: xterm.js in its own document, out of the app's and the overlay's key handling. */
 const terminalPage = (base: string) => `<!doctype html><html><head><meta charset="utf-8"><title>Agent</title>
 <style>html,body{margin:0;height:100%;background:#131316;overflow:hidden}#t{position:absolute;inset:4px 2px 2px 8px}</style></head>
 <body><div id="t"></div><script type="module" src="${base}/agent/terminal.js"></script></body></html>`;
 
-/** `distDir`: where agent-panel.js and agent-terminal.js are (next to client.js). */
-export function agentRoutes(opts: AgentOptions, root: string, distDir: string, base: string, readFile: (f: string) => Promise<Buffer>): AgentRoutes {
+/** The panel's routes for one project root, under the API base (`/__redline`). */
+export function agentRoutes(opts: AgentOptions, root: string, base: string): AgentRoutes {
   const cwd = opts.cwd ? path.resolve(root, opts.cwd) : root;
   const session = sessionFor(opts, cwd);
   const commands = (opts.commands ?? DEFAULT_COMMANDS).filter(c => c && typeof c.label === 'string' && typeof c.prompt === 'string');
@@ -364,6 +344,7 @@ export function agentRoutes(opts: AgentOptions, root: string, distDir: string, b
   const hotkey = opts.hotkey === false ? false : typeof opts.hotkey === 'string' && opts.hotkey ? opts.hotkey : 'alt+shift+a';
 
   return {
+    panel: `${base}/agent/panel.js`,
     async handle(req, res, p, allowed) {
       const method = req.method ?? 'GET';
       if (!allowed) return json(res, 403, { error: 'the agent panel answers this machine only' });
@@ -372,9 +353,9 @@ export function agentRoutes(opts: AgentOptions, root: string, distDir: string, b
       const origin = req.headers.origin;
       if (origin && origin !== 'null' && (() => { try { return new URL(origin).host !== req.headers.host; } catch { return true; } })()) return json(res, 403, { error: 'cross-origin agent request' });
 
-      const asset = method === 'GET' && (p === '/agent/panel.js' ? 'agent-panel.js' : p === '/agent/terminal.js' ? 'agent-terminal.js' : null);
+      const asset = method === 'GET' && (p === '/agent/panel.js' ? 'panel.js' : p === '/agent/terminal.js' ? 'terminal.js' : null);
       if (asset) {
-        const file = path.join(distDir, asset);
+        const file = path.join(DIST, asset);
         if (!existsSync(file)) return json(res, 404, { error: 'agent panel not built' });
         res.setHeader('content-type', 'text/javascript; charset=utf-8');
         res.setHeader('cache-control', 'no-store');

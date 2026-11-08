@@ -30,7 +30,7 @@ Rules that hold in every setup:
 - **Overlay runs in:** the framework's dev server. It is gone from builds.
 - **Notes:** `<repo>/.redline/pages/<page>.md`, plus screenshots in `.redline/assets/`. The folder is gitignored.
 - **Agent gets them:** by reading the markdown, guided by the skill that `npx redline init` installs; or with
-  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only, `next dev` included). With `agent: true` the agent CLI runs in a terminal window in the overlay, with prompt buttons and a live status (D53).
+  `npx redline mcp` (stdio); or `POST /__redline/mcp` on the dev server (loopback only, `next dev` included). With `agent: true` and `@umage.ai/redline-agent` installed, the agent CLI runs from an agent toolbar in the overlay (apply notes, approve edits, live status, the terminal on demand; D53).
 - **Install (JS/TS):** `npm i -D @umage.ai/redline`, `npx redline init`, then one line of config:
 
 | Stack | Config |

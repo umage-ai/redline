@@ -7,10 +7,12 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../src/server/program-status.ts';
-import { resolveCommand } from '../../src/server/agent.ts';
+import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent/src/program-status.ts';
+import { resolveCommand } from '../../agent/src/server.ts';
+import { agent } from '../../agent/src/index.ts';
+import { agentFor } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
-import { noteTag, stateLabel } from '../../src/agent/panel.ts';
+import { noteTag, stateLabel } from '../../agent/src/panel.ts';
 
 const ESC = '\x1b', ST = ESC + '\\';
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
@@ -137,7 +139,7 @@ function sse(url: string) {
 test('agent routes: the fake agent reports through OSC 7501 once the server answers its probe; prompts, status, exit', { timeout: 60_000 }, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-'));
   const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
-  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: { command: process.execPath, args: [fake], commands: [{ label: 'Go', prompt: 'go {page}' }] } });
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], commands: [{ label: 'Go', prompt: 'go {page}' }] }) });
   const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
@@ -223,7 +225,7 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
 test('agent routes: stopping a running agent leaves the dev server up (node-pty aborted Node on a second kill, L54)', { timeout: 30_000 }, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-stop-'));
   const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
-  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: { command: process.execPath, args: [fake] } });
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake] }) });
   const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
@@ -240,7 +242,7 @@ test('agent routes: stopping a running agent leaves the dev server up (node-pty 
 
 test('agent routes: only this machine, whatever the network option says; the panel is left out of its config', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-'));
-  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: true, network: true });
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent(), network: true });
   const res = (r: { statusCode?: number; body?: string }) => Object.assign(r, {
     setHeader() {}, getHeader() {}, end(b?: string) { r.body = b; }, writeHead() {}, write() {}, on() {},
   });
@@ -267,4 +269,29 @@ test('agent toolbar: the state chip and the note tags', () => {
   assert.equal(noteTag({ id: 'a', done: false }, sent), 'sent');
   assert.equal(noteTag({ id: 'a', done: true }, sent), 'done');
   assert.equal(noteTag({ id: 'b', done: true }, sent), null, 'done by hand, never sent: no tag');
+});
+
+test('agent option: the core loads @umage.ai/redline-agent only when asked; missing, it warns and runs on', () => {
+  const routes = { panel: '/x/agent/panel.js', handle: async () => {} };
+  const seen: unknown[] = [];
+  const load = () => ({ agent: (o?: unknown) => { seen.push(o); return { routes: () => routes }; } });
+  assert.equal(agentFor(undefined, '/r', '/x', load), null);
+  assert.equal(agentFor(false, '/r', '/x', load), null);
+  assert.equal(agentFor(true, '/r', '/x', load), routes);
+  assert.equal(agentFor('codex', '/r', '/x', load), routes);
+  assert.equal(agentFor({ command: 'gemini', args: ['-y'] }, '/r', '/x', load), routes);
+  assert.deepEqual(seen, [{}, { command: 'codex' }, { command: 'gemini', args: ['-y'] }]);
+  // A plugin from the package is used as is, with the root and the API base.
+  let ctx: unknown;
+  assert.equal(agentFor({ routes: c => { ctx = c; return routes; } }, '/r', '/x', () => { throw new Error('not loaded'); }), routes);
+  assert.deepEqual(ctx, { root: '/r', base: '/x' });
+  // Not installed: null and one warning, however often it is asked.
+  const warn = console.warn, warnings: string[] = [];
+  console.warn = (m: string) => warnings.push(m);
+  try {
+    assert.equal(agentFor(true, '/r', '/x', () => null), null);
+    assert.equal(agentFor('codex', '/r', '/x', () => null), null);
+  } finally { console.warn = warn; }
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /npm i -D @umage\.ai\/redline-agent/);
 });

@@ -82,11 +82,11 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 
 **Remote stores** (D40–D45, docs/PROTOCOL.md, docs/SETUPS.md): `src/server/remote.ts` (client), `protocol.ts` (reference
 server), `/__redline/events` fans one feed out to every overlay; .NET `Notes/RemoteNoteStore.cs`. Store methods take an
-optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`, `overlay/` a third (dist/overlay, D50); `examples/review-frontend`: deployed review, shapes A–C.
+optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`, `overlay/` a third (dist/overlay, D50), `agent/` a fourth (D53); `examples/review-frontend`: deployed review, shapes A–C.
 
 **Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
-`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`). The `agent` option (D53): `src/server/agent.ts` (node-pty session, OSC 7501 in `program-status.ts`) + `src/agent/` (panel extension, xterm iframe).
+`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`). The `agent` option (D53) is a fourth package, `agent/` (`@umage.ai/redline-agent`: node-pty session in `server.ts`, OSC 7501 in `program-status.ts`, the toolbar extension `panel.ts`, the xterm iframe `terminal.ts`); the core only has `src/server/agent-hook.ts` (option types, loads the package from the project).
 
 **Source location per framework** (`anchor.ts` `sourceInfo`, D7/D23): JSX through a dev-only transform
 (`src/server/jsx-source.ts` stamps `data-redline-src="file:line:col Component"` on an HTML-tag allowlist), Vue SFC templates

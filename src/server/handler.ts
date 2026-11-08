@@ -18,7 +18,7 @@ import { cleanLabel, normalizeLabels, type LabelDef, type LabelsSource } from '.
 import { GUIDE_PATHS } from '../init.ts';
 import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
 import { json, readBody } from './http.ts';
-import { agentRoutes, type AgentOptions } from './agent.ts';
+import { agentFor, type AgentOptions, type AgentPlugin } from './agent-hook.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -103,11 +103,11 @@ export interface RedlineOptions {
    */
   build?: string;
   /**
-   * The agent panel (D53, local dev only): your agent CLI in a terminal window in the overlay, with
-   * a live status (OSC 7501) on its toolbar button and prompt buttons ("Apply notes"). true runs
-   * `claude`; a string another CLI (`'codex'`); or the full options. Needs `node-pty` installed.
+   * The agent panel (D53, local dev only): your agent CLI run from an agent toolbar in the overlay,
+   * with its live status (OSC 7501). true runs `claude`; a string another CLI (`'codex'`); the full
+   * options; or `agent({…})` from the package. Needs `@umage.ai/redline-agent` installed.
    */
-  agent?: boolean | string | AgentOptions;
+  agent?: boolean | string | AgentOptions | AgentPlugin;
 }
 
 const MARK = 'data-redline-client';
@@ -252,9 +252,8 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
-  const agentOpts: AgentOptions | null = !opts.agent ? null : opts.agent === true ? {} : typeof opts.agent === 'string' ? { command: opts.agent } : opts.agent;
-  const agent = agentOpts ? agentRoutes(agentOpts, root, path.dirname(opts.clientFile), API_BASE, f => fs.readFile(f)) : null;
-  if (agent) extensions.push(`${API_BASE}/agent/panel.js`);
+  const agent = agentFor(opts.agent, root, API_BASE);
+  if (agent) extensions.push(agent.panel);
   const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
   const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);
   const labelsFor = async (req: IncomingMessage): Promise<LabelDef[]> => {

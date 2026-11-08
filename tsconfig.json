@@ -24,6 +24,7 @@
   "include": [
     "src",
     "hub/src",
+    "agent/src",
     "examples/review-frontend",
     "test/unit",
     "test/e2e",
