@@ -439,16 +439,24 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
     x.tb = x.rl.addToolbar({
       id: 'deck', hotkey: 'alt+shift+d',
       render: (el: HTMLElement) => { el.append(Object.assign(document.createElement('button'), { textContent: `Next ${x.tbLog.length}` })); },
+      attached: (el: HTMLElement) => { if (x.cardText) el.textContent = x.cardText; },
       onShow: () => x.tbLog.push('show'), onHide: () => x.tbLog.push('hide'),
     });
   });
   await expect(ui('.bar')).toBeHidden();   // added hidden, overlay still closed
   await page.keyboard.press('Alt+Shift+KeyD');
   await expect(ui('.bar.ext .xbar[data-toolbar="deck"] button')).toHaveText('Next 1');
+  // Its attached card: none while empty; above the toolbar (which sits low).
+  await expect(ui('.attach')).toBeHidden();
+  await w(x => { x.cardText = 'Speaker notes'; x.tb.render(); });
+  await expect(ui('.attach[data-toolbar="deck"]')).toHaveText('Speaker notes');
+  const [cardBox, barBox] = [await ui('.attach').boundingBox(), await ui('.bar').boundingBox()];
+  expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(barBox!.y);
   await expect(ui('.bar button').filter({ hasText: 'Comment' })).toHaveCount(0);
   expect(await w(x => x.tb.isOpen())).toBe(true);
   await ui('.bar button.back').click();
   await expect(ui('.bar button').filter({ hasText: 'Comment' })).toBeVisible();
+  await expect(ui('.attach')).toBeHidden();   // the card goes with its toolbar
   await w(x => x.tb.show());
   await page.keyboard.press('Escape');
   await expect(ui('.bar.ext')).toHaveCount(0);

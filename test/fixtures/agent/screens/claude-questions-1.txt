@@ -1,0 +1,25 @@
+
+ ▐▛███▛█   Claude Code v2.1.319
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   C:\work\demo… · /rc
+
+
+❯ Use the AskUserQuestion tool to ask me two questions at once: question 1 header Color, which      
+  colour for the button (options Red, Blue, Green, each with a short description); question 2       
+  header Size, which size (Small, Large). Then tell me what I picked.                               
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Color  ☐ Size  ✔ Submit  →
+
+Which colour should the button be?
+
+❯ 1. Red
+     Bold and attention-grabbing, good for warnings or primary calls to action.
+  2. Blue
+     Calm and trustworthy, a common default for primary actions.
+  3. Green
+     Positive and affirming, suits confirm or success actions.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

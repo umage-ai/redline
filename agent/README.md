@@ -5,8 +5,12 @@ The agent panel for [Redline](https://github.com/umage-ai/redline)'s dev server.
 server and drives it from the overlay, so reviewers never need to open a terminal:
 
 - **The agent toolbar**: **Agent** (A) in Redline's toolbar, or `Alt+Shift+A` from anywhere. It shows the
-  agent's state and its own message, **Apply 3 notes** and your own prompt buttons, **Allow**/**Deny** when
-  it asks for approval, **CLI** for its terminal (xterm.js), and stop.
+  agent's state and its own message, **Apply 3 notes** and your own prompt buttons, **CLI** for its
+  terminal (xterm.js), and stop.
+- **Its questions in a card** on the toolbar: when the CLI shows a menu (a permission prompt with its diff, Claude Code's
+  stepped questions, a trust dialog), the card shows the context, the question and every option, with a field for
+  "Type something". It is read off the CLI's screen, so it is exactly what the terminal shows; a click moves the
+  CLI's cursor and presses Enter.
 - **Live status** from the CLI's OSC 7501 reports (Claude Code sends them): a light sweeping round the toolbar
   and a turning ring on the closed launcher while it works, an orange glow while it waits for you, green when done.
 - **The notes panel** tags the notes it was sent and the ones it has done.

@@ -1,0 +1,34 @@
+
+ ▐▛███▛█   Claude Code v2.1.319
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   C:\work\demo… · /rc
+
+
+❯ Use the AskUserQuestion tool to ask me two questions at once: question 1 header Color, which      
+  colour for the button (options Red, Blue, Green, each with a short description); question 2       
+  header Size, which size (Small, Large). Then tell me what I picked.                               
+
+
+
+
+
+
+
+
+
+   
+
+
+
+
+
+
+
+
+✢ Catapulting… (3s · ↓ 292 tokens)
+                                                                                ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  demo  ⎍ master  Opus 5.5 (medium)
+  ⏸ manual mode on · ← 3 agents

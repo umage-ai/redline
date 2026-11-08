@@ -48,7 +48,7 @@ const overlay = {
 
 const agentServer = {
   entryPoints: { index: 'agent/src/index.ts' },
-  outdir: 'agent/dist', bundle: true, platform: 'node', format: 'cjs', target: 'node20',
+  outdir: 'agent/dist', outExtension: { '.js': '.cjs' }, bundle: true, platform: 'node', format: 'cjs', target: 'node20',
   external: ['node-pty', '@lydell/node-pty'], logLevel: 'info',
   define: { 'import.meta.url': 'undefined' },   // the CommonJS build finds its folder through __dirname
 };

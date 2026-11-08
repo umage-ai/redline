@@ -45,7 +45,7 @@ export const dragPart: Part<'placeLauncher' | 'placeBar' | 'placeTools' | 'place
       if (p.x !== null && !wide(k, node)) { s.left = `${clampX(p.x, node.offsetWidth)}px`; s.right = 'auto'; s.margin = '0'; s.transform = 'none'; }
       else s.left = s.right = s.margin = s.transform = '';
     }
-    if (k === 'bar') { follow(el.gate); follow(el.toast); }
+    if (k === 'bar') { follow(el.gate); follow(el.toast); ctx.placeAttached(); }
   }
 
   /** The gate or a toast: next to a moved, visible toolbar (above it in the lower half, else below). */

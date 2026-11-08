@@ -198,6 +198,30 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     assert.equal((await call('/answer', { choice: 'deny' }, auth)).status, 200);
     await stream.until(e => e.event === 'status' && e.data.status.state === 'done' && e.data.status.msg === 'denied');
 
+    // The menu is read off the screen and sent with the status; /choose picks an option (arrows, then Enter).
+    assert.equal((await call('/choose', { index: 0 }, auth)).status, 409, 'no menu on screen');
+    assert.equal((await call('/input', { data: 'ask\r' }, auth)).status, 200);
+    const ask = await stream.until(e => e.event === 'status' && e.data.prompt?.options?.length === 3);
+    assert.equal(ask.data.prompt.question, 'Do you want to make this edit to src/App.tsx?');
+    assert.deepEqual(ask.data.prompt.options.map((o: { label: string }) => o.label), ['Yes', "Yes, and don't ask again this session", 'No']);
+    assert.ok(ask.data.prompt.lines.some((l: { t: string; bg?: string }[]) => l.some(s => s.t.includes('+  <button>') && s.bg)), 'the diff keeps its colour');
+    assert.equal((await call('/choose', { index: 1 }, auth)).status, 200);
+    await stream.until(e => e.event === 'status' && e.data.status.msg === 'approved: always' && !e.data.prompt);
+
+    // Stepped questions: an option, then a typed answer, then the review step's Submit.
+    assert.equal((await call('/input', { data: 'form\r' }, auth)).status, 200);
+    const form = await stream.until(e => e.event === 'status' && e.data.prompt?.steps?.length === 3);
+    assert.deepEqual(form.data.prompt.steps.map((s: { label: string; state: string; current: boolean }) => `${s.state}:${s.label}${s.current ? '*' : ''}`), ['todo:Color*', 'todo:Size', 'submit:Submit']);
+    assert.equal(form.data.prompt.options[0].description, 'Bold, for warnings and primary calls to action.');
+    assert.equal((await call('/choose', { index: 1 }, auth)).status, 200);
+    const size = await stream.until(e => e.event === 'status' && e.data.prompt?.question === 'Which size should the button be?');
+    assert.equal(size.data.prompt.options[2].input, true);
+    assert.equal((await call('/choose', { index: 2, text: 'XL' }, auth)).status, 200);
+    const review = await stream.until(e => e.event === 'status' && e.data.prompt?.question === 'Ready to submit your answers?');
+    assert.ok(review.data.prompt.lines.some((l: { t: string }[]) => l.map(s => s.t).join('').includes('→ XL')));
+    assert.equal((await call('/choose', { index: 0 }, auth)).status, 200);
+    await stream.until(e => e.event === 'status' && e.data.status.msg === 'answered: Color=Blue, Size=XL');
+
     // Keys typed in the terminal; "exit" ends it with code 3.
     assert.equal((await call('/input', { data: 'exit\r' }, auth)).status, 200);
     const exit = await stream.until(e => e.event === 'exit');

@@ -97,6 +97,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .bar button:disabled { opacity: .4; cursor: default; background: none; color: var(--fg-2); }
 .bar .slot { display: flex; align-items: center; }
 .bar .xbar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.attach { position: fixed; z-index: 3; pointer-events: auto; box-sizing: border-box; max-width: min(640px, calc(100vw - 16px)); overflow: auto; overscroll-behavior: contain; padding: 12px 14px; border-radius: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.attach.lit { border-color: color-mix(in srgb, var(--dot) 60%, var(--line)); }
 /* The gate (D50): a blocking step (sign-in, a workspace picker) above the toolbar, rendered by the caller. */
 .gate { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(68px + var(--lift, 0px)); width: min(380px, calc(100vw - 16px));
   max-height: calc(100vh - 100px); overflow: auto; padding: 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line);

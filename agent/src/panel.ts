@@ -11,6 +11,7 @@
 import type { Note } from '../../src/shared/types.ts';
 import type { RedlineApi, RedlineStatus, RedlineWindow } from '../../src/shared/extension.ts';
 import { API_BASE } from '../../src/shared/types.ts';
+import type { PromptView, Span } from './screen.ts';
 
 const BASE = `${API_BASE}/agent`;
 
@@ -21,11 +22,14 @@ interface Info {
   exitCode?: number | null;
   status: { state: State; kind?: string; progress?: number; msg?: string; title?: string; source: '7501' | 'activity' | 'none' };
   sent?: string[];
+  /** The menu on the agent's screen (a permission prompt, stepped questions), read off it by the server. */
+  prompt?: PromptView;
 }
 interface Command { label: string; prompt: string; title?: string }
 interface Setup extends Info { token: string; commands: Command[]; approve: boolean; hotkey: string | false }
 
 const GREY = '#a3a3ad', OFF = '#5c5c66';
+const ESC = '\x1b', LEFT = '\x1b[D', RIGHT = '\x1b[C';
 
 /**
  * The indicator for a status, the same on the open toolbar (its outline) and the closed launcher (a
@@ -94,7 +98,29 @@ const CSS = `
 .ag-line kbd { flex: none; }
 .ag-tag { display: inline-block; margin-top: 6px; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; }
 .ag-tag.sent { color: #8fb4ff; background: color-mix(in srgb, #4f8cff 18%, transparent); }
-.ag-tag.done { color: #3ecf8e; background: color-mix(in srgb, #3ecf8e 16%, transparent); }`;
+.ag-tag.done { color: #3ecf8e; background: color-mix(in srgb, #3ecf8e 16%, transparent); }
+.ag-card { display: grid; gap: 10px; font-size: 13px; }
+.ag-card .ag-who { display: flex; align-items: center; gap: 7px; color: var(--fg-2); font-size: 12px; }
+.ag-card .ag-who .ag-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.ag-steps { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ag-steps button { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line); color: var(--fg-2); font-size: 12px; }
+.ag-steps button.cur { color: var(--fg); border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+.ag-steps button.done { color: #3ecf8e; }
+.ag-steps .nav { border: 0; padding: 3px 6px; }
+.ag-ctx { margin: 0; padding: 8px 10px; border-radius: 8px; background: #0b0b0e; font: 12px/1.45 ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace; color: #c7c7cf; white-space: pre; overflow: auto; max-height: 260px; }
+.ag-q { font-weight: 650; font-size: 14px; line-height: 1.35; }
+.ag-opts { display: grid; gap: 4px; }
+.ag-opt { display: grid; grid-template-columns: 22px 1fr; gap: 2px 8px; align-items: baseline; text-align: left; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-2); color: var(--fg); cursor: pointer; }
+.ag-opt:hover:not(:disabled) { background: var(--bg-3); border-color: color-mix(in srgb, var(--c) 50%, var(--line)); }
+.ag-opt.sel { border-color: color-mix(in srgb, var(--c) 70%, var(--line)); }
+.ag-opt:disabled { opacity: .5; cursor: default; }
+.ag-opt .n, .ag-input .n { font: 600 11px ui-monospace, Consolas, monospace; color: var(--fg-2); background: var(--bg-3); border-radius: 5px; text-align: center; padding: 1px 0; }
+.ag-opt .d { grid-column: 2; color: var(--fg-2); font-size: 12px; line-height: 1.35; }
+.ag-input { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 5px 6px 5px 10px; border-radius: 8px; border: 1px dashed var(--line); }
+.ag-input input { min-width: 0; background: transparent; border: 0; outline: 0; color: var(--fg); font: inherit; padding: 4px 0; }
+.ag-input button, .ag-foot button { padding: 4px 10px; border-radius: 7px; background: var(--bg-3); color: var(--fg); }
+.ag-foot { display: flex; align-items: center; gap: 8px; color: var(--fg-2); font-size: 11.5px; }
+.ag-foot span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }`;
 const style = () => Object.assign(document.createElement('style'), { textContent: CSS });
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> & { class?: string; data?: Record<string, string> } = {}, ...kids: (Node | string | null | false)[]) {
@@ -133,6 +159,15 @@ export default async function agentPanel(rl: RedlineApi) {
     catch (e) { fail(e); }
   };
   const answer = (choice: 'allow' | 'deny') => void post('/answer', { choice }).catch(fail);
+  // A choice on its way: the card's buttons wait for the next screen.
+  let choosing = false;
+  const choose = async (index: number, text?: string) => {
+    choosing = true; toolbar?.render();
+    try { await post('/choose', text === undefined ? { index } : { index, text }); }
+    catch (e) { fail(e); }
+    finally { setTimeout(() => { choosing = false; toolbar?.render(); }, 400); }
+  };
+  const key = (data: string) => void post('/input', { data }).catch(fail);
 
   let frame: HTMLIFrameElement | null = null;
   const toFrame = (msg: unknown) => frame?.contentWindow?.postMessage(msg, location.origin);
@@ -153,11 +188,12 @@ export default async function agentPanel(rl: RedlineApi) {
   function renderToolbar(box: HTMLElement) {
     const st = stateLabel(info), s = info.status;
     const blocked = info.running && s.state === 'blocked';
-    const approval = blocked && s.kind === 'permission' && setup.approve;
+    const asked = blocked && !!info.prompt?.options.length;   // the card shows the options
+    const approval = blocked && !asked && s.kind === 'permission' && setup.approve;
     const btn = (label: string, title: string, onclick: () => void, cls = '', ...extra: (Node | string)[]) =>
       el('button', { class: cls, title, onclick }, label, ...extra);
     const chip = el('div', { class: 'ag-chip', title: `${name()}: ${st.label}${st.msg ? ` · ${st.msg}` : ''}`, data: { state: info.running ? s.state : 'stopped' } },
-      el('span', { class: 'ag-dot' }), el('b', {}, st.label), st.msg ? el('span', { class: 'ag-msg' }, st.msg) : null);
+      el('span', { class: 'ag-dot' }), el('b', {}, st.label), st.msg && !asked ? el('span', { class: 'ag-msg' }, st.msg) : null);   // asking: the card has the question
     chip.style.setProperty('--c', st.color);
     const sep = () => el('div', { class: 'sep' });
     const actions: HTMLElement[] = approval
@@ -169,14 +205,66 @@ export default async function agentPanel(rl: RedlineApi) {
         b.dataset.cmd = c.label;
         return b;
       });
-    const cli = btn(blocked && !approval ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${name()}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
+    const cli = btn(blocked && !approval && !asked ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${name()}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
     cli.dataset.cli = '';
     const stop = info.running ? btn('■', `Stop ${name()}`, () => void post('/stop').catch(fail), 'ag-stop') : null;
     box.replaceChildren(style(), chip, sep(), ...actions, sep(), cli, ...(stop ? [stop] : []));
   }
 
+  /**
+   * What the agent is asking, attached to the toolbar: the steps of a stepped question, the lines
+   * above the question (a diff keeps its colours), the question, the options as buttons (one for
+   * each, with its description; "Type something" as a field), the CLI's key hint, Cancel and CLI.
+   */
+  function renderCard(box: HTMLElement) {
+    const pv = info.running ? info.prompt : undefined;
+    if (!pv?.options.length) return;
+    const st = stateLabel(info);
+    const card = el('div', { class: 'ag-card', data: { kind: info.status.kind ?? '' } });
+    card.style.setProperty('--c', st.color);
+    card.append(el('div', { class: 'ag-who' }, el('span', { class: 'ag-dot' }), name() + ' · ' + st.label));
+    if (pv.steps?.length) {
+      const cur = pv.steps.findIndex(x => x.current);
+      const go = (to: number) => { if (cur >= 0 && to !== cur) key((to > cur ? RIGHT : LEFT).repeat(Math.abs(to - cur))); };
+      card.append(el('div', { class: 'ag-steps' },
+        el('button', { class: 'nav', title: 'Previous question', onclick: () => key(LEFT) }, '←'),
+        ...pv.steps.map((x, i) => el('button', { class: (x.current ? 'cur ' : '') + x.state, title: x.label, onclick: () => go(i) }, (x.state === 'done' ? '☒ ' : x.state === 'submit' ? '✔ ' : '☐ ') + x.label)),
+        el('button', { class: 'nav', title: 'Next question', onclick: () => key(RIGHT) }, '→')));
+    }
+    if (pv.lines.length) card.append(el('pre', { class: 'ag-ctx' }, ...pv.lines.flatMap((l, i) => [...(i ? ['\n'] : []), ...l.map(spanEl)])));
+    if (pv.question) card.append(el('div', { class: 'ag-q' }, pv.question));
+    const opts = el('div', { class: 'ag-opts' });
+    pv.options.forEach((o, i) => {
+      const num = el('span', { class: 'n' }, String(o.n ?? i + 1));
+      if (o.input) {
+        const field = document.createElement('input');
+        field.placeholder = o.label.replace(/\.$/, '') + '…';
+        field.disabled = choosing;
+        // Sent: let go of the field, or the card (not redrawn while a field has focus) would keep this step.
+        const send = () => { const v = field.value.trim(); if (v) { field.blur(); void choose(i, v); } };
+        field.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+        opts.append(el('div', { class: 'ag-input' }, num, field, el('button', { onclick: send, disabled: choosing }, 'Send')));
+        return;
+      }
+      opts.append(el('button', { class: 'ag-opt' + (o.selected ? ' sel' : ''), disabled: choosing, onclick: () => void choose(i), title: o.selected ? 'Selected in the CLI' : '' },
+        num, el('span', {}, o.label), o.description ? el('span', { class: 'd' }, o.description) : null));
+    });
+    card.append(opts, el('div', { class: 'ag-foot' }, el('span', {}, pv.hint ?? ''),
+      el('button', { title: 'Esc in the CLI', onclick: () => key(ESC) }, 'Cancel'),
+      el('button', { title: 'Show ' + name() + "'s terminal", onclick: () => win?.show() }, 'CLI')));
+    box.append(style(), card);
+  }
+  const spanEl = (sp: Span) => {
+    const n = el('span', {}, sp.t);
+    if (sp.fg) n.style.color = sp.fg;
+    if (sp.bg) n.style.background = sp.bg;
+    if (sp.b) n.style.fontWeight = '700';
+    if (sp.dim) n.style.opacity = '.6';
+    return n;
+  };
+
   toolbar = rl.addToolbar({
-    id: 'agent', hotkey: setup.hotkey || undefined, render: renderToolbar,
+    id: 'agent', hotkey: setup.hotkey || undefined, render: renderToolbar, attached: renderCard,
     onShow() { void post('/ack').catch(() => {}); sync(); },
     onHide() { sync(); },
   });

@@ -4,8 +4,12 @@ import type { RedlinePanelState } from '../shared/extension.ts';
 import { esc, h, safely } from './dom.ts';
 import { ICON, type Mode, type Part } from './context.ts';
 
-export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panelState' | 'showHl' | 'hideHl' | 'extToolbar' | 'setToolbar'> = ctx => {
+export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panelState' | 'showHl' | 'hideHl' | 'extToolbar' | 'setToolbar' | 'placeAttached'> = ctx => {
   const { el, ui, config, state } = ctx;
+  // An extension toolbar's attached card (v5): next to the toolbar, above it in the lower half.
+  const card = h('div', { class: 'attach', style: 'display:none' });
+  ui.append(card);
+  ctx.life.on(window, 'resize', () => placeAttached());
 
   function renderLauncher() {
     el.launcher.style.display = !state.open && config.launcher ? '' : 'none';
@@ -71,6 +75,7 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
 
   function renderBar() {
     el.bar.style.display = state.open && state.mode !== 'sketch' ? '' : 'none';
+    if (!state.open || state.mode === 'sketch') card.style.display = 'none';
     if (!state.open) return;
     const { t } = ctx, locked = ctx.locked();
     const brand = h('div', { class: config.draggable ? 'brand grab' : 'brand', title: config.draggable ? t('dragBar') : undefined, html: ICON + `<span>${esc(t('brand'))}</span>` });
@@ -83,7 +88,8 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
       safely(() => tb.render(box), undefined);
       el.bar.replaceChildren(brand, ...dots, h('div', { class: 'sep' }), box, h('div', { class: 'sep' }),
         h('button', { class: 'back', title: tb.backTitle ?? t('backToToolbar'), onclick: () => setToolbar(null) }, '✕'));
-    } else renderMain(brand, dots, locked);
+      renderAttached(tb);
+    } else { card.style.display = 'none'; renderMain(brand, dots, locked); }
     // An extension status as the toolbar's outline (v5): a light sweeping round it (busy), a glow, or steady.
     const lit = ctx.toolbarOutline();
     el.bar.classList.toggle('lit', !!lit);
@@ -94,6 +100,37 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     // Astro's dev toolbar also lives bottom-centre; sit above it.
     ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
     ctx.placeBar();
+    card.classList.toggle('lit', !!lit);
+    if (lit) card.style.setProperty('--dot', lit.status.color);
+    placeAttached();
+  }
+
+  function renderAttached(tb: NonNullable<ReturnType<typeof extToolbar>>) {
+    // Not while a field in it has focus (an answer being typed): the toolbar re-renders on every poll.
+    const a = ctx.shadow.activeElement;
+    const typing = !!a && card.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName);
+    if (!typing) {
+      card.replaceChildren();
+      if (tb.attached) safely(() => tb.attached!(card), undefined);
+      card.dataset.toolbar = tb.id;
+    }
+    card.style.display = card.childNodes.length ? '' : 'none';
+  }
+
+  /** Above the toolbar while it sits in the lower half of the window, below it otherwise; centred on it, kept on screen. */
+  function placeAttached() {
+    if (card.style.display === 'none' || el.bar.style.display === 'none') return;
+    const r = el.bar.getBoundingClientRect(), s = card.style, GAP = 8, EDGE = 8;
+    s.minWidth = `${Math.min(Math.round(r.width), innerWidth - 2 * EDGE)}px`;
+    const w = card.offsetWidth;
+    s.left = `${Math.round(Math.max(EDGE, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - EDGE)))}px`;
+    if (r.top + r.height / 2 > innerHeight / 2) {
+      s.top = 'auto'; s.bottom = `${Math.round(innerHeight - r.top + GAP)}px`; s.maxHeight = `${Math.round(r.top - GAP - EDGE)}px`;
+      card.classList.add('above'); card.classList.remove('below');
+    } else {
+      s.bottom = 'auto'; s.top = `${Math.round(r.bottom + GAP)}px`; s.maxHeight = `${Math.round(innerHeight - r.bottom - GAP - EDGE)}px`;
+      card.classList.add('below'); card.classList.remove('above');
+    }
   }
 
   function renderMain(brand: HTMLElement, dots: HTMLElement[], locked: boolean) {
@@ -144,5 +181,5 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
   }
   function hideHl() { el.hl.style.display = 'none'; el.hlLabel.style.display = 'none'; }
 
-  return { renderBar, renderLauncher, syncPanel, panelState, showHl, hideHl, extToolbar, setToolbar };
+  return { renderBar, renderLauncher, syncPanel, panelState, showHl, hideHl, extToolbar, setToolbar, placeAttached };
 };

@@ -24,7 +24,7 @@ try {
   assert(!pkg.dependencies && Object.keys(pkg.optionalDependencies ?? {}).join() === 'node-pty', 'node-pty must be the only (optional) dependency');
   const tgz = execSync(`npm pack --ignore-scripts --pack-destination "${tmp}"`, { cwd: dir, encoding: 'utf8' }).trim().split('\n').pop();
   const files = execSync(`tar -tzf "${tgz}"`, { cwd: tmp, encoding: 'utf8' }).trim().split('\n');
-  for (const f of ['dist/index.js', 'dist/panel.js', 'dist/terminal.js', 'index.d.ts', 'README.md', 'LICENSE']) assert(files.includes(`package/${f}`), `${f} is not in the tarball`);
+  for (const f of ['dist/index.cjs', 'dist/panel.js', 'dist/terminal.js', 'index.d.ts', 'README.md', 'LICENSE']) assert(files.includes(`package/${f}`), `${f} is not in the tarball`);
   assert(!files.some(f => f.includes('/src/')), 'no sources in the tarball');
 
   step('install the tarball (no optional deps) and serve the panel');

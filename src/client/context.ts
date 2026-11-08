@@ -120,6 +120,8 @@ export interface Ctx {
   extToolbar(): RedlineToolbarDef | undefined;
   /** Shows an extension toolbar (opening the overlay, ending a mode), or null for the main one. */
   setToolbar(id: string | null): void;
+  /** Puts the extension toolbar's attached card next to the toolbar (above it in the lower half, else below). */
+  placeAttached(): void;
   /* drag.ts */
   placeLauncher(): void;
   placeBar(): void;

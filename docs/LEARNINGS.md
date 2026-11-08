@@ -129,13 +129,10 @@ Prune entries whose cause is gone from the code.
 - **Guard:** `MiddlewareTests.Registers_in_servers_json_for_redline_mcp`. Checked by hand: `node dist/cli.js mcp` lists notes from the Razor sample.
 
 ## L35 — Promo video: the last screencast frame's duration was ignored
-- **Cause / fix:** ffmpeg's concat demuxer drops the final entry's `duration`; `concatList` in `promo/record.mjs` repeats the last file after it.
-- **Guard:** not a test; check the contact sheet (`promo/README.md`, "Changing it") after a change.
+- **Cause / fix:** ffmpeg's concat demuxer drops the final entry's `duration`; `concatList` in `promo/record.mjs` repeats the last file after it. **Guard:** not a test; check the contact sheet (`promo/README.md`, "Changing it").
 
 ## L36 — The red highlight stayed on screen after saving a comment, drifting as the page scrolled
-- **Cause:** the scroll handler (`reposition`) redraws the highlight for `draft.el`, and `draft` is still set while `saveDraft` awaits the screenshot and POST. A scroll then re-showed it; after saving, the mode is idle, so nothing hid it again.
-- **Fix:** `reposition` skips while `busy`; a successful save hides the highlight.
-- **Guard:** `overlay.spec.ts` "the highlight goes away after saving, even if the page scrolls while saving". It flaked on CI until it waited for the textarea's focus (set a tick after the click): earlier keys are mode keys, `s` opened sketch.
+- **Cause / fix:** the scroll handler (`reposition`) redraws the highlight for `draft.el`, still set while `saveDraft` awaits the screenshot and POST, and after saving nothing hid it again. `reposition` skips while `busy`; a successful save hides it. **Guard:** `overlay.spec.ts` "the highlight goes away after saving, even if the page scrolls while saving". It flaked on CI until it waited for the textarea's focus (set a tick after the click): earlier keys are mode keys, `s` opened sketch.
 
 ## L40 — Every page logged an EventSource error when the store had no change feed
 - **Cause:** the first version opened `/__redline/events` unconditionally; the markdown store answers 404, and Chrome logs the refused stream on every load.
@@ -196,3 +193,6 @@ Prune entries whose cause is gone from the code.
 
 ## L55 — A toolbar or launcher drag sometimes stopped halfway (flaky D51 drag test)
 - **Cause / fix:** the drag captured the pointer on the pressed child (the toolbar's icon); a notes poll re-renders the toolbar's children every 2 s while open, and a detached element loses its capture, so the moves stopped arriving. It now listens and captures on the element that moves; the clicks after a press then target that element, so the double-click reset looks under the pointer (`shadow.elementFromPoint`). **Guard:** `embed.spec.ts` "draggable launcher and toolbar…" (failed about 1 run in 8 here; 20 in a row pass), with a small launcher.
+
+## L56 — The agent's question card answered once, then froze or picked from a menu already gone
+- **Cause / fix:** two timing gaps. The headless screen (`@xterm/headless`) parses writes asynchronously, so `/choose` read the menu before the CLI's last redraw (it had already closed); `Screen.settled()` now waits for pending writes before each read, and the 250 ms status tick skips a read while one is pending (else it kept a closed menu in the status until the next output). And the core doesn't redraw an attached card while a field in it has focus (so typing survives the 2 s re-renders): after sending a typed answer the field kept focus and the card kept the old step, so the panel blurs it on send. **Guard:** `agent.test.ts` (`/choose` with no menu → 409; a typed answer then the review step), `agent.spec.ts` (the card goes after a choice: failed 1 run in 6; the stepped questions test).

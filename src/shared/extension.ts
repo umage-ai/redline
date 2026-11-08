@@ -129,6 +129,12 @@ export interface RedlineToolbarDef {
   id: string;
   /** Called on every toolbar render while shown, with an empty element inside the overlay's shadow root. */
   render(el: HTMLElement): void;
+  /**
+   * A card attached to the toolbar: above it while the toolbar sits in the lower half of the
+   * window, below it when dragged up; it scrolls when the text is long. Called with every toolbar
+   * render while shown; leave `el` empty for no card. It isn't redrawn while a field in it has focus.
+   */
+  attached?(el: HTMLElement): void;
   /** Like the overlay's hotkey (`alt+shift+a`): opens the overlay in this toolbar from anywhere; pressed there, closes it. */
   hotkey?: string;
   /** Hover text for the ✕ that goes back (default "Back to the toolbar (Esc)"). */

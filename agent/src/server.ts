@@ -17,6 +17,7 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { json, readBody } from '../../src/server/http.ts';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState, type ProgramStatus } from './program-status.ts';
+import { Screen, type PromptView } from './screen.ts';
 
 import type { AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
 
@@ -37,6 +38,8 @@ export interface AgentInfo {
   status: ProgramStatus & { source: '7501' | 'activity' | 'none' };
   /** Notes handed to the agent in this dev-server session (by a prompt that named them), oldest first. */
   sent: string[];
+  /** The menu on the agent's screen (a permission prompt, stepped questions), read off it; while running. */
+  prompt?: PromptView;
 }
 
 export const DEFAULT_KEYS = { allow: '\r', deny: '\x1b' };
@@ -61,7 +64,7 @@ const ACTIVE_MS = 1500;
  * CommonJS), not `import(name)`: bundlers parsing a config's dependencies (Next) warn on that.
  */
 function loadPty(root: string): PtyModule | null {
-  for (const from of [path.join(root, 'package.json'), path.join(HERE, 'index.js')]) {
+  for (const from of [path.join(root, 'package.json'), path.join(HERE, 'index.cjs')]) {
     const req = createRequire(from);
     for (const name of ['node-pty', '@lydell/node-pty']) {
       try {
@@ -119,6 +122,10 @@ class AgentSession {
   private lastOutput = 0;
   private lastStatus = '';
   private bracketedPaste = false;
+  private screen: Screen | null = null;   // a headless copy of the screen, to read menus off (screen.ts)
+  private view: PromptView | null = null;
+  private screenDirty = false;
+  private choosing = false;
   private exitCode: number | null | undefined;
   private cols = 100;
   private rows = 30;
@@ -142,7 +149,7 @@ class AgentSession {
     const s = this.records.status();
     const source = this.reported ? '7501' : this.pty ? 'activity' : 'none';
     const status = source === 'activity' ? { ...s, state: (Date.now() - this.lastOutput < ACTIVE_MS ? 'working' : 'idle') as ProgramState } : s;
-    return { running: !!this.pty, command: this.command, exitCode: this.exitCode, status: { ...status, source }, sent: [...this.sent] };
+    return { running: !!this.pty, command: this.command, exitCode: this.exitCode, status: { ...status, source }, sent: [...this.sent], ...(this.pty && this.view ? { prompt: this.view } : {}) };
   }
 
   async start(cols?: number, rows?: number) {
@@ -164,6 +171,9 @@ class AgentSession {
       this.reported = false;
       this.records.clear();
       this.scrollback = '';
+      this.screen?.dispose();
+      this.screen = new Screen(this.cols, this.rows);
+      this.view = null;
       this.bracketedPaste = false;
       p.onData(d => this.output(p, d));
       p.onExit(e => {
@@ -176,7 +186,7 @@ class AgentSession {
         this.pushStatus();
         release(p);
       });
-      this.timer ??= setInterval(() => { this.flush(); this.pushStatus(); }, 250);
+      this.timer ??= setInterval(() => { this.readScreen(); this.flush(); this.pushStatus(); }, 250);
       this.broadcast('start', this.info());
     })();
     try { await this.starting; } finally { this.starting = null; }
@@ -193,6 +203,8 @@ class AgentSession {
     if (on > off) this.bracketedPaste = true; else if (off > on) this.bracketedPaste = false;
     this.lastOutput = Date.now();
     this.scrollback += d;
+    this.screen?.write(d);
+    this.screenDirty = true;
     if (this.scrollback.length > MAX_SCROLLBACK) {
       // Cut at a line start, so the replay doesn't begin inside an escape sequence (mostly).
       const cut = this.scrollback.indexOf('\n', this.scrollback.length - MAX_SCROLLBACK);
@@ -257,9 +269,50 @@ class AgentSession {
     return true;
   }
 
+  /** The menu on screen now (a tick after output: the headless terminal parses asynchronously). */
+  private readScreen() {
+    // Not mid-parse: a read then would keep a menu the program already closed, until its next output (L56).
+    if (!this.screenDirty || !this.screen || this.screen.busy) return;
+    this.screenDirty = false;
+    this.view = this.screen.prompt();
+  }
+
+  /**
+   * Picks option `index` of the menu on screen, the way a person would: arrow keys to it (one at a
+   * time, checking the ❯ arrived), then Enter. `text` for an input option ("Type something"): typed
+   * into it before Enter. False when there is no such menu, or a choice is already on its way.
+   */
+  async choose(index: number, text?: string): Promise<boolean> {
+    const p = this.pty, screen = this.screen;
+    if (!p || !screen || this.choosing) return false;
+    this.choosing = true;
+    try {
+      await screen.settled();   // the screen as the program last drew it
+      const view = screen.prompt();
+      if (!view?.options[index]) return false;
+      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+      const at = async () => { await screen.settled(); return screen.prompt()?.options.findIndex(o => o.selected) ?? -1; };
+      let cur = view.options.findIndex(o => o.selected);
+      for (let tries = 0; cur !== index && tries < 3 * view.options.length; tries++) {
+        p.write(cur < index ? '\x1b[B' : '\x1b[A');
+        const was = cur;
+        for (let w = 0; w < 20 && (await at()) === was; w++) await sleep(25);
+        cur = await at();
+        if (cur < 0) return false;   // the menu went away meanwhile
+      }
+      if (cur !== index) return false;
+      if (text) { p.write(text.replace(/[\x00-\x1f\x7f]/g, ' ')); await sleep(80); }
+      p.write('\r');
+      this.screenDirty = true;
+      return true;
+    } finally { this.choosing = false; }
+  }
+
   resize(cols: number, rows: number) {
     this.cols = clampSize(cols, 20, 400); this.rows = clampSize(rows, 5, 200);
     try { this.pty?.resize(this.cols, this.rows); } catch { /* exited meanwhile */ }
+    this.screen?.resize(this.cols, this.rows);
+    this.screenDirty = true;
   }
 
   stop() {
@@ -402,6 +455,12 @@ export function agentRoutes(opts: AgentOptions, root: string, base: string): Age
           const key = keys && (body.choice === 'allow' ? keys.allow : body.choice === 'deny' ? keys.deny : undefined);
           if (!key) return json(res, 400, { error: 'choice must be allow or deny' });
           if (!session.answer(key)) return json(res, 409, { error: 'the agent is not waiting for approval' });
+          return json(res, 200, { ok: true });
+        }
+        case '/agent/choose': {
+          const index = Number(body.index);
+          if (!Number.isInteger(index) || index < 0) return json(res, 400, { error: 'index is required' });
+          if (!(await session.choose(index, typeof body.text === 'string' ? body.text.slice(0, 4000) : undefined))) return json(res, 409, { error: 'no such option on the agent\'s screen' });
           return json(res, 200, { ok: true });
         }
         case '/agent/ack':

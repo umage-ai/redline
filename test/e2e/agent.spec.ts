@@ -76,22 +76,28 @@ test('agent toolbar: apply notes without the terminal, approve from the toolbar,
   await page.keyboard.press('Enter');
   expect(await page.evaluate(() => (window as unknown as { appKeys: number }).appKeys)).toBe(0);
 
-  // Waiting for approval: the toolbar asks, with the program's question; Allow and Deny answer it.
-  await expect(chip(page)).toHaveText(/Needs your approval\s*Edit src\/App\.tsx\?/);
+  // Waiting for approval: a card attached to the toolbar shows what the CLI asks, read off its screen
+  // (the diff in its colours, the question, every option); a click picks one.
+  await expect(chip(page)).toHaveText('Needs your approval');   // the question is in the card; the message stays in the hover text
+  await expect(chip(page)).toHaveAttribute('title', /Edit src\/App\.tsx\?/);
   await expect(outline(page)).toHaveClass(/pulse/);
-  await expect(apply).toHaveCount(0);
-  await agentBar(page).getByRole('button', { name: 'Allow' }).click();
-  await expect(chip(page)).toHaveText(/Done\s*approved: yes/);
-  await terminal(page).locator('.xterm-screen').click();
-  await page.keyboard.type('ask');
-  await page.keyboard.press('Enter');
-  await agentBar(page).getByRole('button', { name: 'Deny' }).click();
-  await expect(chip(page)).toHaveText(/Done\s*denied/);
+  await expect(agentBar(page).getByRole('button', { name: 'Allow' })).toHaveCount(0);   // the card has the real options
+  const card = ui(page, '.attach[data-toolbar="agent"] .ag-card');
+  await expect(card.locator('.ag-q')).toHaveText('Do you want to make this edit to src/App.tsx?');
+  await expect(apply).toBeDisabled();   // nothing new while it asks
+  await expect(card.locator('.ag-opt')).toHaveText([/Yes$/, /Yes, and don't ask again this session/, /No$/]);
+  await expect(card.locator('.ag-ctx')).toContainText('+  <button>+ Plan a route</button>');
+  await expect(card.locator('.ag-ctx span', { hasText: '+  <button>' })).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const [cardBox, barBox] = [await card.boundingBox(), await ui(page, '.bar').boundingBox()];
+  expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(barBox!.y);   // the toolbar sits low: the card above it
+  await card.locator('.ag-opt', { hasText: "don't ask again" }).click();
+  await expect(chip(page)).toHaveText(/Done\s*approved: always/);
+  await expect(card).toHaveCount(0);
 
   // ✕ goes back to the main toolbar; A brings the agent toolbar again.
   await ui(page, '.bar button.back').click();
   await expect(ui(page, '.bar button[data-ext="agent"]')).toBeVisible();
-  await expect(outline(page)).toHaveAttribute('title', /done · denied/);   // the outline stays on the main toolbar
+  await expect(outline(page)).toHaveAttribute('title', /done · approved: always/);   // the outline stays on the main toolbar
   await ui(page, '.bar button[data-ext="agent"]').click();
   await expect(agentBar(page)).toBeVisible();
 
@@ -125,4 +131,47 @@ test('agent toolbar: its shortcut opens the overlay in it from anywhere, Esc ste
   await page.keyboard.press('c');   // a mode swaps the main toolbar back
   await expect(ui(page, '.bar button.on')).toHaveText(/Comment/);
   await expect(agentBar(page)).toHaveCount(0);
+});
+
+test('agent toolbar: stepped questions in the attached card (steps, descriptions, a typed answer, review), below a toolbar moved up', async ({ page, request }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('a');
+  await expect(agentBar(page)).toBeVisible();
+  const info = await (await request.get(`${f.url}/__redline/agent/info`)).json();
+  const h = { 'x-redline': '1', 'x-redline-agent': info.token };
+  await request.post(`${f.url}/__redline/agent/start`, { headers: h, data: {} });
+  await expect(chip(page)).toHaveText(/Ready/, { timeout: 20_000 });
+  await request.post(`${f.url}/__redline/agent/input`, { headers: h, data: { data: 'form\r' } });
+
+  const card = ui(page, '.attach[data-toolbar="agent"] .ag-card');
+  await expect(chip(page)).toHaveText(/Needs your answer/);
+  await expect(card.locator('.ag-steps button:not(.nav)')).toHaveText(['☐ Color', '☐ Size', '✔ Submit']);
+  await expect(card.locator('.ag-steps button.cur')).toHaveText('☐ Color');
+  await expect(card.locator('.ag-q')).toHaveText('Which colour should the button be?');
+  await expect(card.locator('.ag-opt').nth(1)).toContainText('Calm and trustworthy, a common default.');
+  await card.locator('.ag-opt', { hasText: 'Blue' }).click();
+
+  // Step 2: an answer of our own, typed into the card.
+  await expect(card.locator('.ag-q')).toHaveText('Which size should the button be?');
+  await expect(card.locator('.ag-steps button.done')).toHaveText('☒ Color');
+  await card.locator('.ag-input input').fill('XL');
+  await card.locator('.ag-input input').press('Enter');
+
+  // Review: what was answered, then Submit.
+  await expect(card.locator('.ag-q')).toHaveText('Ready to submit your answers?');
+  await expect(card.locator('.ag-ctx')).toContainText('→ Blue');
+  await expect(card.locator('.ag-ctx')).toContainText('→ XL');
+
+  // The toolbar moved to the top half (as a drag would): the card goes below it.
+  await page.evaluate(() => {
+    const bar = document.querySelector('redline-root')!.shadowRoot!.querySelector<HTMLElement>('.bar')!;
+    Object.assign(bar.style, { top: '24px', bottom: 'auto' });
+    dispatchEvent(new Event('resize'));
+  });
+  const [cardBox, barBox] = [await card.boundingBox(), await ui(page, '.bar').boundingBox()];
+  expect(cardBox!.y).toBeGreaterThanOrEqual(barBox!.y + barBox!.height);
+
+  await card.locator('.ag-opt', { hasText: 'Submit answers' }).click();
+  await expect(chip(page)).toHaveText(/Done\s*answered: Color=Blue, Size=XL/);
+  await expect(card).toHaveCount(0);
 });
