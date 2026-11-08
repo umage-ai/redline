@@ -18,6 +18,7 @@ import { cleanLabel, normalizeLabels, type LabelDef, type LabelsSource } from '.
 import { GUIDE_PATHS } from '../init.ts';
 import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
 import { json, readBody } from './http.ts';
+import { agentRoutes, type AgentOptions } from './agent.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -41,6 +42,8 @@ export interface RedlineOptions {
   launcher?: boolean;
   /** The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51). Default false. */
   draggable?: boolean;
+  /** The launcher's size: 'small' (26 px), 'medium' (32 px, default), 'large' (40 px), or px (20–64). */
+  launcherSize?: 'small' | 'medium' | 'large' | number;
   /**
    * The labels a reviewer can tag a note with (chips in the popover, D46): names, or { name, color }.
    * Default Bug, UX, Idea and Copy; false turns labels off. A function is asked on every /config
@@ -99,6 +102,12 @@ export interface RedlineOptions {
    * with source stamps (`buildSource`, D43) rather than on a dev server.
    */
   build?: string;
+  /**
+   * The agent panel (D53, local dev only): your agent CLI in a terminal window in the overlay, with
+   * a live status (OSC 7501) on its toolbar button and prompt buttons ("Apply notes"). true runs
+   * `claude`; a string another CLI (`'codex'`); or the full options. Needs `node-pty` installed.
+   */
+  agent?: boolean | string | AgentOptions;
 }
 
 const MARK = 'data-redline-client';
@@ -243,6 +252,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
+  const agentOpts: AgentOptions | null = !opts.agent ? null : opts.agent === true ? {} : typeof opts.agent === 'string' ? { command: opts.agent } : opts.agent;
+  const agent = agentOpts ? agentRoutes(agentOpts, root, path.dirname(opts.clientFile), API_BASE, f => fs.readFile(f)) : null;
+  if (agent) extensions.push(`${API_BASE}/agent/panel.js`);
   const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
   const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);
   const labelsFor = async (req: IncomingMessage): Promise<LabelDef[]> => {
@@ -250,7 +262,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     try { return normalizeLabels(await (opts.labels as Extract<LabelsSource<IncomingMessage>, Function>)({ req })); }
     catch (e) { console.warn('[redline] labels() failed:', e); return []; }
   };
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable === true, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable === true, launcherSize: opts.launcherSize, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);
@@ -322,7 +334,11 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         return;
       }
       // guide: the agent guide `redline init` installed, so the copied prompt can point at it.
-      if (read && p === '/config') return json(res, 200, { ...config, labels: await labelsFor(req), guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null });
+      // The agent panel is for this machine only: other callers `network` lets in don't get it.
+      if (read && p === '/config') return json(res, 200, {
+        ...config, extensions: agent && !localCall(req) ? extensions.slice(0, -1) : extensions,
+        labels: await labelsFor(req), guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null,
+      });
       if (read && p.startsWith('/assets/')) {
         const a = await store.asset(p.slice(8), { req });
         if (!a) return json(res, 404, { error: 'not found' });
@@ -358,6 +374,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
         req.on('close', () => { clearInterval(beat); unlisten(res); });
         return;
       }
+
+      // The agent panel (D53) checks its own callers: this machine only, whatever `network` says.
+      if (agent && p.startsWith('/agent/')) return agent.handle(req, res, p, localCall(req));
 
       if (p === '/mcp') return serveMcp(req, res, mcpBackend(req), opts.mcpTokens, versionOf(opts.clientFile));
 

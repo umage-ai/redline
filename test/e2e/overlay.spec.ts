@@ -12,6 +12,7 @@ test('injects the client and stays out of the way until opened', async ({ page }
   await page.goto(f.url);
   await expect(page.locator('script[data-redline-client]')).toBeAttached();
   await expect(ui(page, '.launcher')).toBeVisible();
+  await expect(ui(page, '.launcher')).toHaveCSS('width', '32px');   // launcherSize default: medium
   await expect(ui(page, '.bar')).toBeHidden();
 });
 

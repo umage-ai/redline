@@ -102,10 +102,14 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "vite": ">=7"
+    "vite": ">=7",
+    "node-pty": ">=1.1.0"
   },
   "peerDependenciesMeta": {
     "vite": {
+      "optional": true
+    },
+    "node-pty": {
       "optional": true
     }
   },
@@ -148,9 +152,12 @@
     "@types/react": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "@vitejs/plugin-vue": "^6.0.10",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "astro": "^7.4.2",
     "esbuild": "^0.28.2",
     "modern-screenshot": "^4.7.0",
+    "node-pty": "^1.1.0",
     "preact": "^11.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

@@ -86,7 +86,7 @@ optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `sr
 
 **Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
-`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`).
+`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`). The `agent` option (D53): `src/server/agent.ts` (node-pty session, OSC 7501 in `program-status.ts`) + `src/agent/` (panel extension, xterm iframe).
 
 **Source location per framework** (`anchor.ts` `sourceInfo`, D7/D23): JSX through a dev-only transform
 (`src/server/jsx-source.ts` stamps `data-redline-src="file:line:col Component"` on an HTML-tag allowlist), Vue SFC templates

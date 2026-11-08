@@ -27,6 +27,7 @@ import { textPart } from './text.ts';
 import { sketchPart } from './sketch-tools.ts';
 import { dragPart } from './drag.ts';
 import { installInput } from './input.ts';
+import { windowsPart } from './windows.ts';
 
 export type { MountOptions, OverlayConfig, RedlineHandle, ScreenshotRequest, StatusDef } from './options.ts';
 export type { RedlineTransport, StoredNote, EditRequest, EditResult, Inspection } from './transport.ts';
@@ -58,6 +59,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   const state = store.session<ViewState>({ open: false, mode: 'idle', panel: false, scope: 'page', showDone: false });
   // Sketches and extension modes don't survive a reload (their state, or the extension, is gone).
   if (state.mode === 'sketch' || state.mode.startsWith('ext:') || opts.gate) state.mode = 'idle';
+  if (!state.open || opts.gate) state.toolbar = null;   // an extension toolbar comes back with its extension (agent panel)
   // Page key: built-in ('route' or 'path', from the pageKey option), or an extension's function.
   let customKey: RedlinePageKey | null = null;
   const keyNow = () => {
@@ -66,8 +68,9 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
     return typeof k === 'string' && k ? k : builtIn;
   };
 
+  ui.style.setProperty('--launcher', `${launcherPx(config.launcherSize)}px`);
   const el = layers(config, t);
-  ui.append(el.hl, el.hlLabel, el.pins, el.launcher, el.bar, el.panel, el.gate, el.popLayer, el.tip, el.toast);
+  ui.append(el.hl, el.hlLabel, el.pins, el.launcher, el.bar, el.panel, el.windows, el.gate, el.popLayer, el.tip, el.toast);
   el.launcher.addEventListener('click', () => ctx.setOpen(true));
 
   const shoot = (mark: ScreenshotRequest) => opts.screenshot
@@ -81,14 +84,14 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
     errors, t, ns,
     shoot: mark => shoot({ ...mark, host }),
     state, notes: [] as StoredNote[], version: '', draft: null, page: keyNow(), focusId: null, busy: false,
-    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null },
+    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null, statuses: new Map(), toolbars: [], badge: null },
     gate: { fn: opts.gate ?? null, running: null },
     emit: bus.emit,
-    persist: () => store.saveSession({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone }),
+    persist: () => store.saveSession({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone, toolbar: state.toolbar ?? null }),
   } as Partial<Ctx> as Ctx;
 
   Object.assign(ctx, core(ctx, keyNow));
-  Object.assign(ctx, toastPart(ctx), barPart(ctx), pinsPart(ctx), panelPart(ctx), draftPart(ctx), textPart(ctx), sketchPart(ctx), dragPart(ctx));
+  Object.assign(ctx, toastPart(ctx), barPart(ctx), pinsPart(ctx), panelPart(ctx), draftPart(ctx), textPart(ctx), sketchPart(ctx), dragPart(ctx), windowsPart(ctx));
   installInput(ctx);
   startLoop(ctx);
 
@@ -100,6 +103,14 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   const api = createApi(ctx, bus.on, fn => { customKey = fn; });
   loadExtensions(ctx, api, ns, opts.extensions);
   return { api, unmount: () => { ctx.draft?.sketch?.destroy(); life.end(); } };
+}
+
+/** The launcher's size in px: a named size, or a number (also as text, from .NET) within 20–64. */
+export function launcherPx(v: OverlayConfig['launcherSize']): number {
+  if (v === 'small') return 26;
+  if (v === 'large') return 40;
+  const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? +v : NaN;
+  return Number.isFinite(n) ? Math.max(20, Math.min(64, Math.round(n))) : 32;
 }
 
 /** Errors to attach to notes: our own capture (stopped at unmount), the caller's list, or none. */
@@ -140,6 +151,7 @@ function layers(config: OverlayConfig, t: Translate): Layers {
     popLayer: h('div'),
     toast: h('div', { class: 'toast', style: 'display:none' }),
     gate: h('div', { class: 'gate', style: 'display:none' }),
+    windows: h('div'),
   };
 }
 
@@ -261,7 +273,7 @@ function core(ctx: Ctx, keyNow: () => string) {
     const was = state.open;
     state.open = v;
     if (v) releaseTextFocus();
-    if (!v) { ctx.cancelDraft(); stopExt(); state.mode = 'idle'; state.panel = false; ctx.hideHl(); }
+    if (!v) { ctx.cancelDraft(); stopExt(); state.mode = 'idle'; state.panel = false; ctx.hideHl(); leaveToolbar(); }
     ctx.persist(); ctx.renderAll();
     if (was !== v) ctx.emit(v ? 'open' : 'close');
     if (v) void runGate();
@@ -271,12 +283,20 @@ function core(ctx: Ctx, keyNow: () => string) {
   function stopExt() { const m = extMode(); if (m?.onStop) safely(() => m.onStop!(), undefined); }
   const extMode = (m = state.mode) => m.startsWith('ext:') ? ctx.ext.modes.find(x => `ext:${x.id}` === m) : undefined;
 
+  /** An extension toolbar goes away with the overlay, and when a mode starts: it hears onHide. */
+  function leaveToolbar() {
+    const tb = ctx.extToolbar();
+    state.toolbar = null;
+    if (tb?.onHide) safely(() => tb.onHide!(), undefined);
+  }
+
   function setMode(m: Mode) {
     if (m.startsWith('ext:') && !extMode(m)) return;   // no such extension mode (removed, or never added)
     if (m !== 'idle' && locked()) {
       if (!state.open) setOpen(true); else ctx.toast(ctx.t('gateFirst'), true);
       return;
     }
+    if (m !== 'idle') leaveToolbar();
     if (ctx.draft) ctx.cancelDraft();
     if (m !== 'idle' && !state.open) { state.open = true; ctx.emit('open'); }
     const before = extMode();

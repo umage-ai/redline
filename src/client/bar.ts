@@ -4,15 +4,24 @@ import type { RedlinePanelState } from '../shared/extension.ts';
 import { esc, h, safely } from './dom.ts';
 import { ICON, type Mode, type Part } from './context.ts';
 
-export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panelState' | 'showHl' | 'hideHl'> = ctx => {
+export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panelState' | 'showHl' | 'hideHl' | 'extToolbar' | 'setToolbar'> = ctx => {
   const { el, ui, config, state } = ctx;
 
   function renderLauncher() {
     el.launcher.style.display = !state.open && config.launcher ? '' : 'none';
     ctx.placeLauncher();
-    el.launcher.querySelector('.badge')?.remove();
+    for (const c of el.launcher.querySelectorAll('.badge, .dots, .ring')) c.remove();
+    // The bubble (v5: an extension's text, or none); by default the open notes on this page.
     const open = ctx.pageNotes().filter(n => !n.done).length;
-    if (open) el.launcher.append(h('span', { class: 'badge' }, String(open)));
+    const fn = ctx.ext.badge;
+    const text = fn === false ? '' : fn ? safely(() => fn(open), null) : open || '';
+    if (text !== null && text !== undefined && text !== '') el.launcher.append(h('span', { class: 'badge' }, String(text).slice(0, 4)));
+    // Extension indicators (v5): one as a ring around the button (the agent working), the rest as dots.
+    const ring = ctx.launcherRing();
+    el.launcher.classList.toggle('lit', !!ring);
+    if (ring) el.launcher.append(ring.el);
+    const dots = ctx.statusDots('launcher');
+    if (dots) el.launcher.append(dots);
   }
 
   function extButtons(): HTMLElement[] {
@@ -42,15 +51,59 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     });
   }
 
+  /** The extension toolbar on screen (v5): the one in state, once its extension has added it; none behind a gate. */
+  const extToolbar = () => state.toolbar && !ctx.locked() ? ctx.ext.toolbars.find(x => x.id === state.toolbar) : undefined;
+
+  function setToolbar(id: string | null) {
+    if (id && !ctx.ext.toolbars.some(x => x.id === id)) return;
+    if (id && ctx.locked()) { if (!state.open) ctx.setOpen(true); return; }
+    if (id && state.mode !== 'idle') ctx.setMode('idle');
+    if (id && !state.open) { state.open = true; ctx.releaseTextFocus(); ctx.emit('open'); }
+    const before = extToolbar();
+    state.toolbar = id;
+    const after = extToolbar();
+    if (before !== after) {
+      if (before?.onHide) safely(() => before.onHide!(), undefined);
+      if (after?.onShow) safely(() => after.onShow!(), undefined);
+    }
+    ctx.persist(); ctx.renderAll();
+  }
+
   function renderBar() {
     el.bar.style.display = state.open && state.mode !== 'sketch' ? '' : 'none';
     if (!state.open) return;
     const { t } = ctx, locked = ctx.locked();
+    const brand = h('div', { class: config.draggable ? 'brand grab' : 'brand', title: config.draggable ? t('dragBar') : undefined, html: ICON + `<span>${esc(t('brand'))}</span>` });
+    const dots = [ctx.statusDots('bar')].filter((d): d is HTMLElement => !!d);
+    const tb = extToolbar();
+    el.bar.classList.toggle('ext', !!tb);
+    if (tb) {
+      // An extension's toolbar in place of the main one: icon, its element, back (D53).
+      const box = h('div', { class: 'xbar', 'data-toolbar': tb.id });
+      safely(() => tb.render(box), undefined);
+      el.bar.replaceChildren(brand, ...dots, h('div', { class: 'sep' }), box, h('div', { class: 'sep' }),
+        h('button', { class: 'back', title: tb.backTitle ?? t('backToToolbar'), onclick: () => setToolbar(null) }, '✕'));
+    } else renderMain(brand, dots, locked);
+    // An extension status as the toolbar's outline (v5): a light sweeping round it (busy), a glow, or steady.
+    const lit = ctx.toolbarOutline();
+    el.bar.classList.toggle('lit', !!lit);
+    el.bar.classList.toggle('spin', !!lit?.status.spin);
+    el.bar.classList.toggle('pulse', !!lit && !lit.status.spin && !!lit.status.pulse);
+    if (lit) { el.bar.style.setProperty('--dot', lit.status.color); el.bar.title = lit.status.title ?? lit.id; el.bar.dataset.status = lit.id; }
+    else { el.bar.style.removeProperty('--dot'); el.bar.removeAttribute('title'); delete el.bar.dataset.status; }
+    // Astro's dev toolbar also lives bottom-centre; sit above it.
+    ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
+    ctx.placeBar();
+  }
+
+  function renderMain(brand: HTMLElement, dots: HTMLElement[], locked: boolean) {
+    const { t } = ctx;
     // No hint line: the buttons show their keys, and the extras live in the tooltips (D18).
     const btn = (m: Mode, label: string, key: string, how: string) =>
       h('button', { class: state.mode === m ? 'on' : '', disabled: locked, title: `${label} (${key}): ${how}`, onclick: () => ctx.setMode(m) }, label, h('kbd', {}, key));
     el.bar.replaceChildren(
-      h('div', { class: config.draggable ? 'brand grab' : 'brand', title: config.draggable ? t('dragBar') : undefined, html: ICON + `<span>${esc(t('brand'))}</span>` }),
+      brand,
+      ...dots,
       h('div', { class: 'sep' }),
       btn('comment', t('comment'), 'C', t('commentHow')),
       btn('text', t('text'), 'T', t('textHow')),
@@ -62,9 +115,6 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
       h('button', { class: state.panel ? 'on' : '', disabled: locked, title: t('notesTitle'), onclick: () => ctx.togglePanel() }, t('notes'), h('span', { class: 'count' }, String(ctx.openCount()))),
       h('button', { title: t('close', { hotkey: config.hotkey }), onclick: () => ctx.setOpen(false) }, '✕'),
     );
-    // Astro's dev toolbar also lives bottom-centre; sit above it.
-    ui.style.setProperty('--lift', document.querySelector('astro-dev-toolbar') ? '52px' : '0px');
-    ctx.placeBar();
   }
 
   // The panel's footprint: the bar and toasts move left of it, and extensions hear about it
@@ -94,5 +144,5 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
   }
   function hideHl() { el.hl.style.display = 'none'; el.hlLabel.style.display = 'none'; }
 
-  return { renderBar, renderLauncher, syncPanel, panelState, showHl, hideHl };
+  return { renderBar, renderLauncher, syncPanel, panelState, showHl, hideHl, extToolbar, setToolbar };
 };

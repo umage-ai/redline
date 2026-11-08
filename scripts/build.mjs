@@ -29,6 +29,12 @@ const client = {
   outdir: 'dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
   minify: !watch, sourcemap: 'inline', logLevel: 'info', legalComments: 'none',
 };
+// The agent panel (D53): the overlay extension, and the terminal page it frames (xterm.js inlined, CSS as text).
+const agent = {
+  entryPoints: { 'agent-panel': 'src/agent/panel.ts', 'agent-terminal': 'src/agent/terminal.ts' },
+  outdir: 'dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
+  minify: !watch, sourcemap: watch ? 'inline' : false, logLevel: 'info', legalComments: 'none', loader: { '.css': 'text' },
+};
 // @umage.ai/redline/overlay and its building blocks: shared code in chunks, nothing starts on import.
 const OVERLAY = ['mount', 'anchor', 'sketch', 'capture', 'shield', 'styles', 'transport', 'strings'];
 const overlay = {
@@ -44,9 +50,9 @@ const hub = {
 };
 
 if (watch) {
-  for (const o of [node, nextLoader, client, overlay, hub]) await (await esbuild.context(o)).watch();
+  for (const o of [node, nextLoader, client, agent, overlay, hub]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(overlay), esbuild.build(hub)]);
+  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(overlay), esbuild.build(hub)]);
   emitTypes();
   overlayPackage();
 }

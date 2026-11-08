@@ -91,7 +91,7 @@ where notes go and what source paths are relative to (default: the nearest folde
 share one notes file. `labels` may be a function of the request. `prompt` replaces the **Copy prompt** text (`{open}`, `{page}`), or `false`
 hides it (the default with a remote store). The overlay and its API answer this machine only; **`network`** adds addresses, subnets and host names (`['192.168.1.20', '172.17.0.1', 'myapp.test']`), or `true` for everyone (`redlineMiddleware`'s default). Phones, Docker, nginx: [docs/SETUPS.md](docs/SETUPS.md#reaching-the-dev-server-from-elsewhere).
 
-**Launcher and toolbar.** `draggable: true` lets each reviewer move the launcher (drag it), the toolbar and the sketch tools (drag their icon; at phone width only up and down); the browser remembers where, and double-clicking an icon puts them back. `launcher: false`
+**Launcher and toolbar.** `launcherSize: 'small' | 'medium' | 'large'` (26, 32 or 40 px; or a number) sizes the round button; its bubble counts the open notes on the page. `draggable: true` lets each reviewer move the launcher (drag it), the toolbar and the sketch tools (drag their icon; at phone width only up and down); the browser remembers where, and double-clicking an icon puts them back. `launcher: false`
 hides the round button: open with the hotkey or your own button, no script needed, in any framework or Razor view:
 `<button data-redline-open>Review</button>` toggles; `="comment"`, `"text"`, `"sketch"`, `"notes"`, `"open"`, `"close"` pick what.
 From script: `(window.redlineExtensions ||= []).push(rl => { myBtn.onclick = () => rl.open(); })`; with `mount()`, `rl.api.open()` and `data-<namespace>-open`.
@@ -112,7 +112,7 @@ All optional; without them Redline behaves as described above. Types come from `
   `onRemove`, `onSourceWrite`. **`buildSource: true`** keeps source stamps in `vite build` (a review build behind `redlineMiddleware`); **`build`** records the commit.
 - **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
   A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto
-  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`; v4: `beforeSave`, card decorators and actions, `setPinStyle`, `addMode`, `addSketchTool`, and the `error`/`noteUpdated`/`noteRemoved`/`messageSent` events. **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text ([docs/SETUPS.md](docs/SETUPS.md)).
+  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`; v4: `beforeSave`, card decorators and actions, `setPinStyle`, `addMode`, `addSketchTool`, and the `error`/`noteUpdated`/`noteRemoved`/`messageSent` events; v5: `addToolbar` (your own toolbar in place of the main one, with a hotkey), `addWindow` (a floating window), `setStatus` (the toolbar's outline or a dot, and a ring or dot on the closed launcher) with the `status` event, and `setBadge` (the launcher bubble: open notes by default). **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text ([docs/SETUPS.md](docs/SETUPS.md)).
 
 ## Coding agents
 
@@ -129,13 +129,13 @@ Redline isn't tied to one agent. The notes are plain markdown, and `npx redline 
 The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md` or `.gemini/`,
 `.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini` (`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade. In a terminal, `init` lists the changes and asks first (`--yes` skips the question); `--dry-run` only lists them.
 
-**Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without
-`init`, the prompt spells out the note format itself, so any agent can work from it.
+**Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without `init`, the prompt spells out the note format itself, so any agent can work from it.
 
 **MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
 with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
-`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere;
-through `next dev` too).
+`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere; through `next dev` too).
+
+**Agent panel** (local dev): `agent: true` (or `'codex'`, or `{ command, args, commands: [{ label, prompt }], keys, hotkey }`) runs your agent CLI from the overlay without opening a terminal: **Agent** (A), or `Alt+Shift+A` from anywhere, opens the agent toolbar with its state, **Apply 3 notes** and your own prompt buttons (`{page}`, `{ids}`), **Allow**/**Deny** when it asks for approval, **CLI** for its terminal, and stop; the notes panel tags the notes it was sent and has done. Its state from the CLI's OSC 7501 status on the toolbar's outline and as a ring around the closed launcher: a light sweeping round it while working, an orange glow while it waits for your approval, green when done (hover says what it is doing), which Claude Code reports. Needs `npm i -D node-pty` (Linux without build tools: `@lydell/node-pty`). It runs on this machine only, with the CLI's own permission prompts.
 
 ## What gets written
 

@@ -66,7 +66,10 @@ export const dragPart: Part<'placeLauncher' | 'placeBar' | 'placeTools' | 'place
     const r = node.getBoundingClientRect(), vertical = wide(k, node);
     const sx = e.clientX, sy = e.clientY;
     let moved = false;
-    const target = e.target as Element;
+    // Listened and captured on the element that moves, not the pressed child: the toolbar re-renders
+    // its children (a notes poll every 2 s while open), and a detached child loses the capture mid-drag
+    // (L55). The clicks after it then target that element too; the double-click reset looks under the pointer.
+    const target = node;
     try { target.setPointerCapture(e.pointerId); } catch { /* already released */ }
     const move = (m: Event) => {
       const pe = m as PointerEvent, dx = pe.clientX - sx, dy = pe.clientY - sy;
@@ -100,7 +103,9 @@ export const dragPart: Part<'placeLauncher' | 'placeBar' | 'placeTools' | 'place
   }));
   // The toolbar and the sketch tools are rebuilt on every render: listen above them for the handle.
   const handleOf = (e: Event): Which | null => {
-    const brand = (e.target as Element | null)?.closest?.('.brand');
+    // A click after a press targets the captured bar, not the icon: ask what is under the pointer.
+    const at = e instanceof MouseEvent && e.type !== 'pointerdown' ? ctx.shadow.elementFromPoint(e.clientX, e.clientY) : e.target;
+    const brand = (at as Element | null)?.closest?.('.brand');
     return !brand ? null : brand.closest('.bar') ? 'bar' : brand.closest('.tools') ? 'tools' : null;
   };
   life.on(ui, 'pointerdown', e => { const k = handleOf(e); if (k) drag(e as PointerEvent, k); });

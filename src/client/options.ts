@@ -22,6 +22,8 @@ export interface OverlayConfig {
    * moved toolbar. Default false.
    */
   draggable?: boolean;
+  /** The launcher's size: 'small' (26 px), 'medium' (32 px, default), 'large' (40 px), or px (20–64). */
+  launcherSize?: 'small' | 'medium' | 'large' | number | string;
   labels?: LabelDef[];
   /** The "copy prompt for your agent" text; false hides it, a string replaces it ({open}, {page}). */
   prompt?: string | false;
