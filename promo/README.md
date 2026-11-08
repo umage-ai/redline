@@ -67,3 +67,13 @@ Why this approach: [D38](../docs/DECISIONS.md). ffmpeg quirk: [L35](../docs/LEAR
   recording, so the video shows Redline's stock toolbar.
 - After a change, check it frame by frame:
   `ffmpeg -i promo/out/redline-promo.mp4 -vf "fps=1/3,scale=360:-1,tile=6x4" -frames:v 1 promo/out/sheet.png`.
+
+## Agent toolbar promo
+
+`npm run promo:agent` → `promo/out/redline-agent.mp4` (~40 s, 1920×1200, silent) and its poster. One page (the demo app
+at 1024×640, 1.875× scale so the toolbar reads), CDP screencast, captions and title/end cards drawn into the page.
+Storyboard: a note on "New route" → **A** opens the agent toolbar → **Apply notes** (the CLI starts in the background)
+→ the agent asks to edit, **Allow** in the toolbar → the button changes through HMR, the note shows "done by" → **CLI**
+shows the terminal. Honesty: the overlay, toolbar, Allow and edit are real; the CLI is a scripted stand-in
+(`promo/demo-agent.mjs`, labelled `claude`) that reports OSC 7501 like Claude Code, edits `App.tsx` and ticks the note.
+Port: `PROMO_PORT` (default 5212).
