@@ -8,11 +8,11 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent/src/program-status.ts';
-import { resolveCommand } from '../../agent/src/server.ts';
+import { resolveCommand, withInstructions } from '../../agent/src/server.ts';
 import { agent } from '../../agent/src/index.ts';
 import { agentFor } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
-import { noteTag, stateLabel } from '../../agent/src/panel.ts';
+import { freeIds, noteTag, overall, stateLabel } from '../../agent/src/panel.ts';
 
 const ESC = '\x1b', ST = ESC + '\\';
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
@@ -124,22 +124,24 @@ function sse(url: string) {
       });
     }).on('error', reject);
   });
-  async function until(pred: (e: { event: string; data: any }) => boolean, ms = 20_000) {
+  /** The first event matching `pred`, from event `from` on (`mark()` before the action that causes it). */
+  async function until(pred: (e: { event: string; data: any }) => boolean, ms = 20_000, from = 0) {
     const end = Date.now() + ms;
     for (;;) {
-      const hit = events.find(pred);
+      const hit = events.slice(from).find(pred);
       if (hit) return hit;
       if (Date.now() > end) throw new Error(`timed out; events: ${JSON.stringify(events.map(e => e.event === 'data' ? 'data' : `${e.event}:${JSON.stringify(e.data.status ?? e.data)}`))}`);
       await new Promise<void>(r => { waiters.push(r); setTimeout(r, 200); });
     }
   }
-  return { events, ready, until, close: () => req.destroy() };
+  return { events, ready, until, mark: () => events.length, close: () => req.destroy() };
 }
 
-test('agent routes: the fake agent reports through OSC 7501 once the server answers its probe; prompts, status, exit', { timeout: 60_000 }, async () => {
+test('agent routes: the fake agent reports through OSC 7501 once the server answers its probe; prompts, status, menus, exit', { timeout: 60_000 }, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-'));
   const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
-  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], commands: [{ label: 'Go', prompt: 'go {page}' }] }) });
+  // It reports itself as Claude Code: its menus are read (menus: 'auto').
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], env: { FAKE_APP: 'claude-code' }, commands: [{ label: 'Go', prompt: 'go {page}' }] }) });
   const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
@@ -151,7 +153,8 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
   try {
     const info = await call('/info');
     assert.equal(info.status, 200);
-    assert.equal(info.body.running, false);
+    assert.deepEqual(info.body.sessions, [], 'no session until one is started');
+    assert.equal(info.body.mode, 'shared');
     assert.deepEqual(info.body.commands, [{ label: 'Go', prompt: 'go {page}' }]);
     const token: string = info.body.token;
     const auth = { 'x-redline-agent': token };
@@ -163,14 +166,17 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     assert.equal((await call('/start', {}, { ...auth, origin: 'http://evil.example' })).status, 403, 'another origin');
     assert.equal((await call('/stream?token=nope')).status, 403);
 
-    stream = sse(`${base}/stream?token=${token}`);
-    assert.equal(await stream.ready, 200);
-    await stream.until(e => e.event === 'hello');
+    assert.equal((await call('/stream?id=s1&token=' + token)).status, 404, 'no such session yet');
 
-    assert.equal((await call('/start', { cols: 90, rows: 20 }, auth)).status, 200);
+    const started = await call('/start', { cols: 90, rows: 20 }, auth);
+    assert.equal(started.status, 200);
+    assert.equal(started.body.id, 's1');
+    stream = sse(`${base}/stream?id=s1&token=${token}`);
+    assert.equal(await stream.ready, 200);
     // The probe answered before the DA1 sentinel: the fake agent says so, and reports idle.
-    await stream.until(e => e.event === 'data' && String(e.data).includes('status reporting: yes'));
-    await stream.until(e => e.event === 'status' && e.data.status.source === '7501' && e.data.status.state === 'idle');
+    await stream.until(e => (e.event === 'data' ? String(e.data) : String(e.data.scrollback ?? '')).includes('status reporting: yes'));
+    const idle = await stream.until(e => e.event === 'status' && e.data.status.source === '7501' && e.data.status.state === 'idle');
+    assert.equal(idle.data.app, 'claude-code');
 
     // Allow/Deny only while it waits for approval.
     assert.equal((await call('/answer', { choice: 'allow' }, auth)).status, 409, 'not blocked');
@@ -182,26 +188,29 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     const done = await stream.until(e => e.event === 'status' && e.data.status.state === 'done');
     assert.equal(done.data.status.msg, 'did fix the header');
     assert.deepEqual(done.data.sent, ['n1', 'n2']);
-    assert.deepEqual((await call('/info')).body.sent, ['n1', 'n2']);
+    assert.deepEqual((await call('/info')).body.sessions[0].sent, ['n1', 'n2']);
     assert.ok(stream.events.some(e => e.event === 'data' && String(e.data).includes('did: fix the header')), 'the prompt reached the program');
 
     assert.equal((await call('/ack', {}, auth)).status, 200);
     await stream.until(e => e.event === 'status' && e.data.status.state === 'idle' && e.data.running);
 
     // Waiting for approval: Allow sends Enter, Deny sends Esc (the defaults, Claude Code's prompt).
+    let m = stream.mark();
     assert.equal((await call('/input', { data: 'ask\r' }, auth)).status, 200);
-    await stream.until(e => e.event === 'status' && e.data.status.state === 'blocked' && e.data.status.kind === 'permission');
+    await stream.until(e => e.event === 'status' && e.data.status.state === 'blocked' && e.data.status.kind === 'permission', undefined, m);
     assert.equal((await call('/answer', { choice: 'allow' }, auth)).status, 200);
     await stream.until(e => e.event === 'status' && e.data.status.state === 'done' && e.data.status.msg === 'approved: yes');
+    m = stream.mark();
     assert.equal((await call('/input', { data: 'ask\r' }, auth)).status, 200);
-    await stream.until(e => e.event === 'status' && e.data.status.state === 'blocked');
+    await stream.until(e => e.event === 'status' && e.data.status.state === 'blocked', undefined, m);
     assert.equal((await call('/answer', { choice: 'deny' }, auth)).status, 200);
     await stream.until(e => e.event === 'status' && e.data.status.state === 'done' && e.data.status.msg === 'denied');
 
     // The menu is read off the screen and sent with the status; /choose picks an option (arrows, then Enter).
     assert.equal((await call('/choose', { index: 0 }, auth)).status, 409, 'no menu on screen');
+    m = stream.mark();
     assert.equal((await call('/input', { data: 'ask\r' }, auth)).status, 200);
-    const ask = await stream.until(e => e.event === 'status' && e.data.prompt?.options?.length === 3);
+    const ask = await stream.until(e => e.event === 'status' && e.data.prompt?.options?.length === 3, undefined, m);
     assert.equal(ask.data.prompt.question, 'Do you want to make this edit to src/App.tsx?');
     assert.deepEqual(ask.data.prompt.options.map((o: { label: string }) => o.label), ['Yes', "Yes, and don't ask again this session", 'No']);
     assert.ok(ask.data.prompt.lines.some((l: { t: string; bg?: string }[]) => l.some(s => s.t.includes('+  <button>') && s.bg)), 'the diff keeps its colour');
@@ -227,9 +236,9 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     const exit = await stream.until(e => e.event === 'exit');
     // node-pty on Windows sometimes reports a fast exit without its code (L54): null, never a wrong one.
     assert.ok(exit.data.exitCode === 3 || (process.platform === 'win32' && exit.data.exitCode === null), `exit code ${exit.data.exitCode}`);
-    assert.equal((await call('/info')).body.running, false);
+    assert.equal((await call('/info')).body.sessions[0].running, false);
 
-    // A prompt while stopped starts the agent and waits until it is ready.
+    // A prompt while stopped (the shared session) starts the agent and waits until it is ready.
     assert.equal((await call('/send', { text: 'second' }, auth)).status, 200);
     await stream.until(e => e.event === 'data' && String(e.data).includes('did: second'));
     // Stop an idle agent: the process must survive it (a second kill() in node-pty aborted Node, L54).
@@ -237,7 +246,9 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     assert.equal((await call('/stop', {}, auth)).status, 200);
     await stream.until(e => e.event === 'exit' && stream!.events.filter(x => x.event === 'exit').length === 2);
     await new Promise(r => setTimeout(r, 1500));
-    assert.equal((await call('/info')).body.running, false, 'still answering after the stop');
+    const after = (await call('/info')).body;
+    assert.equal(after.sessions.length, 1, 'shared: one session throughout');
+    assert.equal(after.sessions[0].running, false, 'still answering after the stop');
   } finally {
     stream?.close();
     await call('/stop', {}, { 'x-redline-agent': (await call('/info')).body?.token ?? '' }).catch(() => {});
@@ -260,8 +271,83 @@ test('agent routes: stopping a running agent leaves the dev server up (node-pty 
     await new Promise(r => setTimeout(r, 1500));
     assert.equal((await fetch(`${base}/stop`, { method: 'POST', headers: h, body: '{}' })).status, 200);
     await new Promise(r => setTimeout(r, 2500));
-    assert.equal((await (await fetch(`${base}/info`)).json()).running, false);
+    assert.equal((await (await fetch(`${base}/info`)).json()).sessions[0].running, false);
   } finally { server.closeAllConnections(); server.close(); }
+});
+
+test('agent routes: fresh sessions (one per prompt, the cap, a finished one makes room), instructions ahead of the first prompt, no menus for another CLI', { timeout: 90_000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-fresh-'));
+  const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
+  // The fake reports app=fake-agent: not Claude Code, so its menus aren't read (Allow/Deny instead).
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], sessions: 'fresh', maxSessions: 2, instructions: 'House rules first.' }) });
+  const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
+  const { token, mode, max } = await (await fetch(`${base}/info`)).json();
+  assert.deepEqual([mode, max], ['fresh', 2]);
+  const call = async (p: string, body: unknown) => {
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+  const feed = sse(`${base}/stream?status=1&token=${token}`);
+  type S = { id: string; running: boolean; status: { state: string; kind?: string; msg?: string }; prompt?: unknown; sent: string[] };
+  const when = (pred: (ss: S[]) => boolean) => feed.until(e => (e.event === 'status' || e.event === 'hello') && pred(e.data.sessions));
+  const byId = (ss: S[], id: string) => ss.find(x => x.id === id);
+  try {
+    assert.equal(await feed.ready, 200);
+    // Each prompt: a new session, with its own notes. The instructions go ahead of its first prompt.
+    assert.deepEqual((await call('/send', { text: 'one', notes: ['a'] })).body, { ok: true, id: 's1' });
+    assert.deepEqual((await call('/send', { text: 'two', notes: ['b'] })).body, { ok: true, id: 's2' });
+    const both = await when(ss => ss.length === 2 && ss.every(x => x.status.state === 'done'));
+    assert.equal(byId(both.data.sessions, 's1')!.status.msg, 'did House rules first.one');
+    assert.equal(byId(both.data.sessions, 's2')!.status.msg, 'did House rules first.two');
+    assert.deepEqual(both.data.sessions.map((x: S) => x.sent), [['a'], ['b']]);
+
+    // Not Claude Code: no menu read, /choose refuses; Allow/Deny answer it.
+    assert.equal((await call('/input', { id: 's1', data: 'ask\r' })).status, 200);
+    const asking = await when(ss => byId(ss, 's1')?.status.state === 'blocked');
+    assert.equal(byId(asking.data.sessions, 's1')!.prompt, undefined);
+    assert.equal((await call('/choose', { id: 's1', index: 1 })).status, 409);
+    assert.equal((await call('/answer', { id: 's1', choice: 'allow' })).status, 200);
+    await when(ss => byId(ss, 's1')?.status.msg === 'approved: yes');
+
+    // At the cap (2 running): a new prompt stops the oldest finished session to make room.
+    assert.equal((await call('/send', { text: 'slow three' })).body.id, 's3');
+    await when(ss => byId(ss, 's1')?.running === false && byId(ss, 's3')?.status.state === 'working');
+    assert.equal((await call('/send', { text: 'slow four' })).body.id, 's4');
+    await when(ss => byId(ss, 's2')?.running === false && byId(ss, 's4')?.status.state === 'working');
+    // Both running ones busy: refused.
+    const busy = await call('/send', { text: 'five' });
+    assert.equal(busy.status, 409);
+    assert.match(busy.body.error, /2 sessions are busy/);
+
+    // An ended session can be closed; a running one can't; unknown ids are 404.
+    assert.equal((await call('/dismiss', { id: 's3' })).status, 409);
+    assert.equal((await call('/dismiss', { id: 's1' })).status, 200);
+    assert.equal((await call('/input', { id: 's1', data: 'x' })).status, 404);
+    await when(ss => !byId(ss, 's1'));
+
+    // Back to one shared session: a prompt goes to the newest.
+    assert.equal((await call('/mode', { mode: 'shared' })).body.mode, 'shared');
+    assert.equal((await call('/stop', { id: 's3' })).status, 200);
+    await when(ss => byId(ss, 's3')?.running === false);
+    assert.equal((await call('/mode', { mode: 'nope' })).status, 400);
+  } finally {
+    feed.close();
+    await call('/stop', {}).catch(() => {});   // no id: every session
+    await new Promise(r => setTimeout(r, 1000));
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test('agent instructions: Claude Code gets a system-prompt file, any other CLI a preamble', async () => {
+  assert.deepEqual(await withInstructions('claude', ['-c'], { text: '' }), { args: ['-c'], preamble: '' });
+  assert.deepEqual(await withInstructions('codex', [], { text: 'Rules.' }), { args: [], preamble: 'Rules.' });
+  assert.deepEqual(await withInstructions('C:\\tools\\claude.exe', [], { text: 'Rules.', file: '/repo/agent.md' }), { args: ['--append-system-prompt-file', '/repo/agent.md'], preamble: '' });
+  const r = await withInstructions('claude', ['--model', 'x'], { text: 'Use the redline skill.' });
+  assert.deepEqual(r.args.slice(0, 3), ['--model', 'x', '--append-system-prompt-file']);
+  assert.equal(await fs.readFile(r.args[3], 'utf8'), 'Use the redline skill.');
 });
 
 test('agent routes: only this machine, whatever the network option says; the panel is left out of its config', async () => {
@@ -293,6 +379,13 @@ test('agent toolbar: the state chip and the note tags', () => {
   assert.equal(noteTag({ id: 'a', done: false }, sent), 'sent');
   assert.equal(noteTag({ id: 'a', done: true }, sent), 'done');
   assert.equal(noteTag({ id: 'b', done: true }, sent), null, 'done by hand, never sent: no tag');
+  // Several sessions: the indicator shows the one that most needs you; a fresh session gets the notes no running one has.
+  const ses = (id: string, state: string, running = true, sentIds: string[] = []) => ({ id, label: '#' + id, running, command: 'c', sent: sentIds, status: { state, source: '7501' } as never });
+  assert.equal(overall([ses('1', 'working'), ses('2', 'blocked'), ses('3', 'done')])?.id, '2');
+  assert.equal(overall([ses('1', 'done'), ses('2', 'working')])?.id, '2');
+  assert.equal(overall([ses('1', 'idle', false)]), undefined, 'nothing running, nothing finished');
+  const rl = { notes: () => [{ id: 'a', done: false }, { id: 'b', done: false }, { id: 'c', done: true }] } as never;
+  assert.deepEqual(freeIds(rl, [ses('1', 'working', true, ['a']), ses('2', 'done', false, ['b'])]), ['b'], 'a is with a running session; c is done');
 });
 
 test('agent option: the core loads @umage.ai/redline-agent only when asked; missing, it warns and runs on', () => {

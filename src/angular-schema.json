@@ -169,7 +169,7 @@
           "oneOf": [{ "type": "string", "enum": ["small", "medium", "large"] }, { "type": "number", "minimum": 20, "maximum": 64 }]
         },
         "agent": {
-          "description": "The agent panel (local dev): true runs claude, a string another CLI, or { command, args, env, cwd, label, commands, keys, hotkey }. Needs @umage.ai/redline-agent.",
+          "description": "The agent panel (local dev): true runs claude, a string another CLI, or { command, args, env, cwd, label, commands, keys, hotkey, sessions, maxSessions, menus, instructions }. Needs @umage.ai/redline-agent.",
           "oneOf": [{ "type": "boolean" }, { "type": "string" }, { "type": "object" }]
         },
         "app": {

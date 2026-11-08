@@ -2,6 +2,7 @@
 // server has the `agent` option. Every agent action lives in one place, the agent toolbar
 // (`rl.addToolbar`), opened by the Agent button (A) or its own shortcut (alt+shift+a) from anywhere:
 // the agent's state and message, the prompt buttons ("Apply 3 notes", starting the CLI when needed),
+// a tab per session (several with "Fresh": one per prompt), the card with what it asks (Claude Code) or
 // Allow/Deny while it waits for approval, "CLI" for the terminal window (xterm.js in an iframe, see
 // terminal.ts) and stop. The notes panel only shows: a status line that opens the toolbar, and a
 // "sent"/"done by" tag on the notes a prompt handed over. The live indicator (`rl.setStatus`) comes
@@ -25,8 +26,23 @@ interface Info {
   /** The menu on the agent's screen (a permission prompt, stepped questions), read off it by the server. */
   prompt?: PromptView;
 }
+interface Session extends Info { id: string; label: string; app?: string }
+/** All of the project's sessions: one that keeps its context ('shared'), or one per prompt ('fresh'). */
+interface Group { mode: 'shared' | 'fresh'; max: number; sessions: Session[] }
 interface Command { label: string; prompt: string; title?: string }
-interface Setup extends Info { token: string; commands: Command[]; approve: boolean; hotkey: string | false }
+interface Setup extends Group { command: string; token: string; commands: Command[]; approve: boolean; hotkey: string | false }
+
+const RANK: Record<State, number> = { blocked: 4, working: 3, error: 2, done: 1, idle: 0 };
+/** The session the indicator shows: the one that most needs you (asking, then working, failed, done). */
+export function overall(sessions: Session[]): Session | undefined {
+  let best: Session | undefined, rank = -1;
+  for (const s of sessions) {
+    if (!s.running && s.status.state !== 'done' && s.status.state !== 'error') continue;
+    const r = RANK[s.status.state] ?? 0;
+    if (r >= rank) { best = s; rank = r; }   // ties: the newest
+  }
+  return best;
+}
 
 const GREY = '#a3a3ad', OFF = '#5c5c66';
 const ESC = '\x1b', LEFT = '\x1b[D', RIGHT = '\x1b[C';
@@ -69,12 +85,17 @@ export function stateLabel(info: Info): { label: string; msg?: string; color: st
   }
 }
 
-/** A prompt template with {page}, {url} and {ids} (the open notes on the page) filled in. */
-export function fill(prompt: string, rl: Pick<RedlineApi, 'page' | 'notes'>): string {
-  const ids = openIds(rl).join(', ');
+/** A prompt template with {page}, {url} and {ids} (the notes it hands over: by default the open notes on the page) filled in. */
+export function fill(prompt: string, rl: Pick<RedlineApi, 'page' | 'notes'>, list = openIds(rl)): string {
+  const ids = list.join(', ');
   return prompt.replace(/\{(page|url|ids)\}/g, (_, k: string) => k === 'page' ? rl.page() : k === 'url' ? location.href : ids || 'none');
 }
 const openIds = (rl: Pick<RedlineApi, 'notes'>) => rl.notes('page').filter(n => !n.done).map(n => n.id);
+/** The open notes on the page no running session has yet: what a fresh session gets, so two never work on one note. */
+export function freeIds(rl: Pick<RedlineApi, 'notes'>, sessions: Pick<Session, 'running' | 'sent'>[]): string[] {
+  const taken = new Set(sessions.filter(s => s.running).flatMap(s => s.sent ?? []));
+  return openIds(rl).filter(id => !taken.has(id));
+}
 const usesIds = (c: Command) => c.prompt.includes('{ids}');
 
 /** What a note's tag says: handed to the agent and still open, or done since. */
@@ -120,7 +141,14 @@ const CSS = `
 .ag-input input { min-width: 0; background: transparent; border: 0; outline: 0; color: var(--fg); font: inherit; padding: 4px 0; }
 .ag-input button, .ag-foot button { padding: 4px 10px; border-radius: 7px; background: var(--bg-3); color: var(--fg); }
 .ag-foot { display: flex; align-items: center; gap: 8px; color: var(--fg-2); font-size: 11.5px; }
-.ag-foot span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }`;
+.ag-foot span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-tabs { display: flex; align-items: center; gap: 2px; }
+.bar button.ag-tab { gap: 5px; padding: 0 7px; font-variant-numeric: tabular-nums; }
+.ag-tab .ag-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.ag-tab .ag-x { opacity: .55; padding-left: 2px; }
+.ag-tab .ag-x:hover { opacity: 1; }
+.bar button.ag-tab.cur { background: var(--bg-3); color: var(--fg); }
+.bar button.ag-mode.on { background: color-mix(in srgb, #4f8cff 28%, var(--bg-3)); color: var(--fg); }`;
 const style = () => Object.assign(document.createElement('style'), { textContent: CSS });
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> & { class?: string; data?: Record<string, string> } = {}, ...kids: (Node | string | null | false)[]) {
@@ -140,37 +168,55 @@ export default async function agentPanel(rl: RedlineApi) {
     if (!r.ok) return;
     setup = await r.json();
   } catch { return; }
-  let info: Info = setup;
-  const sent = () => new Set(info.sent ?? []);
+  let group: Group = setup;
   const name = () => setup.command;
+  const NONE = (): Session => ({ id: '', label: '', running: false, command: name(), status: { state: 'idle', source: 'none' }, sent: [] });
+  // The session the toolbar, the card and the terminal are on: picked by a tab, or the newest.
+  let sel: string | null = null;
+  const cur = (): Session => group.sessions.find(s => s.id === sel) ?? group.sessions[group.sessions.length - 1] ?? NONE();
+  const several = () => group.sessions.length > 1;
+  const fresh = () => group.mode === 'fresh';
+  /** "claude", or "claude #2" when there are several sessions. */
+  const who = (s: Session) => several() && s.label ? `${name()} ${s.label}` : name();
+  const sent = () => new Set(group.sessions.flatMap(s => s.sent ?? []));
   const hotkeyText = () => setup.hotkey ? setup.hotkey.split('+').map(k => k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1)).join('+') : '';
 
-  const post = async (p: string, body: unknown = {}) => {
+  const post = async (p: string, body: Record<string, unknown> = {}) => {
     const r = await fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': setup.token }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
     return r.json();
   };
+  /** A call for the selected session. */
+  const here = (p: string, body: Record<string, unknown> = {}) => post(p, { ...body, ...(cur().id ? { id: cur().id } : {}) });
   const fail = (e: unknown) => rl.toast(`Agent: ${(e as Error).message}`, true);
+  /** The notes a prompt hands over: the open ones on the page; a fresh session only those no running session has. */
+  const handed = () => fresh() ? freeIds(rl, group.sessions) : openIds(rl);
   /** A prompt button: starts the CLI when needed (the server holds the prompt until it is ready); the terminal stays closed. */
   const run = async (c: Command) => {
-    const notes = usesIds(c) ? openIds(rl) : [];
-    if (!info.running) rl.toast(`Starting ${name()}…`);
-    try { await post('/send', { text: fill(c.prompt, rl), notes }); }
-    catch (e) { fail(e); }
+    const notes = usesIds(c) ? handed() : [];
+    if (fresh()) rl.toast(`Starting a new ${name()} session…`);
+    else if (!cur().running) rl.toast(`Starting ${name()}…`);
+    try {
+      const r = await post('/send', { text: fill(c.prompt, rl, notes), notes, ...(!fresh() && cur().id ? { id: cur().id } : {}) });
+      if (r?.id) { sel = r.id; sync(); }
+    } catch (e) { fail(e); }
   };
-  const answer = (choice: 'allow' | 'deny') => void post('/answer', { choice }).catch(fail);
+  const answer = (choice: 'allow' | 'deny') => void here('/answer', { choice }).catch(fail);
   // A choice on its way: the card's buttons wait for the next screen.
   let choosing = false;
   const choose = async (index: number, text?: string) => {
     choosing = true; toolbar?.render();
-    try { await post('/choose', text === undefined ? { index } : { index, text }); }
+    try { await here('/choose', text === undefined ? { index } : { index, text }); }
     catch (e) { fail(e); }
     finally { setTimeout(() => { choosing = false; toolbar?.render(); }, 400); }
   };
-  const key = (data: string) => void post('/input', { data }).catch(fail);
+  const key = (data: string) => void here('/input', { data }).catch(fail);
+  let wasAsking = new Set<string>();
+  let typing = false;   // a typed answer in the card's field: no switching sessions under it
 
   let frame: HTMLIFrameElement | null = null;
   const toFrame = (msg: unknown) => frame?.contentWindow?.postMessage(msg, location.origin);
+  const frameSrc = () => `${BASE}/terminal${cur().id ? `?id=${encodeURIComponent(cur().id)}` : ''}`;
   // Set below; a window or toolbar left open before a reload shows (and renders) while it is added.
   let win: RedlineWindow | null = null;
   let toolbar: ReturnType<RedlineApi['addToolbar']> | null = null;
@@ -186,29 +232,41 @@ export default async function agentPanel(rl: RedlineApi) {
   addAgentButton();
 
   function renderToolbar(box: HTMLElement) {
-    const st = stateLabel(info), s = info.status;
+    const info = cur(), st = stateLabel(info), s = info.status;
     const blocked = info.running && s.state === 'blocked';
     const asked = blocked && !!info.prompt?.options.length;   // the card shows the options
     const approval = blocked && !asked && s.kind === 'permission' && setup.approve;
     const btn = (label: string, title: string, onclick: () => void, cls = '', ...extra: (Node | string)[]) =>
       el('button', { class: cls, title, onclick }, label, ...extra);
-    const chip = el('div', { class: 'ag-chip', title: `${name()}: ${st.label}${st.msg ? ` · ${st.msg}` : ''}`, data: { state: info.running ? s.state : 'stopped' } },
+    const chip = el('div', { class: 'ag-chip', title: `${who(info)}: ${st.label}${st.msg ? ` · ${st.msg}` : ''}`, data: { state: info.running ? s.state : 'stopped' } },
       el('span', { class: 'ag-dot' }), el('b', {}, st.label), st.msg && !asked ? el('span', { class: 'ag-msg' }, st.msg) : null);   // asking: the card has the question
     chip.style.setProperty('--c', st.color);
     const sep = () => el('div', { class: 'sep' });
+    // Several sessions: a tab each (its state as a dot); an ended one can be closed.
+    const tabs = several() || (fresh() && group.sessions.length) ? el('div', { class: 'ag-tabs' }, ...group.sessions.map(x => {
+      const xl = stateLabel(x);
+      const t = el('button', { class: 'ag-tab' + (x.id === info.id ? ' cur' : ''), title: `${who(x)}: ${xl.label}${xl.msg ? ` · ${xl.msg}` : ''}`, data: { id: x.id, state: x.running ? x.status.state : 'stopped' }, onclick: () => { sel = x.id; sync(); } },
+        el('span', { class: 'ag-dot' }), x.label);
+      t.style.setProperty('--c', xl.color);
+      if (!x.running) t.append(el('span', { class: 'ag-x', title: 'Close this session', onclick: (e: Event) => { e.stopPropagation(); void post('/dismiss', { id: x.id }).catch(fail); } }, '×'));
+      return t;
+    }), sep()) : null;
     const actions: HTMLElement[] = approval
-      ? [btn('Allow', `Approve (${name()}'s prompt)`, () => answer('allow'), 'ag-allow'), btn('Deny', 'Decline', () => answer('deny'), 'ag-deny')]
+      ? [btn('Allow', `Approve (${who(info)}'s prompt)`, () => answer('allow'), 'ag-allow'), btn('Deny', 'Decline', () => answer('deny'), 'ag-deny')]
       : setup.commands.map(c => {
-        const n = usesIds(c) ? openIds(rl).length : -1;
-        const b = btn(c.label, c.title ?? c.prompt, () => void run(c), '', ...(n >= 0 ? [el('span', { class: 'count' }, String(n))] : []));
-        b.disabled = n === 0 || blocked;
+        const n = usesIds(c) ? handed().length : -1;
+        const b = btn(c.label, (c.title ?? c.prompt) + (fresh() ? ' (in a new session)' : ''), () => void run(c), '', ...(n >= 0 ? [el('span', { class: 'count' }, String(n))] : []));
+        b.disabled = n === 0 || (blocked && !fresh());
         b.dataset.cmd = c.label;
         return b;
       });
-    const cli = btn(blocked && !approval && !asked ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${name()}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
+    const mode = btn('Fresh', fresh()
+      ? `On: every prompt starts a new session with just its notes (up to ${group.max} at once). Click for one shared session`
+      : 'Off: prompts go to one session that keeps its context. Click to start a new session for every prompt', () => void post('/mode', { mode: fresh() ? 'shared' : 'fresh' }).then(g => { group = { ...group, ...g }; sync(); }).catch(fail), 'ag-mode' + (fresh() ? ' on' : ''));
+    const cli = btn(blocked && !approval && !asked ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${who(info)}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
     cli.dataset.cli = '';
-    const stop = info.running ? btn('■', `Stop ${name()}`, () => void post('/stop').catch(fail), 'ag-stop') : null;
-    box.replaceChildren(style(), chip, sep(), ...actions, sep(), cli, ...(stop ? [stop] : []));
+    const stop = info.running ? btn('■', `Stop ${who(info)}`, () => void here('/stop').catch(fail), 'ag-stop') : null;
+    box.replaceChildren(style(), chip, sep(), ...(tabs ? [tabs] : []), ...actions, mode, sep(), cli, ...(stop ? [stop] : []));
   }
 
   /**
@@ -217,15 +275,16 @@ export default async function agentPanel(rl: RedlineApi) {
    * each, with its description; "Type something" as a field), the CLI's key hint, Cancel and CLI.
    */
   function renderCard(box: HTMLElement) {
+    const info = cur();
     const pv = info.running ? info.prompt : undefined;
     if (!pv?.options.length) return;
     const st = stateLabel(info);
-    const card = el('div', { class: 'ag-card', data: { kind: info.status.kind ?? '' } });
+    const card = el('div', { class: 'ag-card', data: { kind: info.status.kind ?? '', session: info.id } });
     card.style.setProperty('--c', st.color);
-    card.append(el('div', { class: 'ag-who' }, el('span', { class: 'ag-dot' }), name() + ' · ' + st.label));
+    card.append(el('div', { class: 'ag-who' }, el('span', { class: 'ag-dot' }), who(info) + ' · ' + st.label));
     if (pv.steps?.length) {
-      const cur = pv.steps.findIndex(x => x.current);
-      const go = (to: number) => { if (cur >= 0 && to !== cur) key((to > cur ? RIGHT : LEFT).repeat(Math.abs(to - cur))); };
+      const at = pv.steps.findIndex(x => x.current);
+      const go = (to: number) => { if (at >= 0 && to !== at) key((to > at ? RIGHT : LEFT).repeat(Math.abs(to - at))); };
       card.append(el('div', { class: 'ag-steps' },
         el('button', { class: 'nav', title: 'Previous question', onclick: () => key(LEFT) }, '←'),
         ...pv.steps.map((x, i) => el('button', { class: (x.current ? 'cur ' : '') + x.state, title: x.label, onclick: () => go(i) }, (x.state === 'done' ? '☒ ' : x.state === 'submit' ? '✔ ' : '☐ ') + x.label)),
@@ -243,6 +302,8 @@ export default async function agentPanel(rl: RedlineApi) {
         // Sent: let go of the field, or the card (not redrawn while a field has focus) would keep this step.
         const send = () => { const v = field.value.trim(); if (v) { field.blur(); void choose(i, v); } };
         field.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+        field.addEventListener('focus', () => { typing = true; });
+        field.addEventListener('blur', () => { typing = false; });
         opts.append(el('div', { class: 'ag-input' }, num, field, el('button', { onclick: send, disabled: choosing }, 'Send')));
         return;
       }
@@ -251,7 +312,7 @@ export default async function agentPanel(rl: RedlineApi) {
     });
     card.append(opts, el('div', { class: 'ag-foot' }, el('span', {}, pv.hint ?? ''),
       el('button', { title: 'Esc in the CLI', onclick: () => key(ESC) }, 'Cancel'),
-      el('button', { title: 'Show ' + name() + "'s terminal", onclick: () => win?.show() }, 'CLI')));
+      el('button', { title: 'Show ' + who(info) + "'s terminal", onclick: () => win?.show() }, 'CLI')));
     box.append(style(), card);
   }
   const spanEl = (sp: Span) => {
@@ -265,7 +326,7 @@ export default async function agentPanel(rl: RedlineApi) {
 
   toolbar = rl.addToolbar({
     id: 'agent', hotkey: setup.hotkey || undefined, render: renderToolbar, attached: renderCard,
-    onShow() { void post('/ack').catch(() => {}); sync(); },
+    onShow() { if (cur().id) void here('/ack').catch(() => {}); sync(); },
     onHide() { sync(); },
   });
 
@@ -273,12 +334,12 @@ export default async function agentPanel(rl: RedlineApi) {
     id: 'agent', title: name(), width: 680, height: 440,
     render(body) {
       frame = document.createElement('iframe');
-      frame.src = `${BASE}/terminal`;
+      frame.src = frameSrc();
       frame.title = `${name()} terminal`;
       frame.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#131316');
       body.append(frame);
     },
-    onShow() { void post('/ack').catch(() => {}); toFrame({ type: 'focus' }); toolbar?.render(); },
+    onShow() { if (cur().id) void here('/ack').catch(() => {}); toFrame({ type: 'focus' }); toolbar?.render(); },
     onHide() { toolbar?.render(); },
     onResize() { toFrame({ type: 'fit' }); },
   });
@@ -287,11 +348,12 @@ export default async function agentPanel(rl: RedlineApi) {
   // Both are kept and updated in place, so a status change doesn't re-render the panel (and a reply being typed).
   function renderLine() {
     if (!line) return;
-    const st = stateLabel(info), all = rl.notes('all'), s = sent();
+    const top = overall(group.sessions) ?? cur(), st = stateLabel(top), all = rl.notes('all'), s = sent();
     const open = all.filter(n => s.has(n.id) && !n.done).length, done = all.filter(n => s.has(n.id) && n.done).length;
-    const counts = [open && `${open} sent note${open === 1 ? '' : 's'} open`, done && `${done} done`].filter(Boolean).join(' · ');
-    const text = info.running || info.status.state === 'done' || info.status.state === 'error'
-      ? `${name()}: ${st.label}${counts ? ` · ${counts}` : st.msg ? ` · ${st.msg}` : ''}`
+    const running = group.sessions.filter(x => x.running).length;
+    const counts = [running > 1 && `${running} sessions`, open && `${open} sent note${open === 1 ? '' : 's'} open`, done && `${done} done`].filter(Boolean).join(' · ');
+    const text = top.running || top.status.state === 'done' || top.status.state === 'error'
+      ? `${who(top)}: ${st.label}${counts ? ` · ${counts}` : st.msg ? ` · ${st.msg}` : ''}`
       : `Hand these notes to ${name()}`;
     const b = el('button', { class: 'ag-line', title: 'Open the agent toolbar', onclick: () => toolbar?.show() },
       el('span', { class: 'ag-dot' }), el('span', {}, text), setup.hotkey ? el('kbd', {}, hotkeyText()) : el('kbd', {}, 'A'));
@@ -300,38 +362,52 @@ export default async function agentPanel(rl: RedlineApi) {
   }
   function renderTag(t: { el: HTMLElement; note: Note }) {
     const tag = noteTag(t.note, sent());
-    t.el.replaceChildren(...(tag ? [el('span', { class: `ag-tag ${tag}` }, tag === 'sent' ? `⤳ sent to ${name()}` : `✓ done by ${name()}`)] : []));
+    // The newest session that had the note: "sent to claude #2".
+    const by = [...group.sessions].reverse().find(x => x.sent?.includes(t.note.id));
+    const to = by ? who(by) : name();
+    t.el.replaceChildren(...(tag ? [el('span', { class: `ag-tag ${tag}` }, tag === 'sent' ? `⤳ sent to ${to}` : `✓ done by ${to}`)] : []));
   }
   rl.addPanelSection({ id: 'agent', render(box) { line = box; renderLine(); } });
   rl.addCardDecorator({ id: 'agent', render(note, box) { const t = { el: box, note }; tags.set(note.id, t); renderTag(t); } });
 
   function sync() {
-    const ind = indicatorFor(info);
+    if (sel && !group.sessions.some(s => s.id === sel)) sel = null;   // closed
+    // Another session starts asking while this one doesn't: show that one (not while an answer is
+    // being typed). Only when it starts, so a tab picked by hand stays picked.
+    const asking = group.sessions.filter(s => s.running && s.status.state === 'blocked').map(s => s.id);
+    const newly = asking.find(id => !wasAsking.has(id));
+    wasAsking = new Set(asking);
+    const c = cur();
+    if (newly && !typing && !(c.running && c.status.state === 'blocked')) sel = newly;
+    const top = overall(group.sessions);
+    const ind = top ? indicatorFor({ ...top, command: who(top) }) : null;
     rl.setStatus('agent', ind ? { ...ind, onClick: () => toolbar?.show() } : null);
     addAgentButton(ind?.title);
+    if (frame && !frame.src.endsWith(frameSrc())) frame.src = frameSrc();   // the terminal follows the tab
+    win?.setTitle(who(cur()));
     toolbar?.render();
     renderLine();
     for (const t of tags.values()) if (t.el.isConnected) renderTag(t); else tags.delete(t.note.id);
   }
 
-  // The status feed: the indicator works with the toolbar and window closed. EventSource reconnects
-  // by itself (a dev-server restart); a stale token (another server process) re-reads /info.
+  // The status feed: every session, with the toolbar and window closed. EventSource reconnects by
+  // itself (a dev-server restart); a stale token (another server process) re-reads /info.
   let es: EventSource | null = null;
   const connect = () => {
     es?.close();
     es = new EventSource(`${BASE}/stream?status=1&token=${encodeURIComponent(setup.token)}`);
-    for (const ev of ['hello', 'status', 'start']) es.addEventListener(ev, e => { info = JSON.parse((e as MessageEvent).data); sync(); });
-    es.addEventListener('exit', () => { info = { ...info, running: false }; sync(); });
+    for (const ev of ['hello', 'status']) es.addEventListener(ev, e => { group = JSON.parse((e as MessageEvent).data); sync(); });
     es.onerror = async () => {
       if (es?.readyState !== EventSource.CLOSED) return;
-      try { const r = await fetch(`${BASE}/info`); if (r.ok) { setup = await r.json(); info = setup; sync(); setTimeout(connect, 1000); } } catch { /* down: retried on the next open */ }
+      try { const r = await fetch(`${BASE}/info`); if (r.ok) { setup = await r.json(); group = setup; sync(); setTimeout(connect, 1000); } } catch { /* down: retried on the next open */ }
     };
   };
   connect();
-  // Keys in the terminal acknowledge a finished turn (the frame tells us).
+  // The terminal: keys there acknowledge a finished turn; a session it started is the one shown.
   window.addEventListener('message', e => {
     if (e.origin !== location.origin || e.source !== frame?.contentWindow) return;
-    if (e.data?.type === 'ack') void post('/ack').catch(() => {});
+    if (e.data?.type === 'ack') void here('/ack').catch(() => {});
+    if (e.data?.type === 'session' && typeof e.data.id === 'string') { sel = e.data.id; sync(); }
   });
   sync();
 }

@@ -41,7 +41,7 @@ try {
   assert(panel.ok && /javascript/.test(panel.headers.get('content-type')), `panel.js: ${panel.status}`);
   assert((await fetch(`${base}/terminal.js`)).ok, 'terminal.js');
   const info = await (await fetch(`${base}/info`)).json();
-  assert(info.running === false && typeof info.token === 'string' && info.commands.length === 1, `info: ${JSON.stringify(info)}`);
+  assert(Array.isArray(info.sessions) && info.sessions.length === 0 && info.mode === 'shared' && typeof info.token === 'string' && info.commands.length === 1, `info: ${JSON.stringify(info)}`);
   console.log(`\n✓ redline-agent package OK`);
 } finally {
   server?.close();

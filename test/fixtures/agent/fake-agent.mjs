@@ -7,12 +7,12 @@
 //   "form"  stepped questions: "← ☐ Color ☐ Size ✔ Submit →", options with descriptions,
 //           "Type something.", then a review step
 // Keys there: ↑/↓ move, a digit picks, Enter picks the ❯ row, ←/→ change step, Esc cancels.
-// "exit" quits with code 3; "slow …" stays working for 8 s.
+// "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent).
 
 const ESC = '\x1b', ST = ESC + '\\';
 const out = s => process.stdout.write(s);
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
-const report = fields => { if (supported) out(`${ESC}]7501;${fields}:app=fake-agent${ST}`); };
+const report = fields => { if (supported) out(`${ESC}]7501;${fields}:app=${process.env.FAKE_APP ?? 'fake-agent'}${ST}`); };
 const RULE = '─'.repeat(70), DASH = '╌'.repeat(70);
 const dim = s => `${ESC}[2m${s}${ESC}[22m`, inv = s => `${ESC}[7m${s}${ESC}[27m`;
 
@@ -120,7 +120,7 @@ function prompt(p) {
     history.push(`did: ${p}`);
     draw();
     report(`state=done:msg=${b64(`did ${p.slice(0, 40)}`)}`);
-  }, p.startsWith('slow') ? 8000 : 1500);   // long enough for a test to see "working"; "slow …": a while
+  }, p.includes('slow') ? 8000 : 1500);   // long enough for a test to see "working"; "slow": a while
 }
 
 const KEYS = [['\x1b[A', 'up'], ['\x1b[B', 'down'], ['\x1b[C', 'right'], ['\x1b[D', 'left'], ['\x1b[200~', ''], ['\x1b[201~', ''], ['\r', 'enter'], ['\t', 'tab'], ['\x7f', 'back'], ['\x1b', 'esc']];

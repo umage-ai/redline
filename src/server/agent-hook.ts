@@ -32,6 +32,26 @@ export interface AgentOptions {
   keys?: { allow?: string; deny?: string } | false;
   /** The shortcut that opens the overlay straight in the agent toolbar. Default alt+shift+a; false for none. */
   hotkey?: string | false;
+  /**
+   * Where a prompt button's prompt goes. `'shared'` (default): one session that keeps its context.
+   * `'fresh'`: a new session for every prompt, with just those notes (no context from earlier ones),
+   * several at once (`maxSessions`). The toolbar can switch it while the dev server runs.
+   */
+  sessions?: 'shared' | 'fresh';
+  /** Sessions running at once with `sessions: 'fresh'` (1–8, default 3). A new one stops the oldest one that has finished; none finished: it says so. */
+  maxSessions?: number;
+  /**
+   * Read the CLI's menus off its screen into the toolbar's card (every option, typed answers, steps).
+   * `'auto'` (default): when the CLI is Claude Code (`app=claude-code` in its OSC 7501 reports, or the
+   * command `claude`), whose menus are known. Other CLIs get Allow/Deny (`keys`) and the terminal. `true`: always.
+   */
+  menus?: 'auto' | boolean;
+  /**
+   * Extra instructions for the sessions started from Redline, on top of the project's CLAUDE.md /
+   * AGENTS.md: text, or `{ file }` (relative to the project root, read at every start). Claude Code
+   * gets them as `--append-system-prompt-file`; any other CLI ahead of the session's first prompt.
+   */
+  instructions?: string | { file: string };
 }
 
 /** The panel's routes in one dev server. */

@@ -11,9 +11,14 @@ import { comment, openOverlay, resetNotes, ui } from './helpers.ts';
 const f = FIXTURES.vanilla;
 test.beforeEach(() => resetNotes(f));
 test.afterEach(async ({ request }) => {
-  // One agent per dev server: leave it stopped for the next test.
-  const info = await (await request.get(`${f.url}/__redline/agent/info`)).json();
-  await request.post(`${f.url}/__redline/agent/stop`, { headers: { 'x-redline': '1', 'x-redline-agent': info.token }, data: {} });
+  // One set of sessions per dev server: stop them all, close them, back to one shared session.
+  const get = async () => (await request.get(`${f.url}/__redline/agent/info`)).json();
+  const { token } = await get();
+  const post = (p: string, data: object) => request.post(`${f.url}/__redline/agent${p}`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data });
+  await post('/stop', {});
+  await expect.poll(async () => (await get()).sessions.filter((x: { running: boolean }) => x.running).length, { timeout: 15_000 }).toBe(0);
+  for (const x of (await get()).sessions) await post('/dismiss', { id: x.id });
+  await post('/mode', { mode: 'shared' });
 });
 
 const NAME = 'node fake-agent.mjs';
@@ -174,4 +179,53 @@ test('agent toolbar: stepped questions in the attached card (steps, descriptions
   await card.locator('.ag-opt', { hasText: 'Submit answers' }).click();
   await expect(chip(page)).toHaveText(/Done\s*answered: Color=Blue, Size=XL/);
   await expect(card).toHaveCount(0);
+});
+
+test('agent toolbar: fresh sessions, a tab each; a new question brings its tab up, the card and terminal follow the tab, an ended one closes', async ({ page, request }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
+  await page.keyboard.press('a');
+  const apply = agentBar(page).locator('button[data-cmd="Apply notes"]');
+  await expect(apply.locator('.count')).toHaveText('1');
+
+  // Fresh: every prompt starts its own session.
+  const mode = agentBar(page).locator('button.ag-mode');
+  await mode.click();
+  await expect(mode).toHaveClass(/on/);
+  await apply.click();
+  const tabs = agentBar(page).locator('.ag-tab');
+  await expect(tabs).toHaveText(['#1'], { timeout: 20_000 });
+  await expect(chip(page)).toHaveText(/Done/, { timeout: 20_000 });
+  // While #1 runs, the note is its: a second session wouldn't get it.
+  await expect(apply).toBeDisabled();
+
+  // A second session asks: its tab comes up, with the card.
+  const { token } = await (await request.get(`${f.url}/__redline/agent/info`)).json();
+  const r = await request.post(`${f.url}/__redline/agent/send`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data: { text: 'ask' } });
+  expect((await r.json()).id).toBe('s2');
+  await expect(tabs).toHaveText(['#1', '#2']);
+  const card = ui(page, '.attach[data-toolbar="agent"] .ag-card');
+  await expect(card).toHaveAttribute('data-session', 's2', { timeout: 20_000 });
+  await expect(card.locator('.ag-who')).toHaveText(/node fake-agent.mjs #2/);
+  await expect(agentBar(page).locator('.ag-tab.cur')).toHaveText('#2');
+  await page.keyboard.press('n');   // the note's tag names the session that has it
+  await expect(ui(page, '.card .ag-tag.sent')).toHaveText('⤳ sent to node fake-agent.mjs #1');
+
+  // The terminal follows the tab.
+  await agentBar(page).locator('button[data-cli]').click();
+  await expect(ui(page, '.win[data-win="agent"] iframe')).toHaveAttribute('src', /id=s2$/);
+  await tabs.filter({ hasText: '#1' }).click();
+  await expect(card).toHaveCount(0);   // #1 isn't asking
+  await expect(chip(page)).toHaveText(/Done/);
+  await expect(ui(page, '.win[data-win="agent"] iframe')).toHaveAttribute('src', /id=s1$/);
+  await tabs.filter({ hasText: '#2' }).click();
+  await card.locator('.ag-opt', { hasText: /^1Yes$/ }).click();
+  await expect(chip(page)).toHaveText(/Dones*approved: yes/);
+
+  // Stop #1: its tab gets a ×, which closes it.
+  await tabs.filter({ hasText: '#1' }).click();
+  await agentBar(page).locator('.ag-stop').click();
+  await tabs.filter({ hasText: '#1' }).locator('.ag-x').click();
+  await expect(tabs).toHaveText(['#2']);
 });

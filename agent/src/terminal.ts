@@ -18,8 +18,12 @@ document.head.append(Object.assign(document.createElement('style'), {
 }));
 
 async function main() {
-  const setup = await (await fetch(`${BASE}/info`)).json() as { token: string; command: string; running: boolean };
+  const setup = await (await fetch(`${BASE}/info`)).json() as { token: string; command: string; sessions: { id: string; label: string }[] };
   const token = setup.token;
+  // The session this page shows (`?id=`, set by the toolbar), or the newest; none yet: Start makes one.
+  const asked = new URLSearchParams(location.search).get('id');
+  const session = setup.sessions.find(x => x.id === asked) ?? setup.sessions[setup.sessions.length - 1];
+  const id = session?.id;
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace',
@@ -37,7 +41,7 @@ async function main() {
 
   // Keys go out in order: one request at a time, with whatever was typed meanwhile batched.
   let pending = '', sending = false;
-  const post = (p: string, body: unknown) => fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
+  const post = (p: string, body: Record<string, unknown>) => fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(id ? { ...body, id } : body) });
   async function pump() {
     if (sending || !pending) return;
     sending = true;
@@ -72,7 +76,10 @@ async function main() {
       btn.disabled = true;
       refit();
       const r = await post('/start', { cols: term.cols, rows: term.rows });
-      if (!r.ok) showStart(exitCode, (await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+      if (!r.ok) return showStart(exitCode, (await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+      // A new session (none was here): this page shows it from now on, and the toolbar too.
+      const started = (await r.json().catch(() => null))?.id as string | undefined;
+      if (started && started !== id) { parent.postMessage({ type: 'session', id: started }, location.origin); location.replace(`?id=${encodeURIComponent(started)}`); }
     };
     box.append(what, btn);
     if (error) box.append(Object.assign(document.createElement('div'), { className: 'err', textContent: error }));
@@ -81,7 +88,8 @@ async function main() {
   }
   const hideStart = () => { start.style.display = 'none'; term.focus(); };
 
-  const es = new EventSource(`${BASE}/stream?token=${encodeURIComponent(token)}`);
+  if (!id) return showStart();
+  const es = new EventSource(`${BASE}/stream?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`);
   es.addEventListener('hello', e => {
     const h = JSON.parse((e as MessageEvent).data);
     term.reset();
