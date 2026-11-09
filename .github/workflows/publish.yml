@@ -69,10 +69,18 @@ jobs:
       - name: Packed tarball in fresh React / SvelteKit / Astro / node apps
         run: npm run test:package
 
-      # Scripts already ran above (and built dist/), so skip prepublishOnly's second pass.
+      # Scripts already ran above (and built dist/), so skip prepublishOnly's second pass. A version already on npm
+      # is skipped, so a release that failed part-way (say, a package's trusted publisher) can be finished with a
+      # manual run (dry_run off) once that is fixed.
       - name: Publish
         if: github.event_name == 'push' || !inputs.dry_run
-        run: npm publish --ignore-scripts
+        run: |
+          spec="$(node -p "const p = require('./package.json'); p.name + '@' + p.version")"
+          if npm view "$spec" version > /dev/null 2>&1; then
+            echo "::notice::$spec is already on npm; skipping."
+          else
+            npm publish --ignore-scripts
+          fi
 
       - name: GitHub release with generated notes
         if: github.event_name == 'push'
