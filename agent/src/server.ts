@@ -550,6 +550,7 @@ export function agentRoutes(opts: AgentOptions, root: string, base: string): Age
   const commands = (opts.commands ?? DEFAULT_COMMANDS).filter(c => c && typeof c.label === 'string' && typeof c.prompt === 'string');
   const keys = opts.keys === false ? false : { ...DEFAULT_KEYS, ...opts.keys };
   const hotkey = opts.hotkey === false ? false : typeof opts.hotkey === 'string' && opts.hotkey ? opts.hotkey : 'alt+shift+a';
+  const key = opts.key === false ? false : typeof opts.key === 'string' && opts.key.length === 1 ? opts.key.toLowerCase() : 'a';
 
   return {
     panel: `${base}/agent/panel.js`,
@@ -576,7 +577,7 @@ export function agentRoutes(opts: AgentOptions, root: string, base: string): Age
         res.end(terminalPage(base));
         return;
       }
-      if (method === 'GET' && p === '/agent/info') return json(res, 200, { ...group.info(), command: commandName(opts), token: group.token, commands, approve: !!keys, hotkey });
+      if (method === 'GET' && p === '/agent/info') return json(res, 200, { ...group.info(), command: commandName(opts), token: group.token, commands, approve: !!keys, hotkey, key });
 
       const url = new URL(req.url ?? '', 'http://x');
       const token = method === 'GET' ? url.searchParams.get('token') : req.headers['x-redline-agent'];

@@ -46,6 +46,7 @@ redline({
     commands: [{ label: 'Review page', prompt: 'Review page {page} against the open Redline notes {ids}' }],
     keys: { allow: '\r', deny: '\x1b' },  // what Allow / Deny send (Claude Code's prompt)
     hotkey: 'alt+shift+a',
+    key: 'a',                             // the Agent button's key in the toolbar; false when an extension uses A
     sessions: 'fresh', maxSessions: 3,    // a new session per prompt (default 'shared': one session)
     instructions: { file: 'redline-agent.md' },  // or a string; see below
   },

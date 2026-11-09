@@ -156,6 +156,7 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     assert.deepEqual(info.body.sessions, [], 'no session until one is started');
     assert.equal(info.body.mode, 'shared');
     assert.deepEqual(info.body.commands, [{ label: 'Go', prompt: 'go {page}' }]);
+    assert.equal(info.body.key, 'a', 'the Agent button is A by default');
     const token: string = info.body.token;
     const auth = { 'x-redline-agent': token };
 
@@ -279,12 +280,13 @@ test('agent routes: fresh sessions (one per prompt, the cap, a finished one make
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-fresh-'));
   const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
   // The fake reports app=fake-agent: not Claude Code, so its menus aren't read (Allow/Deny instead).
-  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], sessions: 'fresh', maxSessions: 2, instructions: 'House rules first.' }) });
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], sessions: 'fresh', maxSessions: 2, instructions: 'House rules first.', key: false }) });
   const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
-  const { token, mode, max } = await (await fetch(`${base}/info`)).json();
+  const { token, mode, max, key } = await (await fetch(`${base}/info`)).json();
   assert.deepEqual([mode, max], ['fresh', 2]);
+  assert.equal(key, false, 'key: false leaves A to an extension');
   const call = async (p: string, body: unknown) => {
     const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };

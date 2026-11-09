@@ -33,6 +33,11 @@ export interface AgentOptions {
   /** The shortcut that opens the overlay straight in the agent toolbar. Default alt+shift+a; false for none. */
   hotkey?: string | false;
   /**
+   * The Agent button's key in Redline's toolbar (a single letter, while the overlay is open). Default 'a'; false
+   * for none, when an extension of yours already uses A: the button and `hotkey` still open the agent toolbar.
+   */
+  key?: string | false;
+  /**
    * Where a prompt button's prompt goes. `'shared'` (default): one session that keeps its context.
    * `'fresh'`: a new session for every prompt, with just those notes (no context from earlier ones),
    * several at once (`maxSessions`). The toolbar can switch it while the dev server runs.

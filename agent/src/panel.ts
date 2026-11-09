@@ -30,7 +30,7 @@ export interface Session extends Info { id: string; label: string; app?: string 
 /** All of the project's sessions: one that keeps its context ('shared'), or one per prompt ('fresh'). */
 interface Group { mode: 'shared' | 'fresh'; max: number; sessions: Session[] }
 interface Command { label: string; prompt: string; title?: string }
-interface Setup extends Group { command: string; token: string; commands: Command[]; approve: boolean; hotkey: string | false }
+interface Setup extends Group { command: string; token: string; commands: Command[]; approve: boolean; hotkey: string | false; key?: string | false }
 
 const RANK: Record<State, number> = { blocked: 4, working: 3, error: 2, done: 1, idle: 0 };
 /** The session the indicator shows: the one that most needs you (asking, then working, failed, done). */
@@ -292,7 +292,7 @@ export default async function agentPanel(rl: RedlineApi) {
   const tags = new Map<string, { el: HTMLElement; note: Note }>();
 
   const addAgentButton = (state?: string) => rl.addButton({
-    id: 'agent', label: 'Agent', key: 'a',
+    id: 'agent', label: 'Agent', key: setup.key === false ? undefined : setup.key || 'a',
     title: state ?? `${name()}: agent toolbar${setup.hotkey ? ` · ${hotkeyText()} from anywhere` : ''}`,
     onClick: () => toolbar?.show(), active: () => !!toolbar?.isOpen(),
   });
@@ -471,7 +471,7 @@ export default async function agentPanel(rl: RedlineApi) {
       ? `${who(top)}: ${st.label}${counts ? ` · ${counts}` : st.msg ? ` · ${st.msg}` : ''}`
       : `Hand these notes to ${name()}`;
     const b = el('button', { class: 'ag-line', title: 'Open the agent toolbar', onclick: () => toolbar?.show(), data: { state: top.running ? top.status.state : 'stopped' } },
-      el('span', { class: 'ag-dot' }), el('span', {}, text), setup.hotkey ? el('kbd', {}, hotkeyText()) : el('kbd', {}, 'A'));
+      el('span', { class: 'ag-dot' }), el('span', {}, text), setup.hotkey ? el('kbd', {}, hotkeyText()) : setup.key !== false ? el('kbd', {}, (setup.key || 'a').toUpperCase()) : null);
     b.style.setProperty('--c', st.color);
     line.replaceChildren(style(), b);
   }
