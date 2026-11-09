@@ -83,11 +83,14 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     const tb = extToolbar();
     el.bar.classList.toggle('ext', !!tb);
     if (tb) {
-      // An extension's toolbar in place of the main one: icon, its element, back (D53).
+      // An extension's toolbar in place of the main one: icon, back, its element, close (D53). ✕ closes
+      // the overlay as on the main toolbar; ← (or Esc) goes back to the main one.
       const box = h('div', { class: 'xbar', 'data-toolbar': tb.id });
       safely(() => tb.render(box), undefined);
-      el.bar.replaceChildren(brand, ...dots, h('div', { class: 'sep' }), box, h('div', { class: 'sep' }),
-        h('button', { class: 'back', title: tb.backTitle ?? t('backToToolbar'), onclick: () => setToolbar(null) }, '✕'));
+      el.bar.replaceChildren(brand, ...dots,
+        h('button', { class: 'back', title: tb.backTitle ?? t('backToToolbar'), onclick: () => setToolbar(null) }, '←'),
+        h('div', { class: 'sep' }), box, h('div', { class: 'sep' }),
+        h('button', { class: 'close', title: t('close', { hotkey: config.hotkey }), onclick: () => ctx.setOpen(false) }, '✕'));
       renderAttached(tb);
     } else { card.style.display = 'none'; renderMain(brand, dots, locked); }
     // An extension status as the toolbar's outline (v5): a light sweeping round it (busy), a glow, or steady.

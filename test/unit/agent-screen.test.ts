@@ -44,6 +44,12 @@ test('prompt: a list without numbers needs the key hint; the input line is never
   assert.equal(parsePrompt([{ text: '❯ Use the AskUserQuestion tool to ask me' }, { text: '  two questions at once' }, { text: '  and tell me.' }, { text: '────────────' }, { text: '  ? for shortcuts' }]), null);
 });
 
+test('prompt: a menu already answered, left on screen with output below it, is not a menu (the card used to stay up)', () => {
+  const answered = [...screen('claude-edit'), { text: '' }, { text: '● Updated notes.txt (1 line)' }, { text: '' }, { text: '> ' }];
+  assert.equal(parsePrompt(answered), null);
+  assert.ok(parsePrompt(screen('claude-edit')), 'live: the hint is the bottom line');
+});
+
 test('screen: colours survive (a red and a green diff line), the menu is read from the live screen', async () => {
   const s = new Screen(60, 12);
   s.write('\x1b[2J\x1b[H Edit file\r\n\x1b[41m 1 -old \x1b[0m\r\n\x1b[42m 1 +new \x1b[0m\r\n Do it?\r\n \x1b[1m❯ 1. Yes\x1b[0m\r\n   2. No\r\n Esc to cancel');

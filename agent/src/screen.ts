@@ -36,8 +36,9 @@ const INPUT = /^(type something|other|something else)\b/i;
  */
 export function parsePrompt(screen: Line[]): PromptView | null {
   const L = trimEnd(screen);
-  let hintAt = -1;
-  for (let i = L.length - 1; i >= Math.max(0, L.length - 6); i--) if (HINT.test(L[i].text)) { hintAt = i; break; }
+  // The key hint is the bottom line of a live menu. One higher up, with output below it, belongs to a
+  // menu already answered (a CLI that doesn't erase it): no menu.
+  const hintAt = L.length && HINT.test(L[L.length - 1].text) ? L.length - 1 : -1;
   const rows = numbered(L, hintAt >= 0 ? hintAt : L.length) ?? (hintAt >= 0 ? unnumbered(L, hintAt) : null);
   if (!rows) return null;
   const options: PromptOption[] = rows.map(r => ({

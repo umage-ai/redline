@@ -70,10 +70,13 @@ Why this approach: [D38](../docs/DECISIONS.md). ffmpeg quirk: [L35](../docs/LEAR
 
 ## Agent toolbar promo
 
-`npm run promo:agent` → `promo/out/redline-agent.mp4` (~40 s, 1920×1200, silent) and its poster. One page (the demo app
+`npm run promo:agent` → `promo/out/redline-agent.mp4` (~58 s, 1920×1200, silent) and its poster. One page (the demo app
 at 1024×640, 1.875× scale so the toolbar reads), CDP screencast, captions and title/end cards drawn into the page.
-Storyboard: a note on "New route" → **A** opens the agent toolbar → **Apply notes** (the CLI starts in the background)
-→ the agent asks to edit, **Allow** in the toolbar → the button changes through HMR, the note shows "done by" → **CLI**
-shows the terminal. Honesty: the overlay, toolbar, Allow and edit are real; the CLI is a scripted stand-in
-(`promo/demo-agent.mjs`, labelled `claude`) that reports OSC 7501 like Claude Code, edits `App.tsx` and ticks the note.
+Storyboard: a note on "New route" → **A** opens the agent toolbar → **Fresh** on → **Apply notes** (session #1 starts in
+the background) → a second note on "Active routes" → **Apply notes** (session #2, a second tab) → the question card (the
+diff, every option) → **Yes**; the other session's question comes up by itself → **Yes, and don't ask again** → both
+edits land through HMR, both notes "done by claude #1/#2" → **CLI** shows a session's terminal. Honesty: the overlay,
+toolbar, tabs, card and edits are real; the CLI is a scripted stand-in (`promo/demo-agent.mjs`, labelled `claude`,
+`menus: true`) that reports OSC 7501, draws Claude Code's edit menu, edits `App.tsx` and ticks its note.
+Whichever session asks first is answered first.
 Port: `PROMO_PORT` (default 5212).

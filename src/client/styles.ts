@@ -284,6 +284,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); flex-wrap: nowrap; justify-content: flex-start; max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
   .bar .brand span, .bar .brand + .sep { display: none; }
   .bar .brand { padding: 0 6px; }
+  .bar .xbar { flex: none; }   /* an extension toolbar scrolls with the row, never under ✕ */
   .bar button { padding: 6px 9px; }
   .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
   .tools { top: max(8px, env(safe-area-inset-top)); }

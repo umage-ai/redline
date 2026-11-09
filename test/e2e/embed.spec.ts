@@ -433,7 +433,7 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   expect(await w(x => x.statusEvents.map((e: { id: string; status: { title?: string } | null }) => [e.id, e.status?.title ?? null])))
     .toEqual([['job', 'job: busy'], ['ping', 'ping: waiting'], ['job', null], ['ping', null]]);
 
-  // v5: an extension toolbar in place of the main one; its hotkey from anywhere, ✕ and Esc go back, a mode leaves it.
+  // v5: an extension toolbar in place of the main one; its hotkey from anywhere, ← and Esc go back, ✕ closes, a mode leaves it.
   await w(x => {
     x.tbLog = [];
     x.tb = x.rl.addToolbar({
@@ -460,6 +460,12 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   await w(x => x.tb.show());
   await page.keyboard.press('Escape');
   await expect(ui('.bar.ext')).toHaveCount(0);
+  // ✕ closes the overlay, as on the main toolbar (it used to go back); opened again, it's the main toolbar.
+  await w(x => x.tb.show());
+  await ui('.bar.ext button.close').click();
+  await expect(ui('.bar')).toBeHidden();
+  await ui('.launcher').click();
+  await expect(ui('.bar button').filter({ hasText: 'Comment' })).toBeVisible();
   await w(x => x.tb.show());
   await page.keyboard.press('c');   // a mode: the main toolbar, with Comment on
   await expect(ui('.bar button.on')).toHaveText(/Comment/);
@@ -467,7 +473,7 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   await page.keyboard.press('Alt+Shift+KeyD');
   await page.keyboard.press('Alt+Shift+KeyD');   // pressed in it: closes the overlay
   await expect(ui('.bar')).toBeHidden();
-  expect(await w(x => x.tbLog)).toEqual(['show', 'hide', 'show', 'hide', 'show', 'hide', 'show', 'hide']);
+  expect(await w(x => x.tbLog)).toEqual(['show', 'hide', 'show', 'hide', 'show', 'hide', 'show', 'hide', 'show', 'hide']);
   await w(x => x.tb.remove());
   await page.keyboard.press('Alt+Shift+KeyD');
   await expect(ui('.bar')).toBeHidden();   // removed: its hotkey is gone

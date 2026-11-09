@@ -26,7 +26,7 @@ interface Info {
   /** The menu on the agent's screen (a permission prompt, stepped questions), read off it by the server. */
   prompt?: PromptView;
 }
-interface Session extends Info { id: string; label: string; app?: string }
+export interface Session extends Info { id: string; label: string; app?: string }
 /** All of the project's sessions: one that keeps its context ('shared'), or one per prompt ('fresh'). */
 interface Group { mode: 'shared' | 'fresh'; max: number; sessions: Session[] }
 interface Command { label: string; prompt: string; title?: string }
@@ -91,21 +91,51 @@ export function fill(prompt: string, rl: Pick<RedlineApi, 'page' | 'notes'>, lis
   return prompt.replace(/\{(page|url|ids)\}/g, (_, k: string) => k === 'page' ? rl.page() : k === 'url' ? location.href : ids || 'none');
 }
 const openIds = (rl: Pick<RedlineApi, 'notes'>) => rl.notes('page').filter(n => !n.done).map(n => n.id);
-/** The open notes on the page no running session has yet: what a fresh session gets, so two never work on one note. */
+/**
+ * The open notes on the page no running session has yet: what a prompt hands over, in both modes, so
+ * two sessions never work on one note and the count doesn't change with Fresh. Stopping a session frees its notes.
+ */
 export function freeIds(rl: Pick<RedlineApi, 'notes'>, sessions: Pick<Session, 'running' | 'sent'>[]): string[] {
   const taken = new Set(sessions.filter(s => s.running).flatMap(s => s.sent ?? []));
   return openIds(rl).filter(id => !taken.has(id));
 }
 const usesIds = (c: Command) => c.prompt.includes('{ids}');
 
+/**
+ * The sessions with a tab on the toolbar, in their order; the rest sit behind "+N" (the session list).
+ * Always the one on screen and any that asks; then the newest running, then the newest ended, up to `max`.
+ */
+export function visibleTabs(sessions: Pick<Session, 'id' | 'running' | 'status'>[], selected: string, max = 3): { shown: string[]; hidden: string[] } {
+  const keep = new Set(sessions.filter(s => s.id === selected || (s.running && s.status.state === 'blocked')).map(s => s.id));
+  const newest = [...sessions].reverse();
+  for (const s of [...newest.filter(x => x.running), ...newest.filter(x => !x.running)]) if (keep.size < max) keep.add(s.id);
+  return { shown: sessions.filter(s => keep.has(s.id)).map(s => s.id), hidden: sessions.filter(s => !keep.has(s.id)).map(s => s.id) };
+}
+
 /** What a note's tag says: handed to the agent and still open, or done since. */
 export function noteTag(note: Pick<Note, 'id' | 'done'>, sent: ReadonlySet<string>): 'sent' | 'done' | null {
   return !sent.has(note.id) ? null : note.done ? 'done' : 'sent';
 }
 
+/**
+ * A handed-over note's tag, from the newest session that has it: being worked on (a pulsing dot),
+ * waiting for your answer, sent (the session rests or has ended), or done. `who` names the session.
+ */
+export function tagFor(note: Pick<Note, 'id' | 'done'>, sessions: Session[], who: (s: Session) => string): { cls: string; text: string } | null {
+  const by = [...sessions].reverse().find(x => x.sent?.includes(note.id));
+  if (!by) return null;
+  if (note.done) return { cls: 'done', text: `✓ done by ${who(by)}` };
+  const st = by.running ? by.status.state : 'stopped';
+  if (st === 'working') return { cls: 'sent working', text: `${who(by)} is working on it` };
+  if (st === 'blocked') return { cls: 'sent asking', text: `${who(by)} needs your answer` };
+  return { cls: 'sent', text: `⤳ sent to ${who(by)}` };
+}
+
 // The extension's own look, inside the overlay's shadow root (a <style> there applies to all of it).
 const CSS = `
-.ag-chip { display: flex; align-items: center; gap: 7px; padding: 0 8px; min-width: 0; max-width: 340px; color: var(--fg); white-space: nowrap; }
+/* A fixed width, so the toolbar doesn't change size with every message (the full text is the hover). */
+.ag-chip { display: flex; align-items: center; gap: 7px; padding: 0 8px; flex: none; width: 290px; box-sizing: border-box; color: var(--fg); white-space: nowrap; overflow: hidden; }
+.ag-chip b { flex: none; }
 .ag-chip .ag-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 25%, transparent); }
 .ag-chip b { font-weight: 650; }
 .ag-chip .ag-msg { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -120,6 +150,12 @@ const CSS = `
 .ag-tag { display: inline-block; margin-top: 6px; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; }
 .ag-tag.sent { color: #8fb4ff; background: color-mix(in srgb, #4f8cff 18%, transparent); }
 .ag-tag.done { color: #3ecf8e; background: color-mix(in srgb, #3ecf8e 16%, transparent); }
+.ag-tag.working, .ag-tag.asking { cursor: pointer; }
+.ag-tag.asking { color: #ffb340; background: color-mix(in srgb, #ff9f0a 18%, transparent); }
+.ag-tag.working::before, .ag-tag.asking::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; animation: ag-beat 1.2s ease-in-out infinite; }
+@keyframes ag-beat { 50% { opacity: .45; transform: scale(.75); } }
+.ag-chip[data-state="working"] .ag-dot, .ag-tab[data-state="working"] .ag-dot, .ag-switch[data-state="working"] .ag-dot, .ag-line[data-state="working"] .ag-dot { animation: ag-beat 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ag-tag::before, .ag-dot { animation: none !important; } }
 .ag-card { display: grid; gap: 10px; font-size: 13px; }
 .ag-card .ag-who { display: flex; align-items: center; gap: 7px; color: var(--fg-2); font-size: 12px; }
 .ag-card .ag-who .ag-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
@@ -148,7 +184,36 @@ const CSS = `
 .ag-tab .ag-x { opacity: .55; padding-left: 2px; }
 .ag-tab .ag-x:hover { opacity: 1; }
 .bar button.ag-tab.cur { background: var(--bg-3); color: var(--fg); }
-.bar button.ag-mode.on { background: color-mix(in srgb, #4f8cff 28%, var(--bg-3)); color: var(--fg); }`;
+.bar button.ag-mode.on { background: color-mix(in srgb, #4f8cff 28%, var(--bg-3)); color: var(--fg); }
+.bar button.ag-more { padding: 0 7px; font-variant-numeric: tabular-nums; }
+.bar button.ag-more.lit { color: var(--fg); box-shadow: inset 0 0 0 1px var(--c); }
+.ag-list { display: grid; gap: 4px; font-size: 13px; min-width: min(420px, calc(100vw - 48px)); }
+.ag-list h4 { margin: 0 0 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-2); }
+.ag-row { display: grid; grid-template-columns: 8px 28px auto 1fr auto; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 8px; background: var(--bg-2); color: var(--fg); text-align: left; cursor: pointer; border: 1px solid transparent; }
+.ag-row:hover { background: var(--bg-3); }
+.ag-row.cur { border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
+.ag-row .ag-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.ag-row .l { font-variant-numeric: tabular-nums; color: var(--fg-2); }
+.ag-row .m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
+.ag-row .ag-x { padding: 0 4px; color: var(--fg-2); }
+.ag-row .ag-x:hover { color: var(--fg); }
+.ag-row[data-state="working"] .ag-dot { animation: ag-beat 1.2s ease-in-out infinite; }
+.ag-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+.ag-head h4 { margin: 0; }
+.ag-head .ag-mode { padding: 4px 10px; border-radius: 7px; background: var(--bg-3); color: var(--fg-2); }
+.ag-head .ag-mode.on { background: color-mix(in srgb, #4f8cff 28%, var(--bg-3)); color: var(--fg); }
+.bar .ag-phone { display: none; }
+.bar button.ag-switch { gap: 5px; font-variant-numeric: tabular-nums; }
+.ag-switch .ag-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+/* Phones: what fits one row. The outline says the state, the list has the words: the
+   session button (its dot the state) in place of the chip and tabs, Fresh and stop in its list, then the prompts and CLI. */
+@media (max-width: 560px) {
+  .ag-chip, .ag-chip + .sep { display: none; }
+  .bar .ag-desk { display: none; }
+  .bar .ag-phone { display: flex; }
+  .bar button.ag-switch { padding: 6px 8px; }
+  .ag-row { grid-template-columns: 8px 24px auto 1fr auto; padding: 9px 8px; }
+}`;
 const style = () => Object.assign(document.createElement('style'), { textContent: CSS });
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> & { class?: string; data?: Record<string, string> } = {}, ...kids: (Node | string | null | false)[]) {
@@ -189,8 +254,8 @@ export default async function agentPanel(rl: RedlineApi) {
   /** A call for the selected session. */
   const here = (p: string, body: Record<string, unknown> = {}) => post(p, { ...body, ...(cur().id ? { id: cur().id } : {}) });
   const fail = (e: unknown) => rl.toast(`Agent: ${(e as Error).message}`, true);
-  /** The notes a prompt hands over: the open ones on the page; a fresh session only those no running session has. */
-  const handed = () => fresh() ? freeIds(rl, group.sessions) : openIds(rl);
+  /** The notes a prompt hands over: the open ones on the page no running session has (both modes). */
+  const handed = () => freeIds(rl, group.sessions);
   /** A prompt button: starts the CLI when needed (the server holds the prompt until it is ready); the terminal stays closed. */
   const run = async (c: Command) => {
     const notes = usesIds(c) ? handed() : [];
@@ -212,7 +277,9 @@ export default async function agentPanel(rl: RedlineApi) {
   };
   const key = (data: string) => void here('/input', { data }).catch(fail);
   let wasAsking = new Set<string>();
+  let lastCur = { id: '', asking: false };
   let typing = false;   // a typed answer in the card's field: no switching sessions under it
+  let listOpen = false;   // the session list ("+N") in the attached card
 
   let frame: HTMLIFrameElement | null = null;
   const toFrame = (msg: unknown) => frame?.contentWindow?.postMessage(msg, location.origin);
@@ -243,30 +310,56 @@ export default async function agentPanel(rl: RedlineApi) {
     chip.style.setProperty('--c', st.color);
     const sep = () => el('div', { class: 'sep' });
     // Several sessions: a tab each (its state as a dot); an ended one can be closed.
-    const tabs = several() || (fresh() && group.sessions.length) ? el('div', { class: 'ag-tabs' }, ...group.sessions.map(x => {
+    const vis = visibleTabs(group.sessions, info.id);
+    const hidden = group.sessions.filter(x => vis.hidden.includes(x.id));
+    // "+N": the sessions without a tab, outlined in the colour of the busiest running one among them.
+    let more: HTMLElement | null = null;
+    if (hidden.length) {
+      const top = overall(hidden.filter(x => x.running && (x.status.state === 'working' || x.status.state === 'blocked')));
+      more = btn(`+${hidden.length}`, `${hidden.length} more session${hidden.length === 1 ? '' : 's'}: show all`, () => { listOpen = !listOpen; toolbar?.render(); }, 'ag-more' + (top ? ' lit' : '') + (listOpen ? ' on' : ''));
+      if (top) more.style.setProperty('--c', stateLabel(top).color);
+    }
+    const tabs = several() || (fresh() && group.sessions.length) ? el('div', { class: 'ag-tabs' }, ...group.sessions.filter(x => vis.shown.includes(x.id)).map(x => {
       const xl = stateLabel(x);
       const t = el('button', { class: 'ag-tab' + (x.id === info.id ? ' cur' : ''), title: `${who(x)}: ${xl.label}${xl.msg ? ` · ${xl.msg}` : ''}`, data: { id: x.id, state: x.running ? x.status.state : 'stopped' }, onclick: () => { sel = x.id; sync(); } },
         el('span', { class: 'ag-dot' }), x.label);
       t.style.setProperty('--c', xl.color);
       if (!x.running) t.append(el('span', { class: 'ag-x', title: 'Close this session', onclick: (e: Event) => { e.stopPropagation(); void post('/dismiss', { id: x.id }).catch(fail); } }, '×'));
       return t;
-    }), sep()) : null;
+    }), ...(more ? [more] : []), sep()) : null;
     const actions: HTMLElement[] = approval
       ? [btn('Allow', `Approve (${who(info)}'s prompt)`, () => answer('allow'), 'ag-allow'), btn('Deny', 'Decline', () => answer('deny'), 'ag-deny')]
       : setup.commands.map(c => {
         const n = usesIds(c) ? handed().length : -1;
-        const b = btn(c.label, (c.title ?? c.prompt) + (fresh() ? ' (in a new session)' : ''), () => void run(c), '', ...(n >= 0 ? [el('span', { class: 'count' }, String(n))] : []));
+        const busy = n >= 0 ? openIds(rl).length - n : 0;   // open notes a running session already has
+        const b = btn(c.label, (c.title ?? c.prompt) + (fresh() ? ' (in a new session)' : '') + (busy ? ` · ${busy} note${busy === 1 ? ' is' : 's are'} already with a session` : ''), () => void run(c), '', ...(n >= 0 ? [el('span', { class: 'count' }, String(n))] : []));
         b.disabled = n === 0 || (blocked && !fresh());
         b.dataset.cmd = c.label;
         return b;
       });
-    const mode = btn('Fresh', fresh()
-      ? `On: every prompt starts a new session with just its notes (up to ${group.max} at once). Click for one shared session`
-      : 'Off: prompts go to one session that keeps its context. Click to start a new session for every prompt', () => void post('/mode', { mode: fresh() ? 'shared' : 'fresh' }).then(g => { group = { ...group, ...g }; sync(); }).catch(fail), 'ag-mode' + (fresh() ? ' on' : ''));
+    const mode = modeButton('ag-desk');
     const cli = btn(blocked && !approval && !asked ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${who(info)}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
     cli.dataset.cli = '';
-    const stop = info.running ? btn('■', `Stop ${who(info)}`, () => void here('/stop').catch(fail), 'ag-stop') : null;
-    box.replaceChildren(style(), chip, sep(), ...(tabs ? [tabs] : []), ...actions, mode, sep(), cli, ...(stop ? [stop] : []));
+    const stop = info.running ? btn('■', `Stop ${who(info)}`, () => void here('/stop').catch(fail), 'ag-stop ag-desk') : null;
+    // Phones: one button for the session on screen; the list it opens has the tabs, Fresh and stop.
+    const sw = btn(`${info.label || 'Sessions'} ▾`, 'All sessions, Fresh, stop', () => { listOpen = !listOpen; toolbar?.render(); }, 'ag-switch ag-phone' + (listOpen ? ' on' : ''));
+    sw.prepend(el('span', { class: 'ag-dot' }));
+    sw.style.setProperty('--c', st.color);
+    sw.dataset.state = info.running ? s.state : 'stopped';
+    if (tabs) tabs.classList.add('ag-desk');
+    box.replaceChildren(style(), chip, sep(), ...(tabs ? [tabs] : []), sw, ...actions, mode, sep(), cli, ...(stop ? [stop] : []));
+  }
+
+  /** Fresh on or off: a new session for every prompt, or one shared session. */
+  function modeButton(cls = '') {
+    const b = el('button', {
+      class: `ag-mode ${cls}` + (fresh() ? ' on' : ''),
+      title: fresh()
+        ? `On: every prompt starts a new session with just its notes (up to ${group.max} at once). Click for one shared session`
+        : 'Off: prompts go to one session that keeps its context. Click to start a new session for every prompt',
+      onclick: () => void post('/mode', { mode: fresh() ? 'shared' : 'fresh' }).then(g => { group = { ...group, ...g }; sync(); }).catch(fail),
+    }, 'Fresh');
+    return b;
   }
 
   /**
@@ -277,7 +370,7 @@ export default async function agentPanel(rl: RedlineApi) {
   function renderCard(box: HTMLElement) {
     const info = cur();
     const pv = info.running ? info.prompt : undefined;
-    if (!pv?.options.length) return;
+    if (!pv?.options.length) { if (listOpen) renderList(box); return; }   // a question comes first
     const st = stateLabel(info);
     const card = el('div', { class: 'ag-card', data: { kind: info.status.kind ?? '', session: info.id } });
     card.style.setProperty('--c', st.color);
@@ -314,6 +407,28 @@ export default async function agentPanel(rl: RedlineApi) {
       el('button', { title: 'Esc in the CLI', onclick: () => key(ESC) }, 'Cancel'),
       el('button', { title: 'Show ' + who(info) + "'s terminal", onclick: () => win?.show() }, 'CLI')));
     box.append(style(), card);
+  }
+  /** Every session (the "+N" list), newest first: state, message, its notes; a click shows it, × closes an ended one. */
+  function renderList(box: HTMLElement) {
+    const ended = group.sessions.filter(x => !x.running);
+    const rows = [...group.sessions].reverse().map(x => {
+      const xl = stateLabel(x), n = x.sent?.length ?? 0;
+      const r = el('button', { class: 'ag-row' + (x.id === cur().id ? ' cur' : ''), title: `${who(x)}: ${xl.label}${xl.msg ? ` · ${xl.msg}` : ''}`, data: { id: x.id, state: x.running ? x.status.state : 'stopped' }, onclick: () => { sel = x.id; listOpen = false; sync(); } },
+        el('span', { class: 'ag-dot' }), el('span', { class: 'l' }, x.label), el('b', {}, xl.label),
+        el('span', { class: 'm' }, [n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')),
+        x.running
+          ? el('span', { class: 'ag-x', title: `Stop ${who(x)}`, onclick: (e: Event) => { e.stopPropagation(); void post('/stop', { id: x.id }).catch(fail); } }, '■')
+          : el('span', { class: 'ag-x', title: 'Close this session', onclick: (e: Event) => { e.stopPropagation(); void post('/dismiss', { id: x.id }).catch(fail); } }, '×'));
+      r.style.setProperty('--c', xl.color);
+      return r;
+    });
+    const closeEnded = async () => { for (const x of ended) await post('/dismiss', { id: x.id }).catch(fail); };
+    const running = group.sessions.filter(x => x.running).length;
+    box.append(style(), el('div', { class: 'ag-list' },
+      el('div', { class: 'ag-head' }, el('h4', {}, group.sessions.length ? `Sessions · ${running} running` : 'No sessions yet'), modeButton()), ...rows,
+      el('div', { class: 'ag-foot' }, el('span', {}, ''),
+        ended.length ? el('button', { onclick: () => void closeEnded() }, `Close ended (${ended.length})`) : null,
+        el('button', { onclick: () => { listOpen = false; toolbar?.render(); } }, 'Done'))));
   }
   const spanEl = (sp: Span) => {
     const n = el('span', {}, sp.t);
@@ -355,30 +470,33 @@ export default async function agentPanel(rl: RedlineApi) {
     const text = top.running || top.status.state === 'done' || top.status.state === 'error'
       ? `${who(top)}: ${st.label}${counts ? ` · ${counts}` : st.msg ? ` · ${st.msg}` : ''}`
       : `Hand these notes to ${name()}`;
-    const b = el('button', { class: 'ag-line', title: 'Open the agent toolbar', onclick: () => toolbar?.show() },
+    const b = el('button', { class: 'ag-line', title: 'Open the agent toolbar', onclick: () => toolbar?.show(), data: { state: top.running ? top.status.state : 'stopped' } },
       el('span', { class: 'ag-dot' }), el('span', {}, text), setup.hotkey ? el('kbd', {}, hotkeyText()) : el('kbd', {}, 'A'));
     b.style.setProperty('--c', st.color);
     line.replaceChildren(style(), b);
   }
   function renderTag(t: { el: HTMLElement; note: Note }) {
-    const tag = noteTag(t.note, sent());
-    // The newest session that had the note: "sent to claude #2".
-    const by = [...group.sessions].reverse().find(x => x.sent?.includes(t.note.id));
-    const to = by ? who(by) : name();
-    t.el.replaceChildren(...(tag ? [el('span', { class: `ag-tag ${tag}` }, tag === 'sent' ? `⤳ sent to ${to}` : `✓ done by ${to}`)] : []));
+    const tag = tagFor(t.note, group.sessions, who);
+    // Being worked on or asking: a click opens the agent toolbar (and its card).
+    const live = !!tag && /working|asking/.test(tag.cls);
+    t.el.replaceChildren(...(tag ? [el('span', { class: `ag-tag ${tag.cls}`, ...(live ? { title: 'Open the agent toolbar', onclick: () => toolbar?.show() } : {}) }, tag.text)] : []));
   }
   rl.addPanelSection({ id: 'agent', render(box) { line = box; renderLine(); } });
   rl.addCardDecorator({ id: 'agent', render(note, box) { const t = { el: box, note }; tags.set(note.id, t); renderTag(t); } });
 
   function sync() {
     if (sel && !group.sessions.some(s => s.id === sel)) sel = null;   // closed
-    // Another session starts asking while this one doesn't: show that one (not while an answer is
-    // being typed). Only when it starts, so a tab picked by hand stays picked.
-    const asking = group.sessions.filter(s => s.running && s.status.state === 'blocked').map(s => s.id);
+    // Another session asks while this one doesn't: show that one (not while an answer is being typed).
+    // Only when it starts asking, or when this one's question was just answered (the next question
+    // comes up), so a tab picked by hand stays picked.
+    const isAsking = (s: Session) => s.running && s.status.state === 'blocked';
+    const asking = group.sessions.filter(isAsking).map(s => s.id);
     const newly = asking.find(id => !wasAsking.has(id));
     wasAsking = new Set(asking);
-    const c = cur();
-    if (newly && !typing && !(c.running && c.status.state === 'blocked')) sel = newly;
+    const c = cur(), answered = lastCur.id === c.id && lastCur.asking && !isAsking(c);
+    const next = newly ?? (answered ? asking[0] : undefined);
+    if (next && !typing && !isAsking(c)) sel = next;
+    lastCur = { id: cur().id, asking: isAsking(cur()) };
     const top = overall(group.sessions);
     const ind = top ? indicatorFor({ ...top, command: who(top) }) : null;
     rl.setStatus('agent', ind ? { ...ind, onClick: () => toolbar?.show() } : null);

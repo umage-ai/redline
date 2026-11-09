@@ -12,7 +12,7 @@ import { resolveCommand, withInstructions } from '../../agent/src/server.ts';
 import { agent } from '../../agent/src/index.ts';
 import { agentFor } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
-import { freeIds, noteTag, overall, stateLabel } from '../../agent/src/panel.ts';
+import { freeIds, noteTag, overall, stateLabel, tagFor, visibleTabs } from '../../agent/src/panel.ts';
 
 const ESC = '\x1b', ST = ESC + '\\';
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
@@ -386,6 +386,20 @@ test('agent toolbar: the state chip and the note tags', () => {
   assert.equal(overall([ses('1', 'idle', false)]), undefined, 'nothing running, nothing finished');
   const rl = { notes: () => [{ id: 'a', done: false }, { id: 'b', done: false }, { id: 'c', done: true }] } as never;
   assert.deepEqual(freeIds(rl, [ses('1', 'working', true, ['a']), ses('2', 'done', false, ['b'])]), ['b'], 'a is with a running session; c is done');
+  // The count is the same in both modes (it used to jump between 0 and 1 with Fresh): a running session keeps its notes, resting or not.
+  assert.deepEqual(freeIds(rl, [ses('1', 'done', true, ['a'])]), ['b'], 'a rests with #1: not handed over again');
+  // The note's tag says what is happening to it: worked on, asking, sent (resting or stopped), done.
+  const who = (x: { label: string }) => `c ${x.label}`;
+  assert.deepEqual(tagFor({ id: 'a', done: false }, [ses('1', 'working', true, ['a'])], who), { cls: 'sent working', text: 'c #1 is working on it' });
+  assert.deepEqual(tagFor({ id: 'a', done: false }, [ses('1', 'blocked', true, ['a'])], who), { cls: 'sent asking', text: 'c #1 needs your answer' });
+  assert.deepEqual(tagFor({ id: 'a', done: false }, [ses('1', 'working', false, ['a'])], who), { cls: 'sent', text: '⤳ sent to c #1' }, 'stopped: just sent');
+  assert.deepEqual(tagFor({ id: 'a', done: true }, [ses('1', 'done', true, ['a']), ses('2', 'working', true, ['a'])], who), { cls: 'done', text: '✓ done by c #2' }, 'the newest session that had it');
+  assert.equal(tagFor({ id: 'z', done: false }, [ses('1', 'working', true, ['a'])], who), null);
+  // Many sessions: 3 tabs (the one on screen, any asking, then the newest running, then the newest ended), the rest behind "+N".
+  const many = [ses('1', 'done', false), ses('2', 'blocked'), ses('3', 'done', false), ses('4', 'working'), ses('5', 'done'), ses('6', 'working')];
+  assert.deepEqual(visibleTabs(many, '1'), { shown: ['1', '2', '6'], hidden: ['3', '4', '5'] }, 'picked by hand and asking stay; the newest running fills up');
+  assert.deepEqual(visibleTabs(many, '6').shown, ['2', '5', '6'], 'in session order; a resting one before an ended one');
+  assert.deepEqual(visibleTabs(many.slice(0, 3), '3'), { shown: ['1', '2', '3'], hidden: [] }, 'three or fewer: all');
 });
 
 test('agent option: the core loads @umage.ai/redline-agent only when asked; missing, it warns and runs on', () => {

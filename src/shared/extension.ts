@@ -122,7 +122,7 @@ export interface RedlineWindow {
 
 /**
  * A toolbar of your own (v5), shown in place of the main one the way sketch shows its tools: the
- * icon (the drag handle), your element, and ✕ back to the main toolbar (Esc too). The live outline,
+ * icon (the drag handle), ← back to the main toolbar (Esc too), your element, and ✕ that closes the overlay. The live outline,
  * position and drag carry over. An agent's controls, a review checklist, a presenter's remote.
  */
 export interface RedlineToolbarDef {
@@ -137,7 +137,7 @@ export interface RedlineToolbarDef {
   attached?(el: HTMLElement): void;
   /** Like the overlay's hotkey (`alt+shift+a`): opens the overlay in this toolbar from anywhere; pressed there, closes it. */
   hotkey?: string;
-  /** Hover text for the ✕ that goes back (default "Back to the toolbar (Esc)"). */
+  /** Hover text for the ← that goes back (default "Back to the toolbar (Esc)"). */
   backTitle?: string;
   onShow?(): void;
   onHide?(): void;

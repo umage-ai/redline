@@ -15,9 +15,11 @@ server and drives it from the overlay, so reviewers never need to open a termina
 - **Live status** from the CLI's OSC 7501 reports (Claude Code sends them): a light sweeping round the toolbar
   and a turning ring on the closed launcher while it works, an orange glow while it waits for you, green when done.
 - **Fresh sessions** (the toolbar's **Fresh**, or `sessions: 'fresh'`): every prompt starts its own session with
-  only its notes (none that a running session already has), several at once, a tab each. The default is one
-  shared session that keeps its context.
-- **The notes panel** tags the notes it was sent and the ones it has done.
+  only its notes (none that a running session already has), several at once, a tab each (3 shown, the rest
+  behind **+N**, a list of every session; on phones one session button opens it). The default is one shared
+  session that keeps its context; either way a note goes to one running session at a time.
+- **The notes panel** tags each note it was sent: being worked on, waiting for your answer, sent, or done.
+- **← and ✕**: ← goes back to the main toolbar (Esc too), ✕ closes the overlay.
 
 Local dev only: it answers this machine only (whatever Redline's `network` option says), and every call needs a
 per-process token. The CLI keeps its own permission prompts.

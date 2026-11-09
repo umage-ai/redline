@@ -220,8 +220,34 @@ test('agent toolbar: fresh sessions, a tab each; a new question brings its tab u
   await expect(chip(page)).toHaveText(/Done/);
   await expect(ui(page, '.win[data-win="agent"] iframe')).toHaveAttribute('src', /id=s1$/);
   await tabs.filter({ hasText: '#2' }).click();
+  // #1 asks too, while #2's card is up: #2 stays. Answered, #2 hands over to #1's question.
+  await request.post(`${f.url}/__redline/agent/input`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data: { id: 's1', data: 'ask\r' } });
+  await expect(tabs.filter({ hasText: '#1' })).toHaveAttribute('data-state', 'blocked');
+  await expect(card).toHaveAttribute('data-session', 's2');
   await card.locator('.ag-opt', { hasText: /^1Yes$/ }).click();
-  await expect(chip(page)).toHaveText(/Dones*approved: yes/);
+  await expect(card).toHaveAttribute('data-session', 's1');
+  await expect(agentBar(page).locator('.ag-tab.cur')).toHaveText('#1');
+  await card.locator('.ag-opt', { hasText: /^3No$/ }).click();
+  await expect(chip(page)).toHaveText(/Done\s*denied/);
+  await tabs.filter({ hasText: '#2' }).click();
+  await expect(chip(page)).toHaveText(/Done\s*approved: yes/);
+
+  // A phone: one session button instead of the chip, tabs, Fresh and stop; its list has them all.
+  await agentBar(page).locator('button[data-cli]').click();   // the terminal and the notes panel cover a phone: closed
+  await page.keyboard.press('n');
+  await page.setViewportSize({ width: 390, height: 760 });
+  const sw = agentBar(page).locator('button.ag-switch');
+  await expect(sw).toHaveText(/#2/);
+  await expect(agentBar(page).locator('.ag-tabs')).toBeHidden();
+  await expect(chip(page)).toBeHidden();
+  await sw.click();
+  const list = ui(page, '.attach[data-toolbar="agent"] .ag-list');
+  await expect(list.locator('.ag-row')).toHaveCount(2);
+  await expect(list.locator('.ag-mode')).toHaveClass(/on/);
+  await list.locator('.ag-row[data-id="s1"]').click();
+  await expect(sw).toHaveText(/#1/);
+  await expect(list).toHaveCount(0);   // picked: the list closes
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   // Stop #1: its tab gets a ×, which closes it.
   await tabs.filter({ hasText: '#1' }).click();

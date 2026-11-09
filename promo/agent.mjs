@@ -1,8 +1,9 @@
 // Records the short agent-toolbar promo (silent, H.264, 1920×1200) from the demo app:
 //   npm run promo:agent   → promo/out/redline-agent.mp4 and redline-agent-poster.png
-// The overlay, the agent toolbar, the Allow click and the HMR edit are all real; the agent CLI is a scripted
-// stand-in (promo/demo-agent.mjs) that reports OSC 7501 like Claude Code, asks before its edit, then edits
-// App.tsx and ticks the note off. One page, recorded with a CDP screencast; captions are drawn into the page.
+// The overlay, the agent toolbar, its tabs and question card, and the HMR edits are all real; the agent CLI
+// is a scripted stand-in (promo/demo-agent.mjs) that reports OSC 7501 and draws Claude Code's edit menu,
+// then edits App.tsx and ticks its note off. Two notes, two fresh sessions side by side. One page, recorded
+// with a CDP screencast; captions are drawn into the page.
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -17,6 +18,7 @@ const framesDir = path.join(outDir, 'agent-frames');
 const appFile = path.join(demo, 'src/App.tsx');
 const PORT = Number(process.env.PROMO_PORT ?? 5212);
 const COMMENT = 'Add a "+" and call it "Plan a route".';
+const COMMENT2 = 'Call it "Routes today".';
 
 await fs.rm(path.join(demo, '.redline'), { recursive: true, force: true });
 await fs.rm(framesDir, { recursive: true, force: true });
@@ -26,7 +28,7 @@ const appSource = await fs.readFile(appFile, 'utf8');
 const server = await createServer({
   configFile: false, root: demo, cacheDir: path.join(demo, '.vite-cache'), logLevel: 'warn',
   server: { port: PORT, strictPort: true },
-  plugins: [redline({ root: demo, agent: { command: process.execPath, args: [path.resolve('promo/demo-agent.mjs')], label: 'claude' } }), react()],
+  plugins: [redline({ root: demo, agent: { command: process.execPath, args: [path.resolve('promo/demo-agent.mjs')], label: 'claude', menus: true, env: { PLAN_MS: '8500' } } }), react()],
   optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime'] },
 });
 await server.listen();
@@ -49,6 +51,17 @@ async function glide([x, y], ms = 650) {
   cursor = [x, y];
 }
 const click = async loc => { await glide(await centre(loc)); await hold(300); await page.mouse.click(...cursor); };
+/** Comment mode on, click the element, type the note, save. */
+async function pin(target, text) {
+  await page.keyboard.press('c');
+  await click(target);
+  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.activeElement?.tagName === 'TEXTAREA');
+  await page.keyboard.type(text, { delay: 34 });
+  await hold(400);
+  const saved = page.waitForResponse(r => r.url().endsWith('/__redline/notes') && r.request().method() === 'POST');
+  await page.keyboard.press('Control+Enter');
+  await saved;
+}
 
 // CDP screencast with timestamps: real-time pacing (a frame only comes when the page changes).
 const cdp = await page.context().newCDPSession(page);
@@ -80,48 +93,65 @@ try {
   await page.keyboard.press('Alt+Shift+KeyR');
   await ui('.bar').waitFor();
   await hold(500);
-  await page.keyboard.press('c');
-  await click(page.getByTestId('new-route'));
-  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.activeElement?.tagName === 'TEXTAREA');
-  await page.keyboard.type(COMMENT, { delay: 34 });
-  await hold(500);
-  const saved = page.waitForResponse(r => r.url().endsWith('/__redline/notes') && r.request().method() === 'POST');
-  await page.keyboard.press('Control+Enter');
-  await saved;
-  await hold(1200);
+  await pin(page.getByTestId('new-route'), COMMENT);
+  await hold(900);
 
-  // 2 · the agent toolbar
+  // 2 · the agent toolbar, fresh sessions
   await caption('02 · Agent', 'Press A: everything for your agent, in one toolbar.', ['A']);
   await hold(700);
   await page.keyboard.press('a');
   await ui('.bar.ext').waitFor();
-  await hold(2200);
+  await hold(1600);
+  await caption('03 · Fresh', 'Fresh: a new session for each batch of notes.<br>A clean context every time.');
+  await click(ui('.xbar button.ag-mode'));
+  await hold(1600);
 
   // 3 · apply, no terminal
-  await caption('03 · Apply', 'Your agent CLI starts in the background.<br>No terminal needed.');
+  await caption('04 · Apply', 'Your agent CLI starts in the background.<br>No terminal needed.');
   await click(ui('.xbar button[data-cmd="Apply notes"]'));
   await ui('.bar.lit.spin').waitFor({ timeout: 20_000 });
   await glide([512, 330], 600);
+  await hold(1400);
+
+  // 4 · keep reviewing: a second note, a second session
+  await caption('05 · Parallel', 'Keep reviewing. The next note gets its own session.');
+  await pin(page.locator('h2', { hasText: 'Active routes' }), COMMENT2);
+  await page.keyboard.press('a');
+  await ui('.bar.ext').waitFor();
+  await hold(500);
+  await click(ui('.xbar button[data-cmd="Apply notes"]'));
+  await ui('.xbar .ag-tab[data-id="s2"]').waitFor({ timeout: 20_000 });
+  await glide(await centre(ui('.xbar .ag-tabs')), 700);
   await hold(1500);
 
-  // 4 · approval
-  await ui('.xbar button.ag-allow').waitFor({ timeout: 20_000 });
-  await caption('04 · Approve', 'It asks before it edits.<br>Allow, right in the toolbar.');
-  await hold(1600);
-  await click(ui('.xbar button.ag-allow'));
+  // 5 · the questions, in a card
+  const qcard = ui('.attach[data-toolbar="agent"] .ag-card');
+  await qcard.waitFor({ timeout: 30_000 });
+  await caption('06 · Ask', 'It asks before it edits:<br>the diff and every option, on the toolbar.');
+  await hold(2600);
+  // Whichever session asks first; then the other one's question comes up.
+  const first = await qcard.getAttribute('data-session'), other = first === 's1' ? 's2' : 's1';
+  await click(qcard.locator('.ag-opt').first());
+  await ui(`.attach[data-toolbar="agent"] .ag-card[data-session="${other}"]`).waitFor({ timeout: 30_000 });
+  await caption('07 · Next', 'The next session\'s question comes up by itself.');
+  await hold(2200);
+  await click(qcard.locator('.ag-opt', { hasText: "don't ask again" }));
+  await page.locator('h2', { hasText: 'Routes today' }).waitFor({ timeout: 20_000 });
   await page.getByTestId('new-route').filter({ hasText: 'Plan a route' }).waitFor({ timeout: 20_000 });
-  await ui('.xbar .ag-chip[data-state="done"]').waitFor();
-  await caption('05 · Done', 'Applied live, the note ticked off.');
-  await glide(await centre(page.getByTestId('new-route')), 700);
-  await hold(1600);
+  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.querySelectorAll('.ag-tab[data-state="done"]').length === 2, null, { timeout: 20_000 });
+
+  // 6 · done: both applied live, both notes ticked off
+  await caption('08 · Done', 'Applied live, both notes ticked off.');
+  await glide(await centre(page.locator('h2', { hasText: 'Routes today' })), 700);
+  await hold(1200);
   await page.keyboard.press('n');
   await ui('.filters label').filter({ hasText: 'Show done' }).click();
-  await ui('.card .ag-tag.done').waitFor({ timeout: 10_000 });
-  await glide(await centre(ui('.card .ag-tag.done')), 700);
-  await hold(2200);
+  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.querySelectorAll('.card .ag-tag.done').length === 2, null, { timeout: 10_000 });
+  await glide(await centre(ui('.card .ag-tag.done').last()), 700);
+  await hold(2400);
 
-  // 5 · the terminal, on demand
-  await caption('06 · CLI', 'The terminal is one click away.');
+  // 7 · the terminal, on demand
+  await caption('09 · CLI', 'Each session\'s terminal is one click away.');
   await page.keyboard.press('n');
   await click(ui('.xbar button[data-cli]'));
   await page.frameLocator('iframe[title$="terminal"]').locator('.xterm-rows').filter({ hasText: 'update_note' }).waitFor();
@@ -207,7 +237,7 @@ function stageScript() {
         cap.style.opacity = '0';
         cardEl.innerHTML = kind === 'title'
           ? `<div class="logo">${MARK}Redline <em>Agent</em></div><p>Hand your notes to your AI agent.<br>No terminal needed.</p>`
-          : `<div class="logo">${MARK}Redline</div><p class="sub">Your own agent CLI, run from the overlay.<br>Live status from Claude Code.</p><code>npm i -D @umage.ai/redline-agent</code><div class="url">github.com/umage-ai/redline</div>`;
+          : `<div class="logo">${MARK}Redline</div><p class="sub">Your own agent CLI, run from the overlay.<br>Fresh sessions side by side, questions in a card.</p><code>npm i -D @umage.ai/redline-agent</code><div class="url">github.com/umage-ai/redline</div>`;
         cardEl.style.opacity = '1';
       },
     };
