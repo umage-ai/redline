@@ -1,8 +1,7 @@
-# Redline
-
-**Mark up a running web UI, and let an AI agent apply the changes.**
-
-[Product page](https://umage.ai/products/redline) · [Packages](#packages) · [Setups](docs/SETUPS.md) · [![redline](https://img.shields.io/npm/v/@umage.ai/redline?label=%40umage.ai%2Fredline&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline) [![redline-agent](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=%40umage.ai%2Fredline--agent&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) [![redline-hub](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=%40umage.ai%2Fredline--hub&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) [![redline-overlay](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=%40umage.ai%2Fredline--overlay&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay)
+<h1 align="center">Redline</h1>
+<p align="center"><b>Mark up a running web UI, and let an AI agent apply the changes.</b></p>
+<p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline?label=npm&color=e5484d"></a> <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline?color=555"></a></p>
+<p align="center"><a href="https://umage.ai/products/redline"><b>Product page</b></a> · <a href="#packages">Packages</a> · <a href="#setup-in-a-repo">Setup</a> · <a href="docs/SETUPS.md">Setups</a> · <a href="https://github.com/umage-ai/redline/releases">Releases</a></p>
 
 ![Commenting on a button: the popover shows the element and its React source, App.tsx:32](docs/images/comment.png)
 
@@ -22,12 +21,12 @@ It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, wit
 
 Start with the core; add the others only when you need them. Each has its own README.
 
-| Package | What it is | Add it when |
-|---|---|---|
-| [`@umage.ai/redline`](https://www.npmjs.com/package/@umage.ai/redline) | The core: dev-server plugins (Vite, Astro, Next.js, Angular, any Node server), the overlay, the agent skill, the MCP server and the CLI | Always: this is Redline ([setup](#setup-in-a-repo)) |
-| [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](agent/README.md)) | You want notes applied without opening a terminal (local dev) |
-| [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](hub/README.md)) | Several people review the same app |
-| [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
+| Package | Version | What it is | Add it when |
+|---|---|---|---|
+| [`@umage.ai/redline`](https://www.npmjs.com/package/@umage.ai/redline) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline) | The core: dev-server plugins (Vite, Astro, Next.js, Angular, any Node server), the overlay, the agent skill, the MCP server and the CLI | Always: this is Redline ([setup](#setup-in-a-repo)) |
+| [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](agent/README.md)) | You want notes applied without opening a terminal (local dev) |
+| [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](hub/README.md)) | Several people review the same app |
+| [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
 
 ## Modes
 
