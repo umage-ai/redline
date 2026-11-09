@@ -35,3 +35,7 @@ Decisions: D49 (mountable) and D50 (note model, gate, slots, strings) in
 [docs/DECISIONS.md](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md).
 
 MIT licensed.
+
+---
+
+Part of **Redline** ([umage.ai/products/redline](https://umage.ai/products/redline)): [all packages](https://github.com/umage-ai/redline#packages), [source](https://github.com/umage-ai/redline).

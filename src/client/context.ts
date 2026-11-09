@@ -6,7 +6,7 @@ import type { Note, NoteType } from '../shared/types.ts';
 import type { LabelDef } from '../shared/labels.ts';
 import type {
   RedlineBeforeSave, RedlineButton, RedlineCardAction, RedlineCardDecorator, RedlineEvents, RedlineGate, RedlineMode, RedlineModeDef,
-  RedlineOp, RedlinePanelSection, RedlinePanelState, RedlinePinStyle, RedlineSketchTool, RedlineSlot,
+  RedlineOp, RedlinePanelSection, RedlinePanelState, RedlinePinStyle, RedlineSketchTool, RedlineSlot, RedlineStatus, RedlineBadge, RedlineToolbarDef, RedlineWindow, RedlineWindowDef,
 } from '../shared/extension.ts';
 import type { Life, Store } from './dom.ts';
 import type { Shield } from './shield.ts';
@@ -26,11 +26,15 @@ export interface Draft {
 }
 
 /** Kept in sessionStorage, so a reload comes back to the same view. */
-export interface ViewState { open: boolean; mode: Mode; panel: boolean; scope: 'page' | 'all'; showDone: boolean }
+export interface ViewState {
+  open: boolean; mode: Mode; panel: boolean; scope: 'page' | 'all'; showDone: boolean;
+  /** An extension toolbar shown in place of the main one (v5), by id. */
+  toolbar?: string | null;
+}
 
 export interface Layers {
   launcher: HTMLButtonElement; hl: HTMLElement; hlLabel: HTMLElement; pins: HTMLElement; tip: HTMLElement;
-  bar: HTMLElement; panel: HTMLElement; popLayer: HTMLElement; toast: HTMLElement; gate: HTMLElement;
+  bar: HTMLElement; panel: HTMLElement; popLayer: HTMLElement; toast: HTMLElement; gate: HTMLElement; windows: HTMLElement;
 }
 
 export interface Ctx {
@@ -67,6 +71,11 @@ export interface Ctx {
     /* v4 */
     beforeSave: RedlineBeforeSave[]; cardDecorators: RedlineCardDecorator[]; cardActions: RedlineCardAction[];
     modes: RedlineModeDef[]; sketchTools: RedlineSketchTool[]; pinStyle: RedlinePinStyle | null;
+    /* v5 */
+    statuses: Map<string, RedlineStatus>;
+    toolbars: RedlineToolbarDef[];
+    /** The launcher bubble: null = open notes on the page, false = none. */
+    badge: RedlineBadge | false | null;
   };
   /** A gate waiting to be passed (D50): no notes, no modes. `running`: the one on screen. */
   gate: { fn: RedlineGate | null; running: RedlineGate | null };
@@ -107,6 +116,12 @@ export interface Ctx {
   panelState(): RedlinePanelState;
   showHl(el: Element, label: string | null, cls?: string): void;
   hideHl(): void;
+  /** The extension toolbar on screen in place of the main one (v5), if any. */
+  extToolbar(): RedlineToolbarDef | undefined;
+  /** Shows an extension toolbar (opening the overlay, ending a mode), or null for the main one. */
+  setToolbar(id: string | null): void;
+  /** Puts the extension toolbar's attached card next to the toolbar (above it in the lower half, else below). */
+  placeAttached(): void;
   /* drag.ts */
   placeLauncher(): void;
   placeBar(): void;
@@ -134,6 +149,15 @@ export interface Ctx {
   renderTools(): void;
   /** A key while sketching; true when it was the sketch's. */
   sketchKey(e: KeyboardEvent): boolean;
+  /* windows.ts (v5) */
+  addWindow(def: RedlineWindowDef): RedlineWindow;
+  setStatus(id: string, status: RedlineStatus | null): void;
+  /** Indicator dots (toolbar: after the brand; launcher: in its corner), without the outline/ring one, or null. */
+  statusDots(where: 'bar' | 'launcher'): HTMLElement | null;
+  /** The status the toolbar's outline shows, or null. */
+  toolbarOutline(): { id: string; status: RedlineStatus } | null;
+  /** The launcher's ring, or null. */
+  launcherRing(): { el: HTMLElement; status: RedlineStatus } | null;
 }
 
 /** One overlay part: gets the shared context, returns the actions it provides. */

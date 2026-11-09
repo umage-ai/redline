@@ -1,0 +1,23 @@
+
+ ▐▛███▛█   Claude Code v2.1.319
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   C:\work\demo… · /rc
+
+
+❯ Use the AskUserQuestion tool to ask me two questions at once: question 1 header Color, which      
+  colour for the button (options Red, Blue, Green, each with a short description); question 2       
+  header Size, which size (Small, Large). Then tell me what I picked.                               
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Color  ☐ Size  ✔ Submit  →
+
+Which size should the button be?
+
+❯ 1. Small
+     Compact, fits inline or in dense layouts.
+  2. Large
+     Prominent and easy to tap, good for main actions.
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

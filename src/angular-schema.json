@@ -164,6 +164,14 @@
           "type": "boolean",
           "description": "The launcher and the toolbar (by its icon) can be dragged around. Default: false"
         },
+        "launcherSize": {
+          "description": "The launcher's size: small (26 px), medium (32 px, default), large (40 px), or px (20-64).",
+          "oneOf": [{ "type": "string", "enum": ["small", "medium", "large"] }, { "type": "number", "minimum": 20, "maximum": 64 }]
+        },
+        "agent": {
+          "description": "The agent panel (local dev): true runs claude, a string another CLI, or { command, args, env, cwd, label, commands, keys, hotkey, sessions, maxSessions, menus, instructions }. Needs @umage.ai/redline-agent.",
+          "oneOf": [{ "type": "boolean" }, { "type": "string" }, { "type": "object" }]
+        },
         "app": {
           "type": "string",
           "description": "Monorepos: the app name in notes."

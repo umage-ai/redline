@@ -35,7 +35,7 @@ folder with `.git`); add `.redline/` to `.gitignore` and install the agent guide
 `o.Labels` is the list of note labels (chips in the popover; default Bug, UX, Idea, Copy):
 `o.Labels.Add(new("Perf", "#0c0"))`, or `o.Labels.Clear()` to turn them off; `o.LabelsFrom` reads them per request.
 `o.Prompt` replaces the panel's **Copy prompt** text, or `""` hides it (hidden by default with a non-markdown store or online).
-`o.Draggable = true` lets reviewers move the launcher, toolbar and sketch tools; `o.Launcher = false` hides the round button, and any
+`o.LauncherSize = "small"` (or `"large"`, or px) sizes the round button; `o.Draggable = true` lets reviewers move the launcher, toolbar and sketch tools; `o.Launcher = false` hides the round button, and any
 element with `data-redline-open` (`="comment"`, `"notes"`, …) in a view opens the overlay instead (D51).
 
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:

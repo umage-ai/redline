@@ -18,12 +18,12 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 
 /* launcher */
 .launcher {
-  position: fixed; right: 16px; bottom: 16px; width: 36px; height: 36px; border-radius: 50%;
+  position: fixed; right: 16px; bottom: 16px; width: var(--launcher, 32px); height: var(--launcher, 32px); border-radius: 50%;
   background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center;
   box-shadow: 0 4px 16px rgba(0,0,0,.3); opacity: .7; transition: opacity .15s, transform .15s; pointer-events: auto;
 }
 .launcher:hover { opacity: 1; transform: scale(1.06); }
-.launcher svg { width: 18px; height: 18px; }
+.launcher svg { width: calc(var(--launcher, 32px) * .5); height: calc(var(--launcher, 32px) * .5); }
 /* draggable (D51): the launcher whole, the toolbar by its icon; no page scroll starts on them */
 .launcher.grab, .bar .brand.grab, .tools .brand.grab { cursor: grab; touch-action: none; user-select: none; }
 .launcher.dragging, .bar.dragging, .bar.dragging .brand, .tools.dragging, .tools.dragging .brand { cursor: grabbing; transition: none; }
@@ -32,6 +32,52 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .launcher.dragging { opacity: 1; }
 .badge { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
   background: var(--ink); color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+
+/* live indicators (v5): a dot on its toolbar button (or after the brand), a ring or dots on the launcher */
+.launcher .badge { z-index: 1; }
+.launcher .dots { position: absolute; left: -3px; bottom: -3px; display: flex; gap: 2px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); flex: none; }
+.launcher .dot { box-shadow: 0 0 0 2px var(--bg); }
+.bar .dots { display: flex; align-items: center; gap: 0; padding: 0 2px; }
+.bar .dots .hit { display: grid; place-items: center; width: 18px; height: 22px; cursor: default; }
+.bar .dots .hit.click { cursor: pointer; }
+/* the toolbar's outline (an extension status): steady, a glow, or a light sweeping along it (busy) */
+.bar .dots .dot { box-shadow: 0 0 0 2px var(--bg); }
+.bar::before { content: ''; position: absolute; inset: -1px; border-radius: 13px; padding: 2px; pointer-events: none; display: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.bar.lit::before { display: block; background: var(--dot); }
+.bar.lit.spin::before { background: linear-gradient(90deg, transparent, var(--dot), transparent) -70% 0 / 35% 100% no-repeat, color-mix(in srgb, var(--dot) 28%, transparent);
+  animation: rl-sweep 1.8s linear infinite; }
+.bar.lit.pulse { animation: rl-glow-bar 1.4s ease-in-out infinite; }
+@keyframes rl-sweep { to { background-position: 170% 0, 0 0; } }
+@keyframes rl-glow-bar { 50% { box-shadow: 0 8px 30px rgba(0,0,0,.35), 0 0 16px 3px color-mix(in srgb, var(--dot) 65%, transparent); } }
+.dot.pulse { animation: rl-glow-dot 1.2s ease-in-out infinite; }
+.dot.spin { background: var(--bg); border: 2px solid color-mix(in srgb, var(--dot) 30%, transparent); border-top-color: var(--dot); width: 10px; height: 10px; animation: rl-spin .9s linear infinite; }
+/* the ring around the closed launcher: a turning arc (busy), a glow (waiting for you), or steady */
+.launcher.lit { opacity: 1; }
+.launcher .ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--dot); pointer-events: none; }
+.launcher .ring.spin { border-color: color-mix(in srgb, var(--dot) 22%, transparent); border-top-color: var(--dot); border-right-color: var(--dot); animation: rl-spin 1s linear infinite; }
+.launcher .ring.pulse { animation: rl-glow 1.4s ease-in-out infinite; }
+@keyframes rl-spin { to { transform: rotate(360deg); } }
+@keyframes rl-glow { 50% { box-shadow: 0 0 10px 3px color-mix(in srgb, var(--dot) 70%, transparent); } }
+@keyframes rl-glow-dot { 50% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 5px color-mix(in srgb, var(--dot) 55%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .dot.pulse, .dot.spin, .launcher .ring, .bar.lit, .bar.lit::before { animation: none; } }
+/* extension windows (v5) */
+.win { position: fixed; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.45); pointer-events: auto; overflow: hidden; min-width: 260px; min-height: 140px; }
+.win-head { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 4px 0 12px; border-bottom: 1px solid var(--line);
+  background: var(--bg-2); cursor: grab; user-select: none; touch-action: none; flex: none; }
+.win.moving, .win.moving .win-head { cursor: grabbing; }
+.win.moving iframe { pointer-events: none; }
+.win-title { flex: 1 1 auto; min-width: 0; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-controls { display: flex; align-items: center; gap: 4px; flex: none; }
+.win-close { flex: none; }
+.win-controls button, .win-close { padding: 4px 8px; border-radius: 6px; color: var(--fg-2); white-space: nowrap; }
+.win-controls button:hover, .win-close:hover { background: var(--bg-3); color: var(--fg); }
+.win-controls button:disabled { opacity: .4; cursor: default; background: none; }
+.win-body { flex: 1; min-height: 0; position: relative; }
+.win-grip { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, var(--fg-3) 50%, var(--fg-3) 60%, transparent 60%, transparent 75%, var(--fg-3) 75%, var(--fg-3) 85%, transparent 85%); }
 
 /* toolbar */
 /* Centred in the room left of the notes panel (--panel-w, set while it is open); wraps when that room is short. */
@@ -50,6 +96,9 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .bar button.on kbd { background: rgba(255,255,255,.2); color: #fff; }
 .bar button:disabled { opacity: .4; cursor: default; background: none; color: var(--fg-2); }
 .bar .slot { display: flex; align-items: center; }
+.bar .xbar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.attach { position: fixed; z-index: 3; pointer-events: auto; box-sizing: border-box; max-width: min(640px, calc(100vw - 16px)); overflow: auto; overscroll-behavior: contain; padding: 12px 14px; border-radius: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+.attach.lit { border-color: color-mix(in srgb, var(--dot) 60%, var(--line)); }
 /* The gate (D50): a blocking step (sign-in, a workspace picker) above the toolbar, rendered by the caller. */
 .gate { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(68px + var(--lift, 0px)); width: min(380px, calc(100vw - 16px));
   max-height: calc(100vh - 100px); overflow: auto; padding: 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line);
@@ -235,6 +284,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); flex-wrap: nowrap; justify-content: flex-start; max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
   .bar .brand span, .bar .brand + .sep { display: none; }
   .bar .brand { padding: 0 6px; }
+  .bar .xbar { flex: none; }   /* an extension toolbar scrolls with the row, never under ✕ */
   .bar button { padding: 6px 9px; }
   .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
   .tools { top: max(8px, env(safe-area-inset-top)); }

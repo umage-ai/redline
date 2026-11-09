@@ -18,6 +18,8 @@ public sealed class RedlineOptions
     public bool Launcher { get; set; } = true;
     /// <summary>The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51).</summary>
     public bool Draggable { get; set; }
+    /// <summary>The launcher's size: "small" (26 px), "medium" (32 px, default), "large" (40 px), or px ("28", 20–64).</summary>
+    public string? LauncherSize { get; set; }
     /// <summary>
     /// The labels a reviewer can tag a note with (chips in the popover, D46). Default Bug, UX, Idea and Copy;
     /// replace or add to the list, or <c>Labels.Clear()</c> to turn labels off.

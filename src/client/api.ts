@@ -4,6 +4,7 @@
 import type { RedlineApi, RedlineEvents, RedlineExtension, RedlinePageKey } from '../shared/extension.ts';
 import type { Ctx } from './context.ts';
 import { BUILTIN_KEYS } from './input.ts';
+import { safely } from './dom.ts';
 
 type Listener = (...a: unknown[]) => void;
 
@@ -42,7 +43,7 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     if (k && BUILTIN_KEYS.includes(k)) console.warn(`[redline] key "${key}" for "${id}" is taken by the overlay; use the button`);
   };
   return {
-    version: 4,
+    version: 5,
     addButton(b) {
       const key = b.key?.toLowerCase();
       if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
@@ -90,6 +91,29 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     },
     addSketchTool(t) { upsert(ext.sketchTools, t); ctx.renderTools(); },
     removeSketchTool(id) { if (drop(ext.sketchTools, id)) ctx.renderTools(); },
+    /* v5 */
+    addWindow: w => ctx.addWindow(w),
+    addToolbar(def) {
+      const id = String(def.id);
+      const shown = () => state.open && ctx.extToolbar()?.id === id;
+      const hide = () => { if (shown()) ctx.setToolbar(null); };
+      const replaced = ext.toolbars.some(x => x.id === id);
+      upsert(ext.toolbars, def);
+      // Back after a reload (the view keeps it), or replaced while on screen: it is showing now.
+      if (shown() && !replaced && def.onShow) safely(() => def.onShow!(), undefined);
+      ctx.renderBar();
+      return {
+        show: () => ctx.setToolbar(id),
+        hide,
+        toggle: () => (shown() ? hide() : ctx.setToolbar(id)),
+        isOpen: shown,
+        render: () => { if (shown()) ctx.renderBar(); },
+        remove: () => { hide(); if (drop(ext.toolbars, id)) ctx.renderBar(); },
+      };
+    },
+    setStatus: (id, s) => ctx.setStatus(String(id), s),
+    statuses: () => Object.fromEntries([...ext.statuses].map(([k, v]) => [k, { ...v }])),
+    setBadge(fn) { ext.badge = typeof fn === 'function' || fn === false ? fn : null; ctx.renderLauncher(); },
     on: (e, fn) => on(e, fn as Listener),
     open: () => ctx.setOpen(true),
     close: () => ctx.setOpen(false),

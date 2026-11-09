@@ -1,7 +1,7 @@
 # Publishes @umage.ai/redline to npm through Trusted Publishing (OIDC): no npm token is stored anywhere.
 # Also @umage.ai/redline-hub (hub/, D44) whenever hub/package.json carries a version npm doesn't have yet;
 # it needs its own Trusted Publisher entry on npm (same repo and workflow). Likewise @umage.ai/redline-overlay
-# (overlay/, D50) whenever overlay/package.json carries a new version.
+# (overlay/, D50) whenever overlay/package.json carries a new version, and @umage.ai/redline-agent (agent/, D53).
 # npm side: package settings → Trusted Publisher → GitHub Actions, repo umage-ai/redline, workflow publish.yml,
 # no environment, and "Allow npm publish" ticked (only `npm stage publish` is allowed by default → 403, L20).
 #
@@ -103,6 +103,17 @@ jobs:
             npm publish --ignore-scripts
           fi
 
+      - name: Publish @umage.ai/redline-agent (when its version is new)
+        if: github.event_name == 'push' || !inputs.dry_run
+        working-directory: agent
+        run: |
+          spec="$(node -p "const p = require('./package.json'); p.name + '@' + p.version")"
+          if npm view "$spec" version > /dev/null 2>&1; then
+            echo "::notice::$spec is already on npm; bump agent/package.json to publish the agent panel."
+          else
+            npm publish --ignore-scripts
+          fi
+
       # npm refuses even a dry run for a version that is already published, so between releases show the tarball instead.
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
@@ -116,6 +127,7 @@ jobs:
           fi
           (cd hub && npm pack --dry-run --ignore-scripts)
           (cd overlay && npm pack --dry-run --ignore-scripts)
+          (cd agent && npm pack --dry-run --ignore-scripts)
 
       - name: Upload Playwright results
         if: failure()

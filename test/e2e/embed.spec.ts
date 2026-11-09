@@ -194,7 +194,7 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
     const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
     w.handle.unmount();
     document.body.insertAdjacentHTML('beforeend', '<nav><button id="mine" data-drag-open>Review</button> <button id="mine-c" data-drag-open="comment">Comment</button></nav>');
-    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { draggable: true } });
+    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { draggable: true, launcherSize: 'small' } });
   });
   const ui = (sel: string) => page.locator(`drag-root ${sel}`);
   const box = async (sel: string) => (await ui(sel).boundingBox())!;
@@ -209,8 +209,9 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
     await page.mouse.up();
   };
 
-  // The launcher moves, and the press that moved it doesn't open the overlay; a plain click still does.
+  // A small launcher (launcherSize) moves like any other; the press that moved it doesn't open the overlay; a plain click still does.
   const l0 = await box('.launcher');
+  expect([l0.width, l0.height]).toEqual([26, 26]);
   await dragBy('.launcher', -300, -200);
   const l1 = await box('.launcher');
   // (within a few px: the hovered launcher is scaled up a little)
@@ -329,7 +330,7 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   // Runs `fn` in the page with the window (as a loose record) as its argument.
   const w = <T,>(fn: (w: Record<string, any>) => T) => page.evaluate(`(${fn.toString()})(window)`) as Promise<T>;   // eslint-disable-line @typescript-eslint/no-explicit-any
   const ui = (sel: string) => page.locator(`v4-root ${sel}`);
-  expect(await w(x => x.rl.version)).toBe(4);
+  expect(await w(x => x.rl.version)).toBe(5);
 
   // error: once per failure streak (polling goes on quietly), and again only after a success.
   await w(x => { x.fail = 'Unauthorized'; });
@@ -397,4 +398,83 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   await page.mouse.up();
   await expect(ui('svg.rl-sketch ellipse')).toHaveCount(1);
   await page.keyboard.press('Escape');
+
+  // v5 (D53): a window (rendered on first show, kept up while the overlay is closed), live indicators, the launcher bubble.
+  await w(x => {
+    x.rl.open();
+    x.statusEvents = [];
+    x.rl.on('status', (e: unknown) => x.statusEvents.push(e));
+    x.win = x.rl.addWindow({ id: 'log', title: 'Log', width: 300, height: 200, render: (body: HTMLElement, controls: HTMLElement) => {
+      body.textContent = 'log body'; controls.append(Object.assign(document.createElement('button'), { textContent: 'Clear' }));
+    } });
+    x.rl.setStatus('job', { color: 'rgb(79, 140, 255)', title: 'job: busy', spin: true, onClick: () => x.win.show() });
+    x.rl.setStatus('ping', { color: 'rgb(255, 159, 10)', title: 'ping: waiting', pulse: true, launcher: 'ring', toolbar: 'outline' });
+  });
+  await expect(ui('.win[data-win="log"]')).toBeHidden();
+  await expect(ui('.bar .dots [data-status="job"]')).toHaveAttribute('title', 'job: busy');      // no button named: after the brand
+  await expect(ui('.bar.lit.pulse[data-status="ping"]')).toHaveAttribute('title', 'ping: waiting');   // the toolbar's outline
+  await expect(ui('.bar .dots [data-status="ping"]')).toHaveCount(0);
+  await ui('.bar .dots [data-status="job"]').click();
+  await expect(ui('.win[data-win="log"] .win-body')).toHaveText('log body');
+  await expect(ui('.win[data-win="log"] .win-controls button')).toHaveText('Clear');
+  await w(x => x.rl.close());
+  await expect(ui('.launcher .ring[data-status="ping"]')).toHaveCSS('border-top-color', 'rgb(255, 159, 10)');   // the ring status
+  await expect(ui('.launcher .dots .dot[data-status="job"]')).toBeVisible();                                   // the others as dots
+  await expect(ui('.launcher .badge')).toHaveText('1');   // default bubble: open notes on the page
+  await w(x => x.rl.setBadge((open: number) => (open ? `${open}!` : null)));
+  await expect(ui('.launcher .badge')).toHaveText('1!');
+  await w(x => x.rl.setBadge(false));
+  await expect(ui('.launcher .badge')).toHaveCount(0);
+  await expect(ui('.win[data-win="log"]')).toBeVisible();
+  await ui('.win[data-win="log"] .win-close').click();
+  await expect(ui('.win[data-win="log"]')).toBeHidden();
+  await w(x => { x.rl.setStatus('job', null); x.rl.setStatus('ping', null); });
+  await expect(ui('.launcher .ring, .launcher .dot')).toHaveCount(0);
+  expect(await w(x => x.statusEvents.map((e: { id: string; status: { title?: string } | null }) => [e.id, e.status?.title ?? null])))
+    .toEqual([['job', 'job: busy'], ['ping', 'ping: waiting'], ['job', null], ['ping', null]]);
+
+  // v5: an extension toolbar in place of the main one; its hotkey from anywhere, ← and Esc go back, ✕ closes, a mode leaves it.
+  await w(x => {
+    x.tbLog = [];
+    x.tb = x.rl.addToolbar({
+      id: 'deck', hotkey: 'alt+shift+d',
+      render: (el: HTMLElement) => { el.append(Object.assign(document.createElement('button'), { textContent: `Next ${x.tbLog.length}` })); },
+      attached: (el: HTMLElement) => { if (x.cardText) el.textContent = x.cardText; },
+      onShow: () => x.tbLog.push('show'), onHide: () => x.tbLog.push('hide'),
+    });
+  });
+  await expect(ui('.bar')).toBeHidden();   // added hidden, overlay still closed
+  await page.keyboard.press('Alt+Shift+KeyD');
+  await expect(ui('.bar.ext .xbar[data-toolbar="deck"] button')).toHaveText('Next 1');
+  // Its attached card: none while empty; above the toolbar (which sits low).
+  await expect(ui('.attach')).toBeHidden();
+  await w(x => { x.cardText = 'Speaker notes'; x.tb.render(); });
+  await expect(ui('.attach[data-toolbar="deck"]')).toHaveText('Speaker notes');
+  const [cardBox, barBox] = [await ui('.attach').boundingBox(), await ui('.bar').boundingBox()];
+  expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(barBox!.y);
+  await expect(ui('.bar button').filter({ hasText: 'Comment' })).toHaveCount(0);
+  expect(await w(x => x.tb.isOpen())).toBe(true);
+  await ui('.bar button.back').click();
+  await expect(ui('.bar button').filter({ hasText: 'Comment' })).toBeVisible();
+  await expect(ui('.attach')).toBeHidden();   // the card goes with its toolbar
+  await w(x => x.tb.show());
+  await page.keyboard.press('Escape');
+  await expect(ui('.bar.ext')).toHaveCount(0);
+  // ✕ closes the overlay, as on the main toolbar (it used to go back); opened again, it's the main toolbar.
+  await w(x => x.tb.show());
+  await ui('.bar.ext button.close').click();
+  await expect(ui('.bar')).toBeHidden();
+  await ui('.launcher').click();
+  await expect(ui('.bar button').filter({ hasText: 'Comment' })).toBeVisible();
+  await w(x => x.tb.show());
+  await page.keyboard.press('c');   // a mode: the main toolbar, with Comment on
+  await expect(ui('.bar button.on')).toHaveText(/Comment/);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Alt+Shift+KeyD');
+  await page.keyboard.press('Alt+Shift+KeyD');   // pressed in it: closes the overlay
+  await expect(ui('.bar')).toBeHidden();
+  expect(await w(x => x.tbLog)).toEqual(['show', 'hide', 'show', 'hide', 'show', 'hide', 'show', 'hide', 'show', 'hide']);
+  await w(x => x.tb.remove());
+  await page.keyboard.press('Alt+Shift+KeyD');
+  await expect(ui('.bar')).toBeHidden();   // removed: its hotkey is gone
 });

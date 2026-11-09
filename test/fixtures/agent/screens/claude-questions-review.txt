@@ -1,0 +1,24 @@
+
+ ▐▛███▛█   Claude Code v2.1.319
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   C:\work\demo… · /rc
+
+
+❯ Use the AskUserQuestion tool to ask me two questions at once: question 1 header Color, which      
+  colour for the button (options Red, Blue, Green, each with a short description); question 2       
+  header Size, which size (Small, Large). Then tell me what I picked.                               
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Color  ☐ Size  ✔ Submit  →
+
+Review your answers
+
+⚠ You have not answered all questions
+
+ ● Which colour should the button be?
+   → Blue
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel

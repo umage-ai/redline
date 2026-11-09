@@ -106,6 +106,13 @@ export const BUILTIN_KEYS = ['c', 't', 's', 'k', 'n', 'escape'];
 function onKey(ctx: Ctx, e: KeyboardEvent) {
   const { state } = ctx;
   if (matchHotkey(e, ctx.config.hotkey)) { e.preventDefault(); e.stopImmediatePropagation(); ctx.setOpen(!state.open); return; }
+  // An extension toolbar's own shortcut (v5): opens the overlay in it; pressed there, closes the overlay.
+  const tb = ctx.ext.toolbars.find(x => x.hotkey && matchHotkey(e, x.hotkey));
+  if (tb) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (state.open && ctx.extToolbar() === tb) ctx.setOpen(false); else ctx.setToolbar(tb.id);
+    return;
+  }
   if (!state.open || e.ctrlKey && e.key !== 'z' || e.metaKey || e.altKey) return;
   if (ctx.sketchKey(e)) return;
   if (isTyping(e, ctx.shadow) || e.ctrlKey) return;
@@ -125,10 +132,11 @@ function onKey(ctx: Ctx, e: KeyboardEvent) {
   e.preventDefault(); e.stopImmediatePropagation();
 }
 
-/** Esc steps back one level: draft, mode, panel, overlay. */
+/** Esc steps back one level: draft, mode, extension toolbar, panel, overlay. */
 function escape(ctx: Ctx) {
   if (ctx.draft) ctx.cancelDraft();
   else if (ctx.state.mode !== 'idle') ctx.setMode('idle');
+  else if (ctx.extToolbar()) ctx.setToolbar(null);
   else if (ctx.state.panel) ctx.togglePanel(false);
   else ctx.setOpen(false);
 }
