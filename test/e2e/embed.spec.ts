@@ -295,6 +295,39 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
   await expect(ui('.bar .brand')).not.toHaveClass(/grab/);   // not draggable unless asked
 });
 
+test('launcherPosition: a side or the middle on each axis, px from the edge; a dragged launcher resets to it', async ({ page }) => {
+  const mountAt = (launcherPosition: unknown) => page.evaluate(async pos => {
+    const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
+    w.handle.unmount();
+    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'pos-root', namespace: 'pos', config: { draggable: true, launcherPosition: pos } });
+    w.handle.api.close();   // the page may have left it open
+  }, launcherPosition);
+  const box = async () => (await page.locator('pos-root .launcher').boundingBox())!;
+  const vp = page.viewportSize()!;
+  await mountAt('top-left 24');
+  expect(await box()).toMatchObject({ x: 24, y: 24, width: 32 });
+  await mountAt('bottom-center 16 80');
+  let b = await box();
+  expect(Math.round(b.x + b.width / 2)).toBe(Math.round(vp.width / 2));
+  expect(Math.round(vp.height - b.y - b.height)).toBe(80);
+  await mountAt({ x: 'right', y: 'middle', offsetX: 40 });
+  b = await box();
+  expect(Math.round(vp.width - b.x - b.width)).toBe(40);
+  expect(Math.round(b.y + b.height / 2)).toBe(Math.round(vp.height / 2));
+  // Dragged, it stays where the reviewer put it.
+  await page.mouse.move(b.x + 16, b.y + 16);
+  await page.mouse.down();
+  await page.mouse.move(b.x - 200, b.y - 100, { steps: 5 });
+  await page.mouse.up();
+  expect(Math.round((await box()).x)).toBeLessThan(Math.round(b.x) - 150);
+  // Double-clicking the toolbar's icon puts it back on the configured spot.
+  await page.locator('pos-root .launcher').click();
+  await page.locator('pos-root .bar .brand').dblclick();
+  await page.evaluate(() => (window as unknown as W).handle.api.close());
+  await expect.poll(async () => Math.round(vp.width - (await box()).x - 32)).toBe(40);
+  await page.evaluate(() => localStorage.clear());
+});
+
 test('API v4: error and change events, beforeSave, card decorators and actions, pin style, an extension mode and sketch tool (D52)', async ({ page }) => {
   await page.evaluate(async () => {
     const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any

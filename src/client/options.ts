@@ -2,6 +2,7 @@
 
 import type { LabelDef } from '../shared/labels.ts';
 import type { PageKeyMode } from '../shared/page.ts';
+import type { LauncherPosition } from '../shared/place.ts';
 import type { RedlineApi, RedlineExtension, RedlineGate } from '../shared/extension.ts';
 import type { RedlineStrings } from './strings.ts';
 import type { Mark } from './capture.ts';
@@ -24,6 +25,8 @@ export interface OverlayConfig {
   draggable?: boolean;
   /** The launcher's size: 'small' (26 px), 'medium' (32 px, default), 'large' (40 px), or px (20–64). */
   launcherSize?: 'small' | 'medium' | 'large' | number | string;
+  /** Where the launcher sits: `'bottom-right'` (default), `'top-left 24'`, `'bottom-left 24 80'` (px from the edges, x then y), or `{ x, y, offsetX, offsetY }`. */
+  launcherPosition?: LauncherPosition;
   labels?: LabelDef[];
   /** The "copy prompt for your agent" text; false hides it, a string replaces it ({open}, {page}). */
   prompt?: string | false;

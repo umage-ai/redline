@@ -248,6 +248,7 @@ public sealed class RedlineMiddleware
             ["launcher"] = _rt.Options.Launcher,
             ["draggable"] = _rt.Options.Draggable,
             ["launcherSize"] = _rt.Options.LauncherSize,
+            ["launcherPosition"] = _rt.Options.LauncherPosition,
             ["dir"] = _rt.Store.Dir,
             ["app"] = _rt.Context.App,
             ["directEdit"] = _rt.Writers.Count > 0,

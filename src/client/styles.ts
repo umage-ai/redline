@@ -18,11 +18,13 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 
 /* launcher */
 .launcher {
-  position: fixed; right: 16px; bottom: 16px; width: var(--launcher, 32px); height: var(--launcher, 32px); border-radius: 50%;
+  /* where: the launcherPosition option sets these (place.ts); a dragged launcher is placed inline instead */
+  position: fixed; left: var(--l-left, auto); right: var(--l-right, 16px); top: var(--l-top, auto); bottom: var(--l-bottom, 16px); transform: var(--l-shift, none);
+  width: var(--launcher, 32px); height: var(--launcher, 32px); border-radius: 50%;
   background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center;
   box-shadow: 0 4px 16px rgba(0,0,0,.3); opacity: .7; transition: opacity .15s, transform .15s; pointer-events: auto;
 }
-.launcher:hover { opacity: 1; transform: scale(1.06); }
+.launcher:hover { opacity: 1; transform: var(--l-shift, translate(0, 0)) scale(1.06); }
 .launcher svg { width: calc(var(--launcher, 32px) * .5); height: calc(var(--launcher, 32px) * .5); }
 /* draggable (D51): the launcher whole, the toolbar by its icon; no page scroll starts on them */
 .launcher.grab, .bar .brand.grab, .tools .brand.grab { cursor: grab; touch-action: none; user-select: none; }
@@ -279,7 +281,6 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 
 /* phones: fit everything inside the viewport */
 @media (max-width: 560px) {
-  .launcher { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
   /* phones: one row that scrolls sideways (a wrapped bar would cover the page) */
   .bar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--lift, 0px)); flex-wrap: nowrap; justify-content: flex-start; max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
   .bar .brand span, .bar .brand + .sep { display: none; }

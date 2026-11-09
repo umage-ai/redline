@@ -8,6 +8,7 @@ import net from 'node:net';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NewNoteRequest, Note, Target } from '../shared/types.ts';
+import type { LauncherPosition } from '../shared/place.ts';
 import { API_BASE, STORE_OWNED } from '../shared/types.ts';
 import { cleanPatch, createStore, isMarkdownStore, type NotePatch, type NoteStore } from './store.ts';
 import { remoteStore } from './remote.ts';
@@ -44,6 +45,12 @@ export interface RedlineOptions {
   draggable?: boolean;
   /** The launcher's size: 'small' (26 px), 'medium' (32 px, default), 'large' (40 px), or px (20–64). */
   launcherSize?: 'small' | 'medium' | 'large' | number;
+  /**
+   * Where the launcher sits, for apps with their own button bottom right: `'bottom-left'`, `'top-right 24'`,
+   * `'bottom-center 16 80'` (px from the edges, x then y; x: left/center/right, y: top/middle/bottom), or
+   * `{ x, y, offsetX, offsetY }`. Default bottom right, 16 px. A launcher dragged by a reviewer stays where they put it.
+   */
+  launcherPosition?: LauncherPosition;
   /**
    * The labels a reviewer can tag a note with (chips in the popover, D46): names, or { name, color }.
    * Default Bug, UX, Idea and Copy; false turns labels off. A function is asked on every /config
@@ -261,7 +268,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     try { return normalizeLabels(await (opts.labels as Extract<LabelsSource<IncomingMessage>, Function>)({ req })); }
     catch (e) { console.warn('[redline] labels() failed:', e); return []; }
   };
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable === true, launcherSize: opts.launcherSize, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable === true, launcherSize: opts.launcherSize, launcherPosition: opts.launcherPosition, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);

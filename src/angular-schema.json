@@ -168,6 +168,10 @@
           "description": "The launcher's size: small (26 px), medium (32 px, default), large (40 px), or px (20-64).",
           "oneOf": [{ "type": "string", "enum": ["small", "medium", "large"] }, { "type": "number", "minimum": 20, "maximum": 64 }]
         },
+        "launcherPosition": {
+          "description": "Where the launcher sits: bottom-right (default), top-left 24, bottom-left 24 80 (px from the edges, x then y; x left/center/right, y top/middle/bottom), or { x, y, offsetX, offsetY }.",
+          "oneOf": [{ "type": "string" }, { "type": "object" }]
+        },
         "agent": {
           "description": "The agent panel (local dev): true runs claude, a string another CLI, or { command, args, env, cwd, label, commands, keys, hotkey, key, sessions, maxSessions, menus, instructions }. Needs @umage.ai/redline-agent.",
           "oneOf": [{ "type": "boolean" }, { "type": "string" }, { "type": "object" }]

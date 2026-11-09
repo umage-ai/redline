@@ -8,6 +8,7 @@
 import type { Note } from '../shared/types.ts';
 import type { RedlineGate, RedlineOp, RedlinePageKey } from '../shared/extension.ts';
 import { pageKey } from '../shared/page.ts';
+import { launcherPlace, launcherVars } from '../shared/place.ts';
 import { screenshot as builtInShot, stopTabCapture } from './capture.ts';
 import { h, Life, safely, storage } from './dom.ts';
 import { captureErrors } from './errors.ts';
@@ -69,6 +70,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   };
 
   ui.style.setProperty('--launcher', `${launcherPx(config.launcherSize)}px`);
+  for (const [k, v] of Object.entries(launcherVars(launcherPlace(config.launcherPosition)))) ui.style.setProperty(k, v);
   const el = layers(config, t);
   ui.append(el.hl, el.hlLabel, el.pins, el.launcher, el.bar, el.panel, el.windows, el.gate, el.popLayer, el.tip, el.toast);
   el.launcher.addEventListener('click', () => ctx.setOpen(true));

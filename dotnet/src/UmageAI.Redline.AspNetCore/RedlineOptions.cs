@@ -21,6 +21,11 @@ public sealed class RedlineOptions
     /// <summary>The launcher's size: "small" (26 px), "medium" (32 px, default), "large" (40 px), or px ("28", 20–64).</summary>
     public string? LauncherSize { get; set; }
     /// <summary>
+    /// Where the launcher sits: "bottom-right" (default), "top-left 24", "bottom-left 24 80" (px from the edges,
+    /// x then y; x left/center/right, y top/middle/bottom). A launcher a reviewer dragged stays where they put it.
+    /// </summary>
+    public string? LauncherPosition { get; set; }
+    /// <summary>
     /// The labels a reviewer can tag a note with (chips in the popover, D46). Default Bug, UX, Idea and Copy;
     /// replace or add to the list, or <c>Labels.Clear()</c> to turn labels off.
     /// </summary>
