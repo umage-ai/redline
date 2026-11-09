@@ -50,7 +50,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 type W = Window & {
-  handle: { api: { isOpen(): boolean; setMode(m: string): void; notes(): unknown[] }; unmount(): void };
+  handle: { api: { isOpen(): boolean; close(): void; setMode(m: string): void; notes(): unknown[] }; unmount(): void };
   created: { note: { body: string; errors?: string[] } }[]; shots: string[]; origError: unknown;
   mount(o?: object): Promise<{ unmount(): void }>;
 };
