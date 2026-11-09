@@ -1,6 +1,6 @@
 {
   "name": "@umage.ai/redline-overlay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Redline review overlay as browser modules: mount() it in your own product with your own note store. Pin comments, text changes and sketches on any page. No server parts, no dependencies.",
   "type": "module",
   "license": "MIT",
