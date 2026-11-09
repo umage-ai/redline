@@ -2,6 +2,8 @@
 
 **Mark up a running web UI, and let an AI agent apply the changes.**
 
+[Product page](https://umage.ai/products/redline) · [Packages](#packages) · [Setups](docs/SETUPS.md) · [![redline](https://img.shields.io/npm/v/@umage.ai/redline?label=%40umage.ai%2Fredline&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline) [![redline-agent](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=%40umage.ai%2Fredline--agent&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) [![redline-hub](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=%40umage.ai%2Fredline--hub&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) [![redline-overlay](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=%40umage.ai%2Fredline--overlay&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay)
+
 ![Commenting on a button: the popover shows the element and its React source, App.tsx:32](docs/images/comment.png)
 
 Redline is a dev-only overlay for any web app. Press **Alt+Shift+R** in the browser, then pin
@@ -15,6 +17,17 @@ Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works th
 `redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
 
 It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Next.js (15+), Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `next dev`, `ng serve`, Debug builds), unless you opt in for a review site. Local, shared, deployed or wired into your own systems: [docs/SETUPS.md](docs/SETUPS.md) says which setup fits.
+
+## Packages
+
+Start with the core; add the others only when you need them. Each has its own README.
+
+| Package | What it is | Add it when |
+|---|---|---|
+| [`@umage.ai/redline`](https://www.npmjs.com/package/@umage.ai/redline) | The core: dev-server plugins (Vite, Astro, Next.js, Angular, any Node server), the overlay, the agent skill, the MCP server and the CLI | Always: this is Redline ([setup](#setup-in-a-repo)) |
+| [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](agent/README.md)) | You want notes applied without opening a terminal (local dev) |
+| [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](hub/README.md)) | Several people review the same app |
+| [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
 
 ## Modes
 
@@ -139,12 +152,8 @@ with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes t
 
 ## What gets written
 
-```
-.redline/
-  INDEX.md               page → open/done counts (regenerated on every change)
-  pages/<page>.md        one file per URL path
-  assets/<id>.png|svg    screenshots and sketches
-```
+`.redline/INDEX.md` (open/done counts per page, regenerated on every change), `pages/<page>.md` (one file per URL path)
+and `assets/<id>.png|svg` (screenshots and sketches). A note:
 
 ```markdown
 ### [ ] Comment · `button` “Next” · src/components/LoginForm.tsx:48
@@ -177,23 +186,14 @@ replies are never overwritten. The overlay polls about every 2 s, which is why r
 
 ## Screenshots
 
-By default the DOM is rendered to a canvas with [modern-screenshot](https://github.com/qq15725/modern-screenshot), page scroll and inner
-scroll containers included. WebGL canvases, cross-origin map tiles and video may come out blank this way. For those apps, tick **Pixel-perfect screenshots (tab capture)** in the panel: it captures the real tab pixels, and Chrome asks once per page load.
+By default the DOM is rendered to a canvas with [modern-screenshot](https://github.com/qq15725/modern-screenshot), page scroll and inner scroll containers included. WebGL canvases, cross-origin map tiles and video may come out blank this way. For those apps, tick **Pixel-perfect screenshots (tab capture)** in the panel: it captures the real tab pixels, and Chrome asks once per page load.
 
 ## Develop
 
-```bash
-npm run dev         # rebuild dist/ on change (reload the app for client changes, restart it for server changes)
-npm test            # unit tests (node:test) + docs check
-npm run test:e2e    # Playwright against fixture apps: vanilla, React, SvelteKit, Astro, Angular, Vue, Solid, Preact, Next
-npm run check       # typecheck + unit + docs + e2e
-npm run test:package   # install the packed tarball into fresh apps per framework and test it end to end
-```
-
+`npm run dev` rebuilds on change, `npm test` runs the unit tests and the docs check, `npm run check` everything
+(with Playwright against every framework fixture), `npm run test:package` installs the packed tarballs into fresh apps.
 Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) runs every check, publishes via Trusted Publishing and creates the release.
-
-Contributor guidance: [CLAUDE.md](CLAUDE.md). State, decisions, learnings and roadmap: [docs/](docs/STATE.md#next-up).
+Contributor guidance and every command: [CLAUDE.md](CLAUDE.md). State, decisions, learnings and roadmap: [docs/](docs/STATE.md#next-up).
 
 ## License
-
 [MIT](LICENSE)

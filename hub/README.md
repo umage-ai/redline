@@ -83,4 +83,8 @@ It is a reference implementation for teams, not a hardened product. For editors 
 - **Signing in** takes the admin key (everything) or a member token (that project's notes only).
 - Tokens, the admin key and sessions are stored as SHA-256 hashes only.
 
-MIT licensed. Part of [umage-ai/redline](https://github.com/umage-ai/redline) (decision D44).
+MIT licensed. Decision D44.
+
+---
+
+Part of **Redline** ([umage.ai/products/redline](https://umage.ai/products/redline)): [all packages](https://github.com/umage-ai/redline#packages), [source](https://github.com/umage-ai/redline).

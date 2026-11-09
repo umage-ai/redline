@@ -68,3 +68,7 @@ read at every start. Claude Code gets it as `--append-system-prompt-file`; any o
 first prompt. The agent starts in the project root (where `.redline/` is), or `cwd`.
 
 How it works and why: [D53](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md). MIT licensed.
+
+---
+
+Part of **Redline** ([umage.ai/products/redline](https://umage.ai/products/redline)): [all packages](https://github.com/umage-ai/redline#packages), [source](https://github.com/umage-ai/redline).
