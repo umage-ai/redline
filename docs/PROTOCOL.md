@@ -1,6 +1,6 @@
 # Remote store protocol
 
-Last updated: 2026-11-07 · Cap: 200 lines · The contract a hosted note store implements (D40–D42).
+Last updated: 2026-11-10 · Cap: 200 lines · The contract a hosted note store implements (D40–D42).
 
 Redline keeps notes as markdown in the repo by default. A **remote store** keeps them on another
 server instead, so everyone reviewing the same app sees the same notes, live. The dev server (or the
@@ -53,7 +53,7 @@ keep a valid `note.id` the client sends, or assign its own.
 
 The same object the markdown anchor holds (`Note` in `src/shared/types.ts`): `id`, `type`
 (`comment` / `text` / `sketch`), `page`, `app`, `url`, `title`, `at`, `whole`, `target` (selector,
-xpath, test id, text, **source file:line**, **components**, box), `viewport`, `scroll`, `theme`,
+xpath, test id, text, **source file:line**, **components**, `cms`, host context `extra` (D61), box), `viewport`, `scroll`, `theme`,
 `from`/`to` (text notes), `errors`, `build`, `label` (D46), plus `body`, `reply` and `done`. Keep fields you don't
 know: newer clients add them.
 

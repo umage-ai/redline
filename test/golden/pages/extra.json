@@ -1,0 +1,15 @@
+{
+  "page": "/en/about",
+  "url": "https://cms.example/en/about",
+  "notes": [
+    {
+      "id": "mhextra1", "type": "comment", "page": "/en/about", "url": "https://cms.example/en/about", "at": "2026-11-10 09:00",
+      "target": {
+        "tag": "h2", "text": "Our story",
+        "cms": { "content": "42_7", "property": "Heading", "node": "c3f0-91ab", "nodeType": "HeroBlock" },
+        "extra": { "epiProperty": "MainBody", "blockId": 117, "variant": "B", "flag": true, "ratio": 0.25, "note": "a -- b \"q\"" }
+      },
+      "body": "Shorter, please.", "reply": "", "done": false
+    }
+  ]
+}

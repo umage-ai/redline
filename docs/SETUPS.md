@@ -143,7 +143,9 @@ A transport is `config`, `load(etag)`, `create`, `update`, `remove`, `assetUrl`,
 `subscribe` (live changes) and `message` (a reply box under each note's `messages` thread). Notes may carry
 `status`, `messages` and `meta`; the markdown store keeps them. `rl.gate(fn)` locks again (sign-out). API v4 (D52):
 `rl.on('error', ({ op, error }) => …)` (a 401 on `load` → `rl.gate(signIn)`), `beforeSave`, card decorators and actions,
-`setPinStyle`, `addMode` (your own pick mode), `addSketchTool`. Building blocks: `overlay/anchor`, `sketch`, `capture`,
+`setPinStyle`, `addMode` (your own pick mode), `addSketchTool`. API v6 (D61): `addTargetEnricher((el, target) => ({ extra: … }))`
+adds what the host knows about the picked element (an edit-mode property, a block id, a variant), and `beforeCreate` changes
+or drops (`false`) a note just before the transport. Building blocks: `overlay/anchor`, `sketch`, `capture`,
 `shield`, `styles`, `transport`, `strings`. **Status:** ✅ `embed.spec.ts` (Chrome); on npm as `@umage.ai/redline-overlay`.
 
 ### The script tag on another path (D60)

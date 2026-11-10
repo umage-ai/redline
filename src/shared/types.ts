@@ -19,6 +19,8 @@ export interface CmsRef {
   type?: string;            // content type name
   lang?: string;
   edit?: string;            // URL of the content in the CMS editor
+  node?: string;            // composition-based CMSs (v6): the node/block key the element renders, e.g. a Visual Builder node
+  nodeType?: string;        // that node's type
 }
 
 export interface Target {
@@ -34,6 +36,8 @@ export interface Target {
   source?: SourceLoc;       // where the element is written in source (framework dev metadata)
   components?: string[];    // component chain, innermost first (React/Svelte where available)
   cms?: CmsRef;             // CMS content and property the element renders (CMS integrations)
+  /** Host-supplied context about the element (an extension's `addTargetEnricher`, v6): edit-mode property names, variants, flags. */
+  extra?: Record<string, string | number | boolean>;
   box?: [number, number, number, number]; // document coords x,y,w,h at capture time
   fx?: number;              // pin position as a fraction of the element box
   fy?: number;

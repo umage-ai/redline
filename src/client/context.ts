@@ -5,7 +5,7 @@
 import type { Note, NoteType } from '../shared/types.ts';
 import type { LabelDef } from '../shared/labels.ts';
 import type {
-  RedlineBeforeSave, RedlineButton, RedlineCardAction, RedlineCardDecorator, RedlineEvents, RedlineGate, RedlineMode, RedlineModeDef,
+  RedlineBeforeCreate, RedlineBeforeSave, RedlineButton, RedlineCardAction, RedlineCardDecorator, RedlineEvents, RedlineGate, RedlineMode, RedlineModeDef, RedlineTargetEnricher,
   RedlineOp, RedlinePanelSection, RedlinePanelState, RedlinePinStyle, RedlineSketchTool, RedlineSlot, RedlineStatus, RedlineBadge, RedlineToolbarDef, RedlineWindow, RedlineWindowDef,
 } from '../shared/extension.ts';
 import type { Life, Store } from './dom.ts';
@@ -76,6 +76,8 @@ export interface Ctx {
     toolbars: RedlineToolbarDef[];
     /** The launcher bubble: null = open notes on the page, false = none. */
     badge: RedlineBadge | false | null;
+    /* v6 */
+    enrichers: RedlineTargetEnricher[]; beforeCreate: RedlineBeforeCreate[];
   };
   /** A gate waiting to be passed (D50): no notes, no modes. `running`: the one on screen. */
   gate: { fn: RedlineGate | null; running: RedlineGate | null };

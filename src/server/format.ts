@@ -29,7 +29,7 @@ export const PAGE_PREAMBLE = `<!--
   Each note: a "### [ ]" heading naming the reviewer's label if any (Bug, UX, …), the
   element and where it lives in source,
   an anchor comment (JSON: url, selector, xpath, source file:line, component chain,
-  CMS content and property, viewport, app folder in a monorepo, …; paths are repo-relative), the instruction, optional screenshot/sketch images, and an optional
+  CMS content and property, host context (extra), viewport, app folder in a monorepo, …; paths are repo-relative), the instruction, optional screenshot/sketch images, and an optional
   "> " reply. Screenshots mark the target with a red box.
   To close a note: tick it ("### [x]") and add a one-line "> " reply saying what
   changed. To ask back: leave it open and put the question in the reply.

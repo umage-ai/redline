@@ -2,7 +2,8 @@
 // and saving it with its target, screenshot and sketch.
 
 import type { LabelDef } from '../shared/labels.ts';
-import type { NewNoteRequest } from '../shared/types.ts';
+import type { NewNoteRequest, Target } from '../shared/types.ts';
+import type { RedlineBeforeSave } from '../shared/extension.ts';
 import { cmsInfo, describe, labelFor, sourceInfo } from './anchor.ts';
 import { startTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, sketchFile } from './sketch.ts';
@@ -212,10 +213,17 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
     const stopNotice = ctx.savingNotice();
     let ok = false;
     try {
-      const req = await beforeSave(await buildRequest(ctx, d, body, wantShot));
-      if (!req) {   // an extension said no: the draft stays open as it was
+      const draft = await hooks(ctx.ext.beforeSave, await buildRequest(ctx, d, body, wantShot), 'beforeSave');
+      if (!draft) {   // an extension said no: the draft stays open as it was
         stopNotice();
         if (d.editor) d.editor.style.visibility = '';
+        return;
+      }
+      const req = await hooks(ctx.ext.beforeCreate, draft, 'beforeCreate');
+      if (!req) {   // dropped (v6): nothing is saved, the draft closes
+        stopNotice();
+        ctx.cancelDraft();
+        state.mode = 'idle'; ctx.persist();
         return;
       }
       const saved = await ctx.transport.create(req);
@@ -242,11 +250,11 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
     if (ok) await ctx.poll(true);
   }
 
-  /** Extensions' beforeSave hooks (v4), in order: each may change the request, or cancel with false. A throwing hook is skipped. */
-  async function beforeSave(req: NewNoteRequest): Promise<NewNoteRequest | null> {
-    for (const fn of ctx.ext.beforeSave) {
+  /** Extensions' beforeSave (v4) or beforeCreate (v6) hooks, in order: each may change the request, or stop with false. A throwing hook is skipped. */
+  async function hooks(list: RedlineBeforeSave[], req: NewNoteRequest, name: string): Promise<NewNoteRequest | null> {
+    for (const fn of list.slice()) {
       let r: NewNoteRequest | void | false;
-      try { r = await fn(req); } catch (err) { console.warn('[redline] beforeSave hook failed:', err); continue; }
+      try { r = await fn(req); } catch (err) { console.warn(`[redline] ${name} hook failed:`, err); continue; }
       if (r === false) return null;
       if (r && typeof r === 'object' && r.note) req = r;
     }
@@ -260,7 +268,7 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
 async function buildRequest(ctx: Ctx, d: Draft, body: string, wantShot: boolean) {
   if (wantShot && ctx.store.get('tabcapture', '0') === '1' && !tabCaptureActive()) await startTabCapture();
   const el = d.whole ? null : d.el ?? null;
-  const target = el ? describe(el, d.x, d.y) : undefined;
+  const target = el ? enrich(ctx, el, describe(el, d.x, d.y)) : undefined;
   if (target && d.type === 'sketch' && d.sketch) {
     // pin at the sketch's top-right corner, relative to the anchor element
     const b = bboxOf(d.sketch.shapes)!, r = el!.getBoundingClientRect();
@@ -284,4 +292,22 @@ async function buildRequest(ctx: Ctx, d: Draft, body: string, wantShot: boolean)
     screenshot: png,
     sketch: d.sketch ? sketchFile(d.sketch.shapes, innerWidth, innerHeight, document.title) : undefined,
   };
+}
+
+/** Extensions' target enrichers (v6), in order: each result merged in, `cms` and `extra` key by key; `extra` keeps primitives only. */
+export function enrich(ctx: Pick<Ctx, 'ext'>, el: Element, target: Target): Target {
+  for (const fn of ctx.ext.enrichers.slice()) {
+    let r: Partial<Target> | void;
+    try { r = fn(el, target); } catch (err) { console.warn('[redline] target enricher failed:', err); continue; }
+    if (!r || typeof r !== 'object' || r === target) continue;
+    const { cms, extra, ...rest } = r;
+    Object.assign(target, rest);
+    if (cms && typeof cms === 'object') target.cms = { ...target.cms, ...cms };
+    if (extra && typeof extra === 'object') target.extra = { ...target.extra, ...extra };
+  }
+  if (target.extra) {
+    const kept = Object.entries(target.extra).filter(([k, v]) => k && (typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))));
+    target.extra = kept.length ? Object.fromEntries(kept) : undefined;
+  }
+  return target;
 }

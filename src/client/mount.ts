@@ -86,7 +86,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
     errors, t, ns,
     shoot: mark => shoot({ ...mark, host }),
     state, notes: [] as StoredNote[], version: '', draft: null, page: keyNow(), focusId: null, busy: false,
-    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null, statuses: new Map(), toolbars: [], badge: null },
+    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null, statuses: new Map(), toolbars: [], badge: null, enrichers: [], beforeCreate: [] },
     gate: { fn: opts.gate ?? null, running: null },
     emit: bus.emit,
     persist: () => store.saveSession({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone, toolbar: state.toolbar ?? null }),
