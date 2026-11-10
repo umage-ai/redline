@@ -36,6 +36,13 @@ function drop<T extends { id: string }>(list: T[], id: string) {
   return i >= 0;
 }
 
+/** Adds a hook to a list; returns its remover. Not a function: nothing is added. */
+function addHook<T>(list: T[], fn: T): () => void {
+  if (typeof fn !== 'function') return () => {};
+  list.push(fn);
+  return () => { const i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); };
+}
+
 export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void, setPageKey: (fn: RedlinePageKey | null) => void): RedlineApi {
   const { ext, state } = ctx;
   const keyTaken = (key: string | undefined, id: string) => {
@@ -43,7 +50,7 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     if (k && BUILTIN_KEYS.includes(k)) console.warn(`[redline] key "${key}" for "${id}" is taken by the overlay; use the button`);
   };
   return {
-    version: 5,
+    version: 6,
     addButton(b) {
       const key = b.key?.toLowerCase();
       if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
@@ -74,11 +81,7 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     gate: fn => { if (typeof fn === 'function') ctx.lock(fn); },
     locked: () => ctx.locked(),
     /* v4 */
-    beforeSave(fn) {
-      if (typeof fn !== 'function') return () => {};
-      ext.beforeSave.push(fn);
-      return () => { const i = ext.beforeSave.indexOf(fn); if (i >= 0) ext.beforeSave.splice(i, 1); };
-    },
+    beforeSave: fn => addHook(ext.beforeSave, fn),
     addCardDecorator(d) { upsert(ext.cardDecorators, d); ctx.renderPanel(true); },
     removeCardDecorator(id) { if (drop(ext.cardDecorators, id)) ctx.renderPanel(true); },
     addCardAction(a) { upsert(ext.cardActions, a); ctx.renderPanel(true); },
@@ -114,7 +117,10 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     setStatus: (id, s) => ctx.setStatus(String(id), s),
     statuses: () => Object.fromEntries([...ext.statuses].map(([k, v]) => [k, { ...v }])),
     setBadge(fn) { ext.badge = typeof fn === 'function' || fn === false ? fn : null; ctx.renderLauncher(); },
-    on: (e, fn) => on(e, fn as Listener),
+    /* v6 */
+    addTargetEnricher: fn => addHook(ext.enrichers, fn),
+    beforeCreate: fn => addHook(ext.beforeCreate, fn),
+    on: ((e: string, fn: Listener) => e === 'beforeCreate' ? addHook(ext.beforeCreate, fn as never) : on(e, fn)) as RedlineApi['on'],
     open: () => ctx.setOpen(true),
     close: () => ctx.setOpen(false),
     isOpen: () => state.open,

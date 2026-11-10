@@ -112,11 +112,15 @@ public sealed class RedlineRuntime
 
     readonly HashSet<string> _registered = new();
 
-    /// <summary>Let `redline mcp` find this server (D22): registered once per URL it is reached on. Dev only.</summary>
-    public void Register(string url)
+    /// <summary>
+    /// Let `redline mcp` find this server (D22): registered once per URL it is reached on. Dev only.
+    /// <paramref name="api"/>: the API's path there when it isn't /__redline (PathBase, ApiBase; D60).
+    /// </summary>
+    public void Register(string url, string? api = null)
     {
         if (Options.Online || !Enabled) return;
-        lock (_registered) if (!_registered.Add(url)) return;
-        _ = ServerRegistry.RegisterAsync(Context.Root, Context.Dir, url, Context.App);
+        if (api == RedlineMiddleware.ApiBase) api = null;
+        lock (_registered) if (!_registered.Add(url + " " + api)) return;
+        _ = ServerRegistry.RegisterAsync(Context.Root, Context.Dir, url, Context.App, api);
     }
 }

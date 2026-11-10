@@ -17,6 +17,7 @@ namespace UmageAI.Redline.Hosting;
 
 public sealed class RedlineMiddleware
 {
+    /// <summary>The default API base; <see cref="RedlineOptions.ApiBase"/> moves it.</summary>
     public const string ApiBase = "/__redline";
     public const string Mark = "data-redline-client";
     internal const string OverlayKey = "UmageAI.Redline.Overlay";
@@ -30,21 +31,33 @@ public sealed class RedlineMiddleware
     readonly RequestDelegate _next;
     readonly RedlineRuntime _rt;
     readonly ILogger _log;
+    readonly string _base;
 
     public RedlineMiddleware(RequestDelegate next, RedlineRuntime rt, ILogger<RedlineMiddleware> log)
     {
         _next = next;
         _rt = rt;
         _log = log;
+        _base = BaseOf(rt.Options.ApiBase);
     }
+
+    /// <summary>The ApiBase option as a path: a leading slash, no trailing one; the default when empty.</summary>
+    public static string BaseOf(string? v)
+    {
+        var b = (v ?? "").Trim().TrimEnd('/');
+        return b.Length == 0 ? ApiBase : b.StartsWith('/') ? b : "/" + b;
+    }
+
+    /// <summary>The API's URL path as the browser sees it: the request's PathBase plus the API base.</summary>
+    string BrowserBase(HttpContext http) => $"{http.Request.PathBase}{_base}";
 
     public async Task InvokeAsync(HttpContext http)
     {
         if (!_rt.Enabled) { await _next(http); return; }
         var path = http.Request.Path.Value ?? "";
-        if (path.StartsWith(ApiBase + "/", StringComparison.Ordinal))
+        if (path.StartsWith(_base + "/", StringComparison.Ordinal))
         {
-            try { await Api(http, path.Substring(ApiBase.Length)); }
+            try { await Api(http, path.Substring(_base.Length)); }
             catch (Exception ex) when (!http.Response.HasStarted)
             {
                 _log.LogWarning(ex, "[redline] {Method} {Path} failed", http.Request.Method, path);
@@ -60,7 +73,10 @@ public sealed class RedlineMiddleware
         }
         http.Items[OverlayKey] = true;   // integrations stamp extra metadata only on these pages
         var original = http.Response.Body;
-        var tag = $"<script type=\"module\" src=\"{http.Request.PathBase}{ApiBase}/client.js\" {Mark}></script>";
+        // Under a PathBase or a custom ApiBase the client is told where the API is (data-api, D60); otherwise the tag is as before.
+        var api = BrowserBase(http);
+        var dataApi = api == ApiBase ? "" : $" data-api=\"{WebUtility.HtmlEncode(api)}\"";
+        var tag = $"<script type=\"module\" src=\"{WebUtility.HtmlEncode(api)}/client.js\"{dataApi} {Mark}></script>";
         var online = _rt.Options.Online;
         var stream = new HtmlInjectionStream(original, http.Response, tag);
         http.Response.OnStarting(() =>
@@ -115,15 +131,34 @@ public sealed class RedlineMiddleware
         var method = http.Request.Method;
         if (p == "/mcp") { await McpEndpoint(http); return; }
 
+        // CORS for listed origins only (D60). Preflights carry no credentials, so they are answered
+        // before the reviewer check.
+        if (CorsOrigin(http) is { } origin)
+        {
+            var h = http.Response.Headers;
+            h.AccessControlAllowOrigin = origin;
+            h.AccessControlAllowCredentials = "true";
+            h.AccessControlExposeHeaders = "etag";
+            h.Vary = "Origin";
+            if (HttpMethods.IsOptions(method))
+            {
+                h.AccessControlAllowMethods = CorsMethods;
+                h.AccessControlAllowHeaders = CorsHeaders;
+                h.AccessControlMaxAge = "600";
+                http.Response.StatusCode = 204;
+                return;
+            }
+        }
+
         var reviewer = await _rt.ReviewerAsync(http);
         if (reviewer is null) { await NotFound(http); return; }   // online: nothing here for anonymous or unauthorized users
-        if (http.Request.Host.HasValue) _rt.Register($"{http.Request.Scheme}://{http.Request.Host}");
+        if (http.Request.Host.HasValue) _rt.Register($"{http.Request.Scheme}://{http.Request.Host}", BrowserBase(http));
         var store = _rt.Store;
         // HEAD answers like GET without the body: link checkers and proxies probe with it.
         var read = HttpMethods.IsGet(method) || HttpMethods.IsHead(method);
 
         if (read && p == "/client.js") { await Bytes(http, "text/javascript; charset=utf-8", _rt.ClientJs); return; }
-        if (read && p == "/config") { var config = Config(reviewer.Identity?.Name); config["labels"] = await LabelsFor(http); await Json(http, 200, config); return; }
+        if (read && p == "/config") { var config = Config(reviewer.Identity?.Name, BrowserBase(http)); config["labels"] = await LabelsFor(http); await Json(http, 200, config); return; }
         if (read && p.StartsWith("/assets/", StringComparison.Ordinal))
         {
             var a = await store.AssetAsync(p.Substring(8), http.RequestAborted);
@@ -165,7 +200,7 @@ public sealed class RedlineMiddleware
         }
 
         // Mutations need the custom header: a cross-site page can't send it without a CORS
-        // preflight, which we never answer. Online (cookie auth) also checks the origin.
+        // preflight, which only CorsOrigins get answered. Online (cookie auth) also checks the origin.
         if (http.Request.Headers["x-redline"] != "1") { await Json(http, 403, new JsonObject { ["error"] = "missing x-redline header" }); return; }
         if (_rt.Options.Online && !SameOrigin(http)) { await Json(http, 403, new JsonObject { ["error"] = "cross-origin request" }); return; }
 
@@ -220,7 +255,7 @@ public sealed class RedlineMiddleware
             var body = await ReadJson(http);
             var (token, hash) = RedlineTokens.Create();
             var id = await _rt.Tokens!.AddTokenAsync(reviewer.Identity!.Name!, Str(body?["name"]), hash, http.RequestAborted);
-            await Json(http, 200, new JsonObject { ["id"] = id, ["token"] = token, ["url"] = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.PathBase}{ApiBase}/mcp" });
+            await Json(http, 200, new JsonObject { ["id"] = id, ["token"] = token, ["url"] = $"{http.Request.Scheme}://{http.Request.Host}{BrowserBase(http)}/mcp" });
             return;
         }
         var tm = System.Text.RegularExpressions.Regex.Match(p, "^/tokens/([A-Za-z0-9_-]+)$");
@@ -235,12 +270,12 @@ public sealed class RedlineMiddleware
 
     bool PersonalTokens => _rt.Options.Online && _rt.Options.Mcp.Enabled && _rt.Options.Mcp.PersonalTokens && _rt.Tokens is not null;
 
-    JsonObject Config(string? user)
+    JsonObject Config(string? user, string api)
     {
         var ext = new JsonArray();
-        for (var i = 0; i < _rt.Options.Extensions.Count; i++) ext.Add($"{ApiBase}/ext/{i}.js");
+        for (var i = 0; i < _rt.Options.Extensions.Count; i++) ext.Add($"{api}/ext/{i}.js");
         foreach (var u in _rt.Options.ExtensionUrls) ext.Add(u);
-        if (PersonalTokens) ext.Add($"{ApiBase}/ext/tokens.js");
+        if (PersonalTokens) ext.Add($"{api}/ext/tokens.js");
         var guide = _rt.Options.Online ? null : GuidePaths.FirstOrDefault(g => File.Exists(Path.Combine(_rt.Context.Root, g)));
         var o = new JsonObject
         {
@@ -256,6 +291,7 @@ public sealed class RedlineMiddleware
             ["guide"] = guide,
             ["pageKey"] = _rt.Options.PageKey == RedlinePageKey.Path ? "path" : "route",
         };
+        if (_rt.Options.AllowInIframe) o["allowInIframe"] = true;
         if (_rt.Options.Online) { o["online"] = true; o["user"] = user; }
         // The copy-prompt button (D47): absent = the markdown store's own prompt, false = hidden, text = the prompt.
         if (_rt.Options.Prompt is { Length: > 0 } prompt) o["prompt"] = prompt;
@@ -283,14 +319,24 @@ public sealed class RedlineMiddleware
 
     static int? Int(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) ? (int)d : null;
 
-    /// <summary>Online mode: a mutation must come from this site (Origin, else Sec-Fetch-Site).</summary>
+    public const string CorsHeaders = "x-redline, authorization, content-type, if-none-match";
+    public const string CorsMethods = "GET, HEAD, POST, PATCH, DELETE";
+
+    /// <summary>The request's Origin when it is in <see cref="RedlineOptions.CorsOrigins"/>, else null.</summary>
+    string? CorsOrigin(HttpContext http)
+    {
+        var origin = http.Request.Headers.Origin.ToString();
+        return origin.Length > 0 && _rt.Options.CorsOrigins.Any(o => string.Equals(o.TrimEnd('/'), origin, StringComparison.OrdinalIgnoreCase)) ? origin : null;
+    }
+
+    /// <summary>Online mode: a mutation must come from this site (Origin, else Sec-Fetch-Site), or a CORS origin.</summary>
     bool SameOrigin(HttpContext http)
     {
         var origin = http.Request.Headers.Origin.ToString();
         if (origin.Length > 0)
         {
             var self = $"{http.Request.Scheme}://{http.Request.Host}";
-            return string.Equals(origin, self, StringComparison.OrdinalIgnoreCase) || _rt.Options.AllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
+            return string.Equals(origin, self, StringComparison.OrdinalIgnoreCase) || _rt.Options.AllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase) || CorsOrigin(http) is not null;
         }
         var site = http.Request.Headers["Sec-Fetch-Site"].ToString();
         return site.Length == 0 || site is "same-origin" or "none";

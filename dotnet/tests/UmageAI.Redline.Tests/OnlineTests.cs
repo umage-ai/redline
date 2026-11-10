@@ -32,6 +32,23 @@ public class OnlineTests
     static async Task<JsonObject> JsonOf(HttpResponseMessage r) => (JsonObject)JsonNode.Parse(await r.Content.ReadAsStringAsync())!;
 
     [Fact]
+    public async Task A_cors_origin_gets_its_preflight_unauthenticated_and_its_mutations_accepted()
+    {
+        await using var t = await Online(o => o.CorsOrigins.Add("https://app.example"));
+        // A preflight carries no cookie: it is answered before the reviewer check.
+        var pre = new HttpRequestMessage(HttpMethod.Options, "/__redline/notes");
+        pre.Headers.Add("Origin", "https://app.example");
+        Assert.Equal(HttpStatusCode.NoContent, (await t.Client.SendAsync(pre)).StatusCode);
+        const string note = """{"note":{"type":"comment","page":"/","url":"https://app.example/","body":"x"}}""";
+        var post = TestApp.Json(HttpMethod.Post, "/__redline/notes", note, user: "ann", roles: "Reviewers");
+        post.Headers.Add("Origin", "https://app.example");
+        Assert.Equal(HttpStatusCode.OK, (await t.Client.SendAsync(post)).StatusCode);
+        var foreign = TestApp.Json(HttpMethod.Post, "/__redline/notes", note, user: "ann", roles: "Reviewers");
+        foreign.Headers.Add("Origin", "https://evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await t.Client.SendAsync(foreign)).StatusCode);
+    }
+
+    [Fact]
     public async Task Anonymous_visitors_get_no_overlay_and_no_api()
     {
         await using var t = await Online();

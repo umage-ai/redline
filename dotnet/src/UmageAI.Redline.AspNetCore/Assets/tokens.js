@@ -2,8 +2,11 @@
 // where a reviewer creates and revokes personal tokens for the remote MCP endpoint (D35).
 // Plain browser JS; the overlay passes the extension API (src/shared/extension.ts).
 
+// Served at <api base>/ext/tokens.js, so the API is where this file came from (PathBase, ApiBase; D60).
+const BASE = new URL('..', import.meta.url).href.replace(/\/$/, '');
+
 export default (rl) => {
-  const api = (method, path, body) => fetch('/__redline' + path, {
+  const api = (method, path, body) => fetch(BASE + path, {
     method, headers: { 'content-type': 'application/json', 'x-redline': '1' }, body: body ? JSON.stringify(body) : undefined,
   }).then(r => { if (!r.ok) throw new Error(r.status + ''); return r.json(); });
 

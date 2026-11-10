@@ -23,8 +23,8 @@ export interface Backend {
   asset(name: string): Promise<{ type: string; data: Buffer } | null>;
 }
 
-export function httpBackend(url: string): Backend {
-  const base = url.replace(/\/+$/, '') + API_BASE;
+export function httpBackend(url: string, api = API_BASE): Backend {
+  const base = url.replace(/\/+$/, '') + api;
   return {
     label: `dev server ${url}`,
     async list() { return (await (await fetch(`${base}/notes`, { cache: 'no-store' })).json()).notes; },
@@ -49,14 +49,14 @@ export function fileBackend(root: string, dir = '.redline'): Backend {
   };
 }
 
-async function reachable(url: string): Promise<boolean> {
-  try { return (await fetch(url.replace(/\/+$/, '') + API_BASE + '/config', { signal: AbortSignal.timeout(1000) })).ok; } catch { return false; }
+async function reachable(url: string, api = API_BASE): Promise<boolean> {
+  try { return (await fetch(url.replace(/\/+$/, '') + api + '/config', { signal: AbortSignal.timeout(1000) })).ok; } catch { return false; }
 }
 
 /** A live dev server from servers.json (or `url`), else the markdown files. */
 export async function pickBackend(opts: { root: string; dir?: string; url?: string }): Promise<Backend> {
-  const candidates = opts.url ? [opts.url] : (await readServers(opts.root, opts.dir)).map(s => s.url);
-  for (const u of candidates) if (await reachable(u)) return httpBackend(u);
+  const candidates = opts.url ? [{ url: opts.url, api: undefined }] : await readServers(opts.root, opts.dir);
+  for (const s of candidates) if (await reachable(s.url, s.api)) return httpBackend(s.url, s.api);
   if (opts.url) throw new Error(`no Redline dev server at ${opts.url}`);
   return fileBackend(opts.root, opts.dir);
 }

@@ -8,7 +8,7 @@
 //     rl.on('noteCreated', n => console.log('new note', n.id));
 //   };
 
-import type { NewNoteRequest, Note } from './types.ts';
+import type { NewNoteRequest, Note, Target } from './types.ts';
 
 /** The built-in modes, or an extension's pick mode as `ext:<id>` (v4). */
 export type RedlineMode = 'idle' | 'comment' | 'text' | 'sketch' | `ext:${string}`;
@@ -42,6 +42,19 @@ export type RedlineGate = (el: HTMLElement) => void | Promise<void>;
  * cancel the save (the draft stays open; say why with `rl.toast`). Hooks run in the order added.
  */
 export type RedlineBeforeSave = (req: NewNoteRequest) => NewNoteRequest | void | false | Promise<NewNoteRequest | void | false>;
+
+/**
+ * Adds what the host page knows about the picked element (v6): CMS ids, a composition node, a
+ * variant or flag. Runs when the note's target is described; its result is merged into the target
+ * (`extra` and `cms` key by key). `extra` keeps strings, numbers and booleans. Enrichers run in the order added.
+ */
+export type RedlineTargetEnricher = (el: Element, target: Target) => Partial<Target> | void;
+
+/**
+ * The last word before a new note reaches the transport (v6), after every `beforeSave`: return a changed
+ * request, nothing to keep it, or `false` to drop the note (nothing is saved, the draft closes).
+ */
+export type RedlineBeforeCreate = RedlineBeforeSave;
 
 /** Your own element on every note card (v4), e.g. an expiry chip from `note.meta`. */
 export interface RedlineCardDecorator {
@@ -238,9 +251,10 @@ export interface RedlineApi {
    * 2 adds removeButton, panelState, setPageKey and the panel/page events; 3 adds addSlot,
    * removeSlot and gate; 4 adds beforeSave, card decorators and actions, setPinStyle, addMode,
    * addSketchTool and the error/noteUpdated/noteRemoved/messageSent events; 5 adds addWindow,
-   * addToolbar, setStatus, statuses, setBadge and the status event. Check `rl.version >= 5`.
+   * addToolbar, setStatus, statuses, setBadge and the status event; 6 adds addTargetEnricher and
+   * beforeCreate (also as `rl.on('beforeCreate', fn)`). Check `rl.version >= 6`.
    */
-  version: 5;
+  version: 6;
   /** Adds a toolbar button; a button with the same id is replaced (use that to update one). */
   addButton(b: RedlineButton): void;
   /** Removes a toolbar button added with addButton (v2). */
@@ -282,6 +296,12 @@ export interface RedlineApi {
   statuses(): Record<string, RedlineStatus>;
   /** The launcher's bubble (v5): your text, `false` for none, `null` for the default (open notes on the page). */
   setBadge(fn: RedlineBadge | false | null): void;
+  /** Adds a target enricher (v6); returns the remover. */
+  addTargetEnricher(fn: RedlineTargetEnricher): () => void;
+  /** Runs `fn` on every new note just before it is saved (v6); `false` drops it. Returns the remover. */
+  beforeCreate(fn: RedlineBeforeCreate): () => void;
+  /** `rl.on('beforeCreate', fn)` is `rl.beforeCreate(fn)` (v6). */
+  on(event: 'beforeCreate', fn: RedlineBeforeCreate): () => void;
   on<E extends keyof RedlineEvents>(event: E, fn: (...args: RedlineEvents[E]) => void): () => void;
   open(): void;
   close(): void;

@@ -22,6 +22,9 @@ function setProp(el: HTMLElement, k: string, v: unknown) {
 export const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
 /** Per-viewer settings under `<namespace>:` (localStorage) and the open/mode state (sessionStorage). */
+/** This document is inside a frame (an iframe, or a frame set). */
+export const inFrame = () => { try { return window.top !== window; } catch { return true; } };
+
 export function storage(ns: string) {
   return {
     get: (k: string, d: string) => { try { return localStorage.getItem(`${ns}:${k}`) ?? d; } catch { return d; } },

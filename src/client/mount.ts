@@ -10,7 +10,7 @@ import type { RedlineGate, RedlineOp, RedlinePageKey } from '../shared/extension
 import { pageKey } from '../shared/page.ts';
 import { launcherPlace, launcherVars } from '../shared/place.ts';
 import { screenshot as builtInShot, stopTabCapture } from './capture.ts';
-import { h, Life, safely, storage } from './dom.ts';
+import { h, inFrame, Life, safely, storage } from './dom.ts';
 import { captureErrors } from './errors.ts';
 import { shieldApp } from './shield.ts';
 import { CSS } from './styles.ts';
@@ -52,7 +52,8 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   const errors = errorSource(opts.captureErrors, life);
   const { host, shadow, ui } = createHost(opts, life);
   const shield = shieldApp(host, life, shadow);
-  const store = storage(ns);
+  // A framed overlay (D60) keeps its own view state and positions: same-origin frames share the parent's storage.
+  const store = storage(inFrame() ? `${ns}~frame` : ns);
   const bus = events();
   life.add(bus.clear);
   life.add(stopTabCapture);
@@ -86,7 +87,7 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
     errors, t, ns,
     shoot: mark => shoot({ ...mark, host }),
     state, notes: [] as StoredNote[], version: '', draft: null, page: keyNow(), focusId: null, busy: false,
-    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null, statuses: new Map(), toolbars: [], badge: null },
+    ext: { buttons: [], sections: [], slots: [], beforeSave: [], cardDecorators: [], cardActions: [], modes: [], sketchTools: [], pinStyle: null, statuses: new Map(), toolbars: [], badge: null, enrichers: [], beforeCreate: [] },
     gate: { fn: opts.gate ?? null, running: null },
     emit: bus.emit,
     persist: () => store.saveSession({ open: state.open, mode: state.mode, panel: state.panel, scope: state.scope, showDone: state.showDone, toolbar: state.toolbar ?? null }),

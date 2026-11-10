@@ -58,8 +58,10 @@ Make this secondary; Publish should be the primary action.
 4. `target.selector`, `target.html`, `target.role`/`name` — for confirming you're on the right element.
 5. Text that lives in content/i18n files (markdown, JSON, CMS): change it there, not in the template.
    **`target.cms`** (heading `CMS <type> <id> “<name>” › <property>`) means the text is CMS content
-   (e.g. Optimizely): `content` id, `property`, `name`, `type`, `lang`, `edit` link. Change it in the
-   CMS (or reply that an editor should); change the template only if the note is about layout.
+   (e.g. Optimizely): `content` id, `property`, `name`, `type`, `lang`, `edit` link (`node`/`nodeType`: a
+   composition block). Change it in the CMS (or reply that an editor should); the template only for layout.
+6. **`target.extra`** is context the host page added (an edit-mode property name, a block id, a variant or
+   flag): use it to find the content or code path, as the keys name it.
 
 `author` is the reviewer who wrote it (online mode or a shared store). `build`, when set, is the commit the page
 was served from: read `source` at that revision if the file has moved on. Use `url`, `viewport` (w, h, devicePixelRatio) and `theme` to reproduce what the reviewer saw,

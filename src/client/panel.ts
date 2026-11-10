@@ -6,7 +6,7 @@ import type { NoteType } from '../shared/types.ts';
 import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
 import { clip } from './anchor.ts';
 import { startTabCapture, stopTabCapture } from './capture.ts';
-import { esc, h, safely } from './dom.ts';
+import { esc, h, safely, inFrame } from './dom.ts';
 import type { Ctx, Part } from './context.ts';
 import type { StoredNote } from './transport.ts';
 
@@ -139,13 +139,21 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
     return h('div', { class: 'meta' }, age, rest);
   }
 
+  /** A note's screenshot: from `assetUrl`, or (header auth, D60) the transport's `assetSrc` once it has it. */
+  function shot(rel: string): HTMLElement {
+    if (!transport.assetSrc) return h('img', { src: assetUrl(rel) + `?v=${ctx.version}`, alt: t('screenshotAlt'), loading: 'lazy', onclick: () => zoom(assetUrl(rel)) });
+    const img = h('img', { alt: t('screenshotAlt'), onclick: () => { if (img.getAttribute('src')) zoom(img.getAttribute('src')!); } });
+    transport.assetSrc(rel).then(src => img.setAttribute('src', src), () => { /* left without a picture */ });
+    return img;
+  }
+
   function card(n: StoredNote, here: boolean): HTMLElement {
     if (here) ctx.markSeen(n);
     const c: HTMLElement = h('div', { class: `card${ctx.isResolved(n) ? ' resolved' : n.done ? ' done' : ''}${ctx.focusId === n.id ? ' focus' : ''}`, 'data-id': n.id },
       cardTop(() => c, n, here),
       n.type === 'text' ? h('div', { class: 'diff', html: `<div class="del">${esc(n.from ?? '')}</div><div class="ins">${esc(n.to ?? '')}</div>` }) : null,
       n.body ? h('div', { class: 'body' }, n.body) : n.type === 'sketch' ? h('div', { class: 'body muted' }, t('seeSketch')) : null,
-      n.screenshot ? h('img', { src: assetUrl(n.screenshot) + `?v=${ctx.version}`, alt: t('screenshotAlt'), loading: 'lazy', onclick: () => zoom(assetUrl(n.screenshot)) }) : null,
+      n.screenshot ? shot(n.screenshot) : null,
       n.reply ? h('div', { class: 'reply', 'data-who': t('agent') }, n.reply) : null,
       ...thread(n),
       replyBox(n),
@@ -232,7 +240,8 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
 
   // Mobile browsers have no getDisplayMedia.
   function tabCaptureToggle() {
-    if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') return false;
+    // In a frame, tab capture would show the whole tab (D60): DOM capture only.
+    if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function' || inFrame()) return false;
     const tab = ctx.store.get('tabcapture', '0') === '1';
     return h('label', { title: t('tabCaptureTitle') },
       h('input', { type: 'checkbox', ...(tab ? { checked: true } : {}), onchange: async (e: Event) => {

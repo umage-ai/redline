@@ -22,7 +22,7 @@ import { clientFile } from './vite.ts';
 import { createHandler, findRoot, PEER, type RedlineOptions } from './server/handler.ts';
 import { API_BASE } from './shared/types.ts';
 
-export interface RedlineNextOptions extends RedlineOptions {
+export interface RedlineNextOptions extends Omit<RedlineOptions, 'apiBase'> {
   /** Stamp JSX/TSX elements with their source location. Default true. */
   jsxSource?: boolean;
 }

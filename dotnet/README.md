@@ -38,6 +38,15 @@ folder with `.git`); add `.redline/` to `.gitignore` and install the agent guide
 `o.LauncherSize = "small"` (or `"large"`, or px) sizes the round button; `o.Draggable = true` lets reviewers move the launcher, toolbar and sketch tools; `o.Launcher = false` hides the round button, and any
 element with `data-redline-open` (`="comment"`, `"notes"`, …) in a view opens the overlay instead (D51).
 
+**Path base and API base.** Under a `PathBase` set by the server (an IIS sub-application) or by `app.UsePathBase("/app")`
+ahead of `app.UseRedline()` (with `o.ManualPlacement = true`), the overlay calls `/app/__redline`: the script tag carries
+`data-api` (D60). Left first in the pipeline (the default), Redline sits outside `UsePathBase` and answers at `/__redline`.
+`o.ApiBase = "/tools/redline"` moves the API itself (a route `/__redline` would clash with, a CMS module path).
+`o.CorsOrigins.Add("https://localhost:5002")` lets pages on that origin call the API (a standalone Blazor WebAssembly
+app, a headless frontend): preflights answered, credentials allowed, `etag` exposed; see docs/SETUPS.md "The API on another origin".
+`o.AllowInIframe = true` lets the overlay start inside iframes too (one per frame; docs/SETUPS.md "Inside an iframe"). The
+Optimizely package still keeps it out of the CMS's own edit and preview frames.
+
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:
 `<PackageReference Include="UmageAI.Redline.Build" Version="…" PrivateAssets="all" />`.
 
@@ -119,7 +128,6 @@ under `"servers"`) take the same entry.
 
 ## Limits
 
-- The overlay calls `/__redline` at the site root; apps under a `PathBase` aren't supported yet.
 - Responses compressed by the app (gzip/br before Redline's middleware) get no overlay.
 - Hot reload compiles the original files: elements of an edited component lose their stamp until the
   next build.

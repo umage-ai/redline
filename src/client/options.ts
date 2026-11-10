@@ -42,6 +42,8 @@ export interface OverlayConfig {
   pageKey?: PageKeyMode;
   /** The transport has a change feed (`subscribe`). */
   events?: boolean;
+  /** The self-starting script also runs inside iframes (D60; the `allowInIframe` server option). `mount()` ignores it. */
+  allowInIframe?: boolean;
   /**
    * A product's own note statuses (D50), in menu order. Set: each card gets a status menu instead of
    * the done button; picking one patches `{ status, done }` with the status's `done`.

@@ -363,7 +363,7 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   // Runs `fn` in the page with the window (as a loose record) as its argument.
   const w = <T,>(fn: (w: Record<string, any>) => T) => page.evaluate(`(${fn.toString()})(window)`) as Promise<T>;   // eslint-disable-line @typescript-eslint/no-explicit-any
   const ui = (sel: string) => page.locator(`v4-root ${sel}`);
-  expect(await w(x => x.rl.version)).toBe(5);
+  expect(await w(x => x.rl.version)).toBe(6);
 
   // error: once per failure streak (polling goes on quietly), and again only after a success.
   await w(x => { x.fail = 'Unauthorized'; });

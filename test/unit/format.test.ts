@@ -29,6 +29,16 @@ test('round-trips notes through markdown', () => {
   assert.deepEqual(back, notes);
 });
 
+test('target.extra (host context, v6) and composition CMS fields round-trip; agent edits keep them', () => {
+  const n = base({ body: 'Shorter', target: { tag: 'h2', text: 'Story', cms: { content: '5', property: 'Heading', node: 'n-1', nodeType: 'Hero' },
+    extra: { epiProperty: 'MainBody', blockId: 117, flag: false, label: 'a -- b' } } });
+  const md = serializePage('/agents', undefined, [n]);
+  assert.deepEqual(parsePage(md), [n]);
+  const [ticked] = parsePage(md.replace(/^### \[ \]/m, '### [x]').replace('Shorter\n', 'Shorter\n\n> Done.\n'));
+  assert.deepEqual(ticked.target?.extra, n.target!.extra);
+  assert.equal(ticked.reply, 'Done.');
+});
+
 test('keeps agent edits: ticked box, replies, CRLF', () => {
   const md = serializePage('/x', undefined, [base({ body: 'Fix it' })])
     .replace(/^### \[ \]/m, '### [x]').replace('Fix it\n', 'Fix it\n\n> Done: renamed.\n> Second line.\n').replace(/\n/g, '\r\n');
