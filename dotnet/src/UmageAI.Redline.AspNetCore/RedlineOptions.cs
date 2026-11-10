@@ -53,6 +53,13 @@ public sealed class RedlineOptions
     /// set this when "/__redline" is taken, or to put the API under a module route.
     /// </summary>
     public string ApiBase { get; set; } = "/__redline";
+    /// <summary>
+    /// Origins whose pages may call the API from the browser (CORS, D60), e.g. "https://www.example.com" for a
+    /// headless frontend or "https://localhost:5002" for a standalone Blazor WebAssembly app. Default none: the
+    /// API stays same-origin. Listed origins get preflights answered, credentials, and <c>etag</c> exposed; online
+    /// mode accepts their mutations too. MCP never answers them.
+    /// </summary>
+    public List<string> CorsOrigins { get; } = new();
     /// <summary>Monorepos: the app's name in notes. Default: the content root relative to the repo root; "" at the root.</summary>
     public string? App { get; set; }
 

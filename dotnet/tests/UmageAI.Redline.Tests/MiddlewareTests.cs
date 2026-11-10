@@ -251,6 +251,48 @@ public class MiddlewareTests
     }
 
     [Fact]
+    public async Task CorsOrigins_answer_preflights_for_listed_origins_only_and_expose_the_etag()
+    {
+        await using var t = await TestApp.StartAsync(o => o.CorsOrigins.Add("https://app.example/"));
+        var pre = new HttpRequestMessage(HttpMethod.Options, "/__redline/notes");
+        pre.Headers.Add("Origin", "https://app.example");
+        pre.Headers.Add("Access-Control-Request-Method", "POST");
+        var r = await t.Client.SendAsync(pre);
+        Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
+        Assert.Equal("https://app.example", r.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal("true", r.Headers.GetValues("Access-Control-Allow-Credentials").Single());
+        Assert.Equal("x-redline, authorization, content-type, if-none-match", r.Headers.GetValues("Access-Control-Allow-Headers").Single());
+        Assert.Equal("GET, HEAD, POST, PATCH, DELETE", r.Headers.GetValues("Access-Control-Allow-Methods").Single());
+
+        var get = new HttpRequestMessage(HttpMethod.Get, "/__redline/notes");
+        get.Headers.Add("Origin", "https://app.example");
+        var notes = await t.Client.SendAsync(get);
+        Assert.Equal("etag", notes.Headers.GetValues("Access-Control-Expose-Headers").Single());
+        Assert.NotNull(notes.Headers.ETag);
+
+        var post = TestApp.Json(HttpMethod.Post, "/__redline/notes", """{"note":{"type":"comment","page":"/","url":"https://app.example/","body":"From the frontend"}}""");
+        post.Headers.Add("Origin", "https://app.example");
+        Assert.Equal(HttpStatusCode.OK, (await t.Client.SendAsync(post)).StatusCode);
+
+        var other = new HttpRequestMessage(HttpMethod.Options, "/__redline/notes");
+        other.Headers.Add("Origin", "https://evil.example");
+        var refused = await t.Client.SendAsync(other);
+        Assert.NotEqual(HttpStatusCode.NoContent, refused.StatusCode);
+        Assert.False(refused.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task Without_CorsOrigins_no_cors_headers_are_sent()
+    {
+        await using var t = await TestApp.StartAsync();
+        var get = new HttpRequestMessage(HttpMethod.Get, "/__redline/config");
+        get.Headers.Add("Origin", "https://app.example");
+        var r = await t.Client.SendAsync(get);
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.False(r.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
     public async Task ApiBase_moves_the_api_and_the_tag_says_so()
     {
         await using var t = await TestApp.StartAsync(o => o.ApiBase = "/tools/redline/");

@@ -123,7 +123,17 @@ export interface RedlineOptions {
    * the overlay calls it there. Not in Next (its rewrite is fixed) or the agent panel, which need the default.
    */
   apiBase?: string;
+  /**
+   * Origins whose pages may call the API from the browser (CORS, D60), e.g. `['http://localhost:5173']`
+   * for an overlay on another origin (a headless frontend, a static Blazor WebAssembly host). Default none:
+   * the API stays same-origin. Listed origins get preflights answered (`x-redline`, `authorization`,
+   * `content-type`, `if-none-match`), credentials, and `etag` exposed. The MCP and agent routes never do.
+   */
+  cors?: string[];
 }
+
+export const CORS_HEADERS = 'x-redline, authorization, content-type, if-none-match';
+export const CORS_METHODS = 'GET, HEAD, POST, PATCH, DELETE';
 
 /** The `apiBase` option as a path: a leading slash, no trailing one; the default when unset or empty. */
 export function apiBaseOf(v: string | undefined): string {
@@ -273,6 +283,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
   const base = apiBaseOf(opts.apiBase);
+  const corsOrigins = new Set((opts.cors ?? []).map(o => String(o).trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean));
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${base}/ext/${i}.js` : e.url);
   const agent = agentFor(opts.agent, root, base);
   if (agent) extensions.push(agent.panel);
@@ -344,6 +355,19 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     if (req.headers.host) register(`${(req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${req.headers.host}`);
     const [p] = url.slice(base.length).split('?');
     const method = req.method ?? 'GET';
+    // CORS for listed origins only (D60); never on MCP or the agent panel, which refuse foreign pages.
+    const origin = typeof req.headers.origin === 'string' && corsOrigins.has(req.headers.origin.toLowerCase()) && !/^\/(mcp|agent\/)/.test(p) ? req.headers.origin : null;
+    if (origin) {
+      res.setHeader('access-control-allow-origin', origin);
+      res.setHeader('access-control-allow-credentials', 'true');
+      res.setHeader('access-control-expose-headers', 'etag');
+      res.setHeader('vary', 'origin');
+      if (method === 'OPTIONS') {
+        res.writeHead(204, { 'access-control-allow-methods': CORS_METHODS, 'access-control-allow-headers': CORS_HEADERS, 'access-control-max-age': '600' });
+        res.end();
+        return;
+      }
+    }
     // HEAD answers like GET (Node drops the body): link checkers and proxies probe with it.
     const read = method === 'GET' || method === 'HEAD';
 
@@ -402,7 +426,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       if (p === '/mcp') return serveMcp(req, res, mcpBackend(req), opts.mcpTokens, versionOf(opts.clientFile));
 
       // Mutations need the custom header: a cross-site page can't send it without a
-      // CORS preflight, which we never answer.
+      // CORS preflight, which only `cors` origins get answered.
       if (req.headers['x-redline'] !== '1') return json(res, 403, { error: 'missing x-redline header' });
 
       if (method === 'POST' && p === '/notes') {

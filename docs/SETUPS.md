@@ -14,7 +14,7 @@ the overlay runs** and **where the notes are kept**. Pick the first row that fit
 
 Rules that hold in every setup:
 
-- **The browser only talks to its own site** (`/__redline/*`). When notes go to a remote store, the server makes those calls and holds the token. The token never reaches the page.
+- **The browser only talks to its own site** (`/__redline/*`). When notes go to a remote store, the server makes those calls and holds the token. The token never reaches the page. The one opt-in exception: [the API on another origin](#the-api-on-another-origin-d60).
 - **Nothing runs outside dev unless you opt in.** The opt-ins are .NET `o.Online = true` (setup 3) and `buildSource` for stamps in a build (setup 3, Node).
 - **Agents get the same notes in every setup**, through files (setup 1) or the MCP tools `list_notes`, `get_note` and `update_note` (all setups).
 - **Markdown in the repo is the default.** Every other store is opt-in.
@@ -155,6 +155,25 @@ where the API is: `window.redlineConfig = { apiBase: '/app/__redline' }` before 
 `<script type="module" src="/app/__redline/client.js" data-api="/app/__redline">`. The servers do it themselves with
 `apiBase` (Node) / `ApiBase` (.NET), and .NET adds the request's `PathBase` ([dotnet/README.md](../dotnet/README.md)).
 Comments, polling, screenshots, the live feed and Apply to file all go to that base. **Status:** ✅ `hosting.spec.ts`.
+
+### The API on another origin (D60)
+
+For hosts with no server Redline can run in: a headless frontend whose notes live in the CMS, a standalone Blazor
+WebAssembly app whose API runs on another port. Where the host has a server, the same-origin proxy above stays the better choice.
+
+- **The page** points `data-api` / `apiBase` at the full URL and picks one mode. **Cookies:** `credentials: 'include'`
+  (or `data-credentials="include"`); every call and the live feed send them. The cookie must reach the API: same site
+  (subdomains, another port) with `SameSite=Lax`, or `SameSite=None; Secure` across sites. **A header:**
+  `window.redlineConfig = { apiBase, headers: async () => ({ authorization: 'Bearer ' + await token() }) }`, asked before
+  every call; images load as blob URLs and the feed is read with fetch. With `mount()`: `httpTransport(url, { credentials, headers })`.
+- **The API** lists the page's origin, exactly: `cors: ['https://www.example.com']` (Node) or `o.CorsOrigins.Add(…)` (.NET).
+  Listed origins get preflights answered (`x-redline`, `authorization`, `content-type`, `if-none-match`), `GET, HEAD, POST,
+  PATCH, DELETE`, credentials, and `etag` exposed so 304 polling works; `client.js` is served to them too (module scripts need CORS).
+  Others get nothing new, and MCP and the agent panel never answer cross-origin. .NET online mode accepts their mutations.
+- **Weaker than the proxy:** a token in page JS is readable by every script on that page (an XSS, a third-party tag),
+  and cookies with `SameSite=None` ride along on cross-site requests. Acceptable for a review build or an editor-only
+  frontend with short-lived, per-reviewer tokens; not for a public site with one shared token. **Status:** ✅ `hosting.spec.ts`
+  (page and API on two ports, both modes), `MiddlewareTests.cs`, `OnlineTests.cs`.
 
 ---
 

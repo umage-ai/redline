@@ -131,6 +131,25 @@ public sealed class RedlineMiddleware
         var method = http.Request.Method;
         if (p == "/mcp") { await McpEndpoint(http); return; }
 
+        // CORS for listed origins only (D60). Preflights carry no credentials, so they are answered
+        // before the reviewer check.
+        if (CorsOrigin(http) is { } origin)
+        {
+            var h = http.Response.Headers;
+            h.AccessControlAllowOrigin = origin;
+            h.AccessControlAllowCredentials = "true";
+            h.AccessControlExposeHeaders = "etag";
+            h.Vary = "Origin";
+            if (HttpMethods.IsOptions(method))
+            {
+                h.AccessControlAllowMethods = CorsMethods;
+                h.AccessControlAllowHeaders = CorsHeaders;
+                h.AccessControlMaxAge = "600";
+                http.Response.StatusCode = 204;
+                return;
+            }
+        }
+
         var reviewer = await _rt.ReviewerAsync(http);
         if (reviewer is null) { await NotFound(http); return; }   // online: nothing here for anonymous or unauthorized users
         if (http.Request.Host.HasValue) _rt.Register($"{http.Request.Scheme}://{http.Request.Host}", BrowserBase(http));
@@ -181,7 +200,7 @@ public sealed class RedlineMiddleware
         }
 
         // Mutations need the custom header: a cross-site page can't send it without a CORS
-        // preflight, which we never answer. Online (cookie auth) also checks the origin.
+        // preflight, which only CorsOrigins get answered. Online (cookie auth) also checks the origin.
         if (http.Request.Headers["x-redline"] != "1") { await Json(http, 403, new JsonObject { ["error"] = "missing x-redline header" }); return; }
         if (_rt.Options.Online && !SameOrigin(http)) { await Json(http, 403, new JsonObject { ["error"] = "cross-origin request" }); return; }
 
@@ -299,14 +318,24 @@ public sealed class RedlineMiddleware
 
     static int? Int(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) ? (int)d : null;
 
-    /// <summary>Online mode: a mutation must come from this site (Origin, else Sec-Fetch-Site).</summary>
+    public const string CorsHeaders = "x-redline, authorization, content-type, if-none-match";
+    public const string CorsMethods = "GET, HEAD, POST, PATCH, DELETE";
+
+    /// <summary>The request's Origin when it is in <see cref="RedlineOptions.CorsOrigins"/>, else null.</summary>
+    string? CorsOrigin(HttpContext http)
+    {
+        var origin = http.Request.Headers.Origin.ToString();
+        return origin.Length > 0 && _rt.Options.CorsOrigins.Any(o => string.Equals(o.TrimEnd('/'), origin, StringComparison.OrdinalIgnoreCase)) ? origin : null;
+    }
+
+    /// <summary>Online mode: a mutation must come from this site (Origin, else Sec-Fetch-Site), or a CORS origin.</summary>
     bool SameOrigin(HttpContext http)
     {
         var origin = http.Request.Headers.Origin.ToString();
         if (origin.Length > 0)
         {
             var self = $"{http.Request.Scheme}://{http.Request.Host}";
-            return string.Equals(origin, self, StringComparison.OrdinalIgnoreCase) || _rt.Options.AllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
+            return string.Equals(origin, self, StringComparison.OrdinalIgnoreCase) || _rt.Options.AllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase) || CorsOrigin(http) is not null;
         }
         var site = http.Request.Headers["Sec-Fetch-Site"].ToString();
         return site.Length == 0 || site is "same-origin" or "none";

@@ -6,7 +6,8 @@ Redline keeps notes as markdown in the repo by default. A **remote store** keeps
 server instead, so everyone reviewing the same app sees the same notes, live. The dev server (or the
 app's own server, through `redlineMiddleware` or the .NET package) is the client: it holds the token
 and makes the calls. The browser keeps talking to `/__redline` on its own origin, so the token never
-reaches the page and no CORS is needed.
+reaches the page and no CORS is needed. (A host with no server Redline can run in can still call an API on another
+origin from the page, opt-in on both ends: [SETUPS.md](SETUPS.md) "The API on another origin", D60.)
 
 ```
 browser ──/__redline/*──▶ your server (Redline middleware) ──HTTPS + Bearer──▶ remote store

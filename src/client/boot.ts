@@ -4,6 +4,7 @@
 // its API base here; with a bundler, `mount({ transport: httpTransport(base) })` does the same.
 
 import { API_BASE } from '../shared/types.ts';
+import type { HttpTransportOptions } from './transport.ts';
 
 /** `window.redlineConfig`: read once, when the self-starting script runs. */
 export interface RedlineBootConfig {
@@ -12,14 +13,26 @@ export interface RedlineBootConfig {
    * Script tag: `data-api`. The dev servers set it themselves under a custom `apiBase` or a .NET PathBase.
    */
   apiBase?: string;
+  /** An API on another origin with cookie auth (D60): `'include'`. Script tag: `data-credentials="include"`. */
+  credentials?: RequestCredentials;
+  /** Headers for every API call, or a function asked before each (a bearer token from the host's login). No attribute. */
+  headers?: HttpTransportOptions['headers'];
 }
 
+export interface Boot extends HttpTransportOptions { apiBase: string }
+
+const CREDENTIALS = ['omit', 'same-origin', 'include'];
+
 /** The settings the self-starting script mounts with: `redlineConfig` first, then the script's data-*, then defaults. */
-export function readBoot(cfg: RedlineBootConfig | undefined, data: Record<string, string | undefined> | undefined): Required<Pick<RedlineBootConfig, 'apiBase'>> {
+export function readBoot(cfg: RedlineBootConfig | undefined, data: Record<string, string | undefined> | undefined): Boot {
   const c = cfg && typeof cfg === 'object' ? cfg : {};
   const d = data ?? {};
   const apiBase = (typeof c.apiBase === 'string' && c.apiBase.trim()) || d.api?.trim() || API_BASE;
-  return { apiBase: apiBase.replace(/\/+$/, '') };
+  const boot: Boot = { apiBase: apiBase.replace(/\/+$/, '') };
+  const credentials = [c.credentials, d.credentials?.trim()].find(v => typeof v === 'string' && CREDENTIALS.includes(v));
+  if (credentials) boot.credentials = credentials as RequestCredentials;
+  if (typeof c.headers === 'function' || (c.headers && typeof c.headers === 'object')) boot.headers = c.headers;
+  return boot;
 }
 
 /** This script's own tag: `document.currentScript` is null in a module, so match it by URL. */

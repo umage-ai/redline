@@ -42,6 +42,8 @@ element with `data-redline-open` (`="comment"`, `"notes"`, …) in a view opens 
 ahead of `app.UseRedline()` (with `o.ManualPlacement = true`), the overlay calls `/app/__redline`: the script tag carries
 `data-api` (D60). Left first in the pipeline (the default), Redline sits outside `UsePathBase` and answers at `/__redline`.
 `o.ApiBase = "/tools/redline"` moves the API itself (a route `/__redline` would clash with, a CMS module path).
+`o.CorsOrigins.Add("https://localhost:5002")` lets pages on that origin call the API (a standalone Blazor WebAssembly
+app, a headless frontend): preflights answered, credentials allowed, `etag` exposed; see docs/SETUPS.md "The API on another origin".
 
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:
 `<PackageReference Include="UmageAI.Redline.Build" Version="…" PrivateAssets="all" />`.

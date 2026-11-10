@@ -70,3 +70,41 @@ test('without apiBase the tag is unchanged and servers.json has no api field', a
     assert.equal(entry.api, undefined);
   } finally { await s.close(); }
 });
+
+test('readBoot: credentials from redlineConfig or data-credentials (known values only); headers from redlineConfig only', () => {
+  assert.equal(readBoot(undefined, { credentials: 'include' }).credentials, 'include');
+  assert.equal(readBoot({ credentials: 'same-origin' }, { credentials: 'include' }).credentials, 'same-origin');
+  assert.equal(readBoot(undefined, { credentials: 'sometimes' }).credentials, undefined);
+  const headers = () => ({ authorization: 'Bearer x' });
+  assert.equal(readBoot({ headers }, undefined).headers, headers);
+  assert.equal(readBoot({ headers: 'nope' as never }, undefined).headers, undefined);
+});
+
+test('cors: preflights answered for listed origins only, credentials allowed, etag exposed; never on MCP', async () => {
+  const s = await serve({ cors: ['http://app.test:3000/'] });
+  try {
+    const pre = await fetch(s.url + '/__redline/notes', { method: 'OPTIONS', headers: { origin: 'http://app.test:3000', 'access-control-request-method': 'PATCH' } });
+    assert.equal(pre.status, 204);
+    assert.equal(pre.headers.get('access-control-allow-origin'), 'http://app.test:3000');
+    assert.equal(pre.headers.get('access-control-allow-credentials'), 'true');
+    assert.equal(pre.headers.get('access-control-allow-methods'), 'GET, HEAD, POST, PATCH, DELETE');
+    assert.equal(pre.headers.get('access-control-allow-headers'), 'x-redline, authorization, content-type, if-none-match');
+    const get = await fetch(s.url + '/__redline/notes', { headers: { origin: 'http://app.test:3000' } });
+    assert.equal(get.headers.get('access-control-expose-headers'), 'etag');
+    assert.ok(get.headers.get('etag'));
+    const other = await fetch(s.url + '/__redline/notes', { method: 'OPTIONS', headers: { origin: 'http://evil.test' } });
+    assert.notEqual(other.status, 204);
+    assert.equal(other.headers.get('access-control-allow-origin'), null);
+    const mcp = await fetch(s.url + '/__redline/mcp', { method: 'OPTIONS', headers: { origin: 'http://app.test:3000' } });
+    assert.equal(mcp.headers.get('access-control-allow-origin'), null);
+  } finally { await s.close(); }
+});
+
+test('without cors nothing changes: no CORS headers, a preflight is refused like any call without x-redline', async () => {
+  const s = await serve();
+  try {
+    const pre = await fetch(s.url + '/__redline/notes', { method: 'OPTIONS', headers: { origin: 'http://app.test:3000' } });
+    assert.equal(pre.status, 403);
+    assert.equal(pre.headers.get('access-control-allow-origin'), null);
+  } finally { await s.close(); }
+});

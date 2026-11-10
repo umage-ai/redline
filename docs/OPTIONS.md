@@ -45,6 +45,7 @@ the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o =
 | — / `Online`, `Policy`, `Roles`, `AllowedOrigins` | off | Deployed review for signed-in reviewers (D34). |
 | — / `ManualPlacement`, `Exclude` | off / none | Where the middleware sits; requests to skip (D31). |
 | `apiBase` / `ApiBase` | `/__redline` | Where the API is mounted; the script tag then carries `data-api` (D60). .NET adds the `PathBase`. Not in Next or with `agent`. |
+| `cors` / `CorsOrigins` | none: same-origin only | Origins whose pages may call the API (preflights, credentials, `etag` exposed; not MCP). .NET online mode accepts their mutations (D60). |
 
 ## The self-starting script (`client.js`, D60)
 
@@ -53,6 +54,10 @@ Set `window.redlineConfig = { … }` before the script loads, or `data-*` on its
 | `redlineConfig` / attribute | Default | What it does |
 |---|---|---|
 | `apiBase` / `data-api` | `/__redline` | The API: a path on this origin or another origin's URL. The servers set `data-api` themselves. |
+| `credentials` / `data-credentials` | the browser's (`same-origin`) | `'include'`: cookies on every call and the live feed, for an API on another origin. |
+| `headers` / — | none | `{ authorization: … }` or `() => headers` (may be async), asked before each call; images then load as blob URLs. |
+
+`httpTransport(base, { credentials, headers })` takes the same two for `mount()`.
 
 ## `mount()` (embedding, D49)
 
