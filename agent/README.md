@@ -64,15 +64,29 @@ redline({ agent: agent({ command: 'codex' }) })
 ### Adapters
 
 What is particular to a CLI sits in an adapter (`AgentAdapter`): Claude Code (menus read into the card,
-`--model`, instructions as `--append-system-prompt-file`) and OpenCode (status from its OSC 7501 reports,
-"done" after a turn since it never reports one, a short wait before typing since its input box isn't ready the
-moment it says idle; Allow/Deny for its prompts). Any other CLI runs as is: Allow/Deny, the terminal, and 7501
-status if it sends it. Add or tune your own, tried before the built-in ones:
+`--model`, instructions as `--append-system-prompt-file`) and OpenCode (over ACP by default, below; in a
+terminal with `protocol: 'pty'`: status from its OSC 7501 reports, Allow/Deny for its prompts). Any other CLI
+runs as is: Allow/Deny, the terminal, and 7501 status if it sends it. Add or tune your own, tried before the built-in ones:
 
 ```js
 import { agent, openCode } from '@umage.ai/redline-agent';
 redline({ agent: agent({ command: 'opencode', adapters: [{ ...openCode, settleMs: 2000 }] }) })
 ```
+
+### ACP mode
+
+Agents that speak the [Agent Client Protocol](https://agentclientprotocol.com) run without a terminal
+(`protocol: 'acp'`; OpenCode does by default, as `opencode acp`). Redline talks JSON-RPC to them over stdio:
+working while a prompt runs, done when it returns, and a permission request shows in the card with the agent's
+own options ("Allow once", "Always allow", "Reject"); Cancel ends the turn. The CLI window shows a transcript
+(the agent's text, tool calls, its plan) and a line typed there is sent as a prompt. `model` is set through the
+agent's model option (OpenCode: `provider/model`, as in `opencode models`); `instructions` go ahead of the first
+prompt. Any other ACP agent: `{ command: 'my-acp-agent', args: [...], protocol: 'acp' }`. Claude Code stays in
+the terminal (its ACP mode is a separate adapter package).
+
+OpenCode asks before nothing by default. To approve its shell commands and edits from the card, set
+`"permission": { "bash": "ask", "edit": "ask" }` in OpenCode's config, or for Redline's sessions only:
+`env: { OPENCODE_CONFIG_CONTENT: '{"permission":{"bash":"ask","edit":"ask"}}' }`.
 
 Prompts fill in `{page}`, `{url}` and `{ids}` (the open notes on the page); a prompt with `{ids}` shows their count
 and tags those notes "sent". Prompts wait until the CLI is ready for input.

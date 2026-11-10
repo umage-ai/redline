@@ -19,6 +19,7 @@ import { json, readBody } from '../../src/server/http.ts';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState, type ProgramStatus } from './program-status.ts';
 import { Screen, type PromptView } from './screen.ts';
 import { adapterFor, claudeCode, defaultCommand } from './adapters.ts';
+import { AcpSession, usesAcp } from './acp.ts';
 
 import type { AgentAdapter, AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
 
@@ -42,11 +43,13 @@ export interface AgentInfo {
   command: string;
   /** Exit code of the last run, when it has ended. */
   exitCode?: number | null;
-  status: ProgramStatus & { source: '7501' | 'activity' | 'none' };
+  status: ProgramStatus & { source: '7501' | 'activity' | 'acp' | 'none' };
   /** Notes handed to the agent in this dev-server session (by a prompt that named them), oldest first. */
   sent: string[];
   /** The menu on the agent's screen (a permission prompt, stepped questions), read off it; while running. */
   prompt?: PromptView;
+  /** 'acp': an Agent Client Protocol session (D58), no terminal; absent: a pseudo-terminal. */
+  protocol?: 'acp';
 }
 
 /** All of a project's sessions: what the toolbar shows. */
@@ -346,7 +349,7 @@ class AgentSession {
   }
 
   /** Allow or Deny from the agent toolbar: the configured key, only while it waits for approval. */
-  answer(key: string): boolean {
+  answer(key: string, _choice?: string): boolean {
     if (!this.pty || this.info().status.state !== 'blocked') return false;
     this.pty.write(key);
     return true;
@@ -460,7 +463,7 @@ const send = (res: ServerResponse, event: string, data: unknown) => res.write(`e
  */
 class AgentGroup {
   readonly token = randomBytes(18).toString('base64url');
-  readonly sessions: AgentSession[] = [];
+  readonly sessions: (AgentSession | AcpSession)[] = [];
   mode: 'shared' | 'fresh';
   private n = 0;
   private watchers = new Set<ServerResponse>();
@@ -475,23 +478,23 @@ class AgentGroup {
   get max() { return clampSize(this.opts.maxSessions ?? 3, 1, 8); }
 
   /** A session by id; no id: the newest. */
-  get(id?: unknown): AgentSession | undefined {
+  get(id?: unknown): AgentSession | AcpSession | undefined {
     return typeof id === 'string' && id ? this.sessions.find(s => s.id === id) : this.sessions[this.sessions.length - 1];
   }
 
   /** A new session; ended ones past KEEP_ENDED are dropped, oldest first. */
-  create(): AgentSession {
+  create(): AgentSession | AcpSession {
     const ended = this.sessions.filter(s => !s.running);
     for (const s of ended.slice(0, Math.max(0, ended.length - KEEP_ENDED + 1))) this.drop(s);
     if (!this.sessions.length) this.n = 0;   // all closed: numbering starts over at #1
-    const s =new AgentSession(this.opts, this.cwd, this.root, ++this.n, () => this.push());
+    const s = new (usesAcp(this.opts) ? AcpSession : AgentSession)(this.opts, this.cwd, this.root, ++this.n, () => this.push());
     this.sessions.push(s);
     this.push();
     return s;
   }
 
   /** The session for a prompt or a start: 'shared' reuses `id` (or the newest), 'fresh' makes room and starts a new one. */
-  forPrompt(id?: unknown): AgentSession {
+  forPrompt(id?: unknown): AgentSession | AcpSession {
     if (this.mode === 'shared') return this.get(id) ?? this.create();
     const running = this.sessions.filter(s => s.running);
     if (running.length >= this.max) {
@@ -502,7 +505,7 @@ class AgentGroup {
     return this.create();
   }
 
-  drop(s: AgentSession) {
+  drop(s: AgentSession | AcpSession) {
     const i = this.sessions.indexOf(s);
     if (i < 0) return;
     this.sessions.splice(i, 1);
@@ -544,7 +547,7 @@ function groupFor(opts: AgentOptions, cwd: string, root: string): AgentGroup {
     process.once('exit', () => { for (const s of m.values()) s.dispose(); });
     return m;
   })();
-  const key = JSON.stringify([cwd, opts.command ?? 'claude', opts.args ?? []]);
+  const key = JSON.stringify([cwd, opts.command ?? 'claude', opts.args ?? [], usesAcp(opts)]);
   let s = map.get(key);
   if (!s) { s = new AgentGroup(opts, cwd, root); map.set(key, s); }
   return s;
@@ -664,7 +667,7 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
         case '/agent/answer': {
           const key = keys && (body.choice === 'allow' ? keys.allow : body.choice === 'deny' ? keys.deny : undefined);
           if (!key) return json(res, 400, { error: 'choice must be allow or deny' });
-          if (!session.answer(key)) return json(res, 409, { error: 'the agent is not waiting for approval' });
+          if (!session.answer(key, body.choice as string)) return json(res, 409, { error: 'the agent is not waiting for approval' });
           return json(res, 200, { ok: true });
         }
         case '/agent/choose': {

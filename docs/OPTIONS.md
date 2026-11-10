@@ -1,6 +1,6 @@
 # Options
 
-Last updated: 2026-11-09 · Cap: 150 lines · Every option with its default, in one place. Detail lives in README.md and the linked docs.
+Last updated: 2026-11-10 · Cap: 150 lines · Every option with its default, in one place. Detail lives in README.md and the linked docs.
 
 The same option is spelled `camelCase` in Node (`redline({ … })`, `withRedline(cfg, { … })`, `redlineMiddleware({ … })`,
 the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o => …)`). "—" means the server doesn't have it.
@@ -61,13 +61,14 @@ the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o =
 | Option | Default | What it does |
 |---|---|---|
 | `command`, `args`, `env`, `cwd`, `label` | the first installed of `claude`, `opencode`; none, none, `root`, the command | The CLI to run. |
-| `model` | the CLI's own | Passed as the CLI's flag (Claude Code `--model`); OpenCode has none (a warning). |
+| `model` | the CLI's own | Passed as the CLI's flag (Claude Code `--model`); over ACP the agent's `model` config option (OpenCode: `provider/model`); else a warning. |
+| `protocol` | `'acp'` when the adapter has an ACP mode (OpenCode), else `'pty'` | `'acp'`: Agent Client Protocol over stdio, no terminal (D58); `'pty'`: the CLI in a pseudo-terminal. |
 | `adapters` | built-in: Claude Code, OpenCode | Your own `AgentAdapter`s, tried first (D55). |
 | `sessions` | **0.10:** `'fresh'` (was `'shared'`) | A new session per prompt with just its notes; `'shared'` keeps one. |
 | `maxSessions` | `3` | Fresh sessions at once (1–8). |
 | `commands` | one **Apply notes** button | Prompt buttons (`{page}`, `{url}`, `{ids}`). |
 | `keys` | Enter / Esc | What Allow / Deny send to CLIs whose menus aren't read. |
-| `menus` | `'auto'` (Claude Code) | Read the CLI's menus into the toolbar's card. |
+| `menus` | `'auto'` (Claude Code) | Read the CLI's menus into the toolbar's card (PTY only; ACP permission requests always show there). |
 | `hotkey`, `key` | `alt+shift+a`, `a` | Open the agent toolbar. |
 | `instructions` | none | Extra rules for sessions Redline starts. |
 
