@@ -21,7 +21,7 @@ interface Info {
   running: boolean;
   command: string;
   exitCode?: number | null;
-  status: { state: State; kind?: string; progress?: number; msg?: string; title?: string; source: '7501' | 'activity' | 'none' };
+  status: { state: State; kind?: string; progress?: number; msg?: string; title?: string; source: '7501' | 'activity' | 'acp' | 'none' };
   sent?: string[];
   /** The menu on the agent's screen (a permission prompt, stepped questions), read off it by the server. */
   prompt?: PromptView;

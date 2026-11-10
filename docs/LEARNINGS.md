@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-09 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-10 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -22,8 +22,7 @@ Prune entries whose cause is gone from the code.
 - `apply: 'serve'` alone would load Redline into unit-test runs (any app that uses Vitest). The plugin returns `[]` when `process.env.VITEST` is set.
 
 ## L7 — Blank React page in e2e: 504 "Outdated Optimize Dep"
-- **Cause:** fixture dev servers running side by side shared `node_modules/.vite`, so each re-optimisation invalidated the others. **Fix:** `cacheDir: '.vite-cache'` per fixture. React deps are also pre-included.
-- **Related:** after a config change Vite re-optimises once and may log transient errors (seen with Keystatic in an Astro site). A second start is clean.
+- **Cause:** fixture dev servers running side by side shared `node_modules/.vite`, so each re-optimisation invalidated the others. **Fix:** `cacheDir: '.vite-cache'` per fixture. React deps are also pre-included. **Related:** after a config change Vite re-optimises once and may log transient errors (seen with Keystatic in an Astro site). A second start is clean.
 
 ## L8 — SvelteKit: element found but no `__svelte_meta`
 - **Cause:** the SSR HTML is visible before hydration, and the meta is attached during hydration. **Fix (tests):** `openOverlay` waits for `networkidle`. A real user won't click within milliseconds of load.
@@ -32,9 +31,7 @@ Prune entries whose cause is gone from the code.
 - **Cause:** the fallback used `prefers-color-scheme`, and headless/OS settings are often dark. **Fix:** explicit markers (`.dark`, `data-theme`) first, then page background luminance, then the media query.
 
 ## L10 — Inner scroll containers in DOM screenshots
-- **Problem:** modern-screenshot clones the DOM, and clones lose their `scrollTop`.
-- **Fix:** before capture, mark the children of scrolled containers (and of `<body>` for page scroll) with their offset, then translate the clones in `onCloneEachNode`. Fixed elements are skipped, so sticky headers are still lost.
-- **Long pages:** cloning everything took ~20 s at 36k elements. Elements wholly below the viewport (with a size; zero-size portal roots stay) are filtered out. **Guard:** `capture.spec.ts` "a long page".
+- **Problem:** modern-screenshot clones the DOM, and clones lose their `scrollTop`. **Fix:** before capture, mark the children of scrolled containers (and of `<body>` for page scroll) with their offset, then translate the clones in `onCloneEachNode`. Fixed elements are skipped, so sticky headers are still lost. **Long pages:** cloning everything took ~20 s at 36k elements. Elements wholly below the viewport (with a size; zero-size portal roots stay) are filtered out. **Guard:** `capture.spec.ts` "a long page".
 
 ## L11 — Sketch label added twice; Escape kept it anyway
 - **Cause:** removing a focused `<input>` fires `blur` synchronously. Enter → commit → `remove()` → blur → commit again (and `remove()` threw); Escape → `remove()` → blur → commit. **Fix:** a `closed` guard in `SketchLayer.textAt`, so the first close wins. **Guard:** `overlay.spec.ts` "sketch text label: Enter adds it once, Escape drops it".
@@ -195,3 +192,6 @@ Prune entries whose cause is gone from the code.
 
 ## L57 — OpenCode lost the first prompt, and never turned green after a turn
 - **Cause / fix:** OpenCode 2.2 reports `idle` before its input box takes keys, so a prompt typed at once vanished; and it reports working → idle, never `done` (anomalyco/opencode#60411). Its adapter (D55) has `settleMs` (idle plus quiet output first) and `doneOnIdle` (idle after a turn it worked on shows as done, idle again once seen). **Guard:** `agent.test.ts` "a CLI that reports idle instead of done" (fake agent with `FAKE_NO_DONE`); checked by hand against OpenCode 2.2.6.
+
+## L58 — OpenCode's first ACP permission request went unanswered
+- **Cause / fix:** agent→client requests carry the agent's own ids, and OpenCode's start at `0`: a truthiness check (`if (m.id)`) reads that as a notification, no reply goes and the turn hangs blocked. `JsonRpc` tests `id !== undefined && id !== null`. Also: OpenCode asks no permission by default (shell and edits are allowed); `permission: { bash: 'ask', edit: 'ask' }` in its config (or `OPENCODE_CONFIG_CONTENT`) makes it ask. **Guard:** `agent-acp.test.ts` "JsonRpc … id 0", and the fake ACP agent (`test/fixtures/agent/fake-acp-agent.mjs`) numbers its requests from 0.

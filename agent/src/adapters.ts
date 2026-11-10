@@ -50,6 +50,8 @@ export const openCode: AgentAdapter = {
   doneOnIdle: true,
   settleMs: 1000,
   start: o => preamble(o, 'OpenCode'),
+  // `opencode acp` (D58): its permission requests become the card's menu, status without screen reading.
+  acp: ['acp'],
 };
 
 export const generic: AgentAdapter = {

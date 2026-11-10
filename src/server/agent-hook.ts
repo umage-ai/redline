@@ -40,6 +40,11 @@ export interface AgentAdapter {
   doneOnIdle?: boolean;
   /** Quiet output (ms) after it reports idle before a prompt is typed: its input box isn't ready at once. */
   settleMs?: number;
+  /**
+   * The arguments that start its Agent Client Protocol mode (D58: JSON-RPC over stdio, structured
+   * status and permission menus, no terminal): OpenCode `['acp']`. Set: ACP by default (`protocol`).
+   */
+  acp?: string[];
 }
 
 export interface AgentOptions {
@@ -93,6 +98,14 @@ export interface AgentOptions {
    * gets them as `--append-system-prompt-file`; any other CLI ahead of the session's first prompt.
    */
   instructions?: string | { file: string };
+  /**
+   * How Redline talks to the CLI (D58). `'acp'`: the Agent Client Protocol over stdio (the adapter's
+   * `acp` arguments first, then `args`): status and permission menus from the protocol, a transcript
+   * in the CLI window, a typed line is a prompt. `'pty'`: the CLI in a pseudo-terminal. Default:
+   * `'acp'` for a CLI whose adapter has an ACP mode (OpenCode), else `'pty'` (Claude Code). For any
+   * other ACP agent: `{ command: 'my-acp-agent', protocol: 'acp' }`.
+   */
+  protocol?: 'acp' | 'pty';
 }
 
 /** The panel's routes in one dev server. */
