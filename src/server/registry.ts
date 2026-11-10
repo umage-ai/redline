@@ -6,7 +6,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-export interface ServerEntry { url: string; app: string; pid: number; at: string }
+/** `api`: the API base when it isn't `/__redline` (the `apiBase` option, a .NET PathBase; D60). */
+export interface ServerEntry { url: string; app: string; pid: number; at: string; api?: string }
 
 const file = (root: string, dir: string) => path.join(root, dir, 'servers.json');
 
@@ -22,11 +23,11 @@ export async function readServers(root: string, dir = '.redline'): Promise<Serve
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Add or refresh this process's entry for `url`. Never throws: discovery is best effort. */
-export function registerServer(root: string, dir: string, url: string, app: string): Promise<void> {
+export function registerServer(root: string, dir: string, url: string, app: string, api?: string): Promise<void> {
   const run = queue.then(async () => {
     try {
       const list = (await readServers(root, dir)).filter(s => s.url !== url);
-      list.push({ url: url.replace(/\/+$/, ''), app, pid: process.pid, at: new Date().toISOString() });
+      list.push({ url: url.replace(/\/+$/, ''), app, pid: process.pid, at: new Date().toISOString(), ...(api ? { api } : {}) });
       await fs.mkdir(path.join(root, dir), { recursive: true });
       await fs.writeFile(file(root, dir), JSON.stringify(list, null, 2) + '\n');
     } catch { /* read-only checkout etc. */ }

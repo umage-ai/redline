@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Builder;
 using UmageAI.Redline.Notes;
 
 namespace UmageAI.Redline.Tests;
@@ -218,5 +219,44 @@ public class MiddlewareTests
         Assert.Contains(list, s => s!["url"]!.GetValue<string>() == "http://localhost" && s["pid"]!.GetValue<int>() == Environment.ProcessId);
         // ISO 8601 whatever the machine's culture (a Danish time separator once wrote "22.58.31").
         Assert.All(list, s => Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", s!["at"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Under_UsePathBase_the_overlay_is_told_where_the_api_is()
+    {
+        // Redline placed after UsePathBase (as with IIS sub-applications, where the server sets PathBase): the
+        // tag carries data-api, the API answers under the base, extension URLs include it, servers.json records it.
+        await using var t = await TestApp.StartAsync(o => { o.ManualPlacement = true; o.Extensions.Add("x.js"); },
+            pipeline: app => { app.UsePathBase("/app"); app.UseRedline(); app.UseRouting(); });
+        var html = await (await t.Client.SendAsync(t.Get("/app/"))).Content.ReadAsStringAsync();
+        Assert.Contains("<script type=\"module\" src=\"/app/__redline/client.js\" data-api=\"/app/__redline\" data-redline-client></script>", html);
+        var config = await JsonOf(await t.Client.GetAsync("/app/__redline/config"));
+        Assert.Equal("/app/__redline/ext/0.js", config["extensions"]![0]!.GetValue<string>());
+        var created = await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/app/__redline/notes", """{"note":{"type":"comment","page":"/","url":"http://localhost/app/","body":"Under a base"}}"""));
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var notes = await t.Client.GetAsync("/app/__redline/notes");
+        Assert.NotNull(notes.Headers.ETag);
+        var list = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(t.Root, ".redline", "servers.json")))!.AsArray();
+        Assert.Contains(list, s => s!["api"]?.GetValue<string>() == "/app/__redline");
+    }
+
+    [Fact]
+    public async Task Default_placement_with_UsePathBase_keeps_the_api_at_the_root()
+    {
+        // First in the pipeline (the default), Redline sits outside the base: the plain tag, the API at /__redline.
+        await using var t = await TestApp.StartAsync(pipeline: app => { app.UsePathBase("/app"); app.UseRouting(); });
+        var html = await (await t.Client.SendAsync(t.Get("/app/"))).Content.ReadAsStringAsync();
+        Assert.Equal(TestApp.Page.Replace("</head>", Script + "</head>"), html);
+        Assert.Equal(HttpStatusCode.OK, (await t.Client.GetAsync("/__redline/config")).StatusCode);
+    }
+
+    [Fact]
+    public async Task ApiBase_moves_the_api_and_the_tag_says_so()
+    {
+        await using var t = await TestApp.StartAsync(o => o.ApiBase = "/tools/redline/");
+        var html = await (await t.Client.SendAsync(t.Get("/"))).Content.ReadAsStringAsync();
+        Assert.Contains("src=\"/tools/redline/client.js\" data-api=\"/tools/redline\"", html);
+        Assert.Equal(HttpStatusCode.OK, (await t.Client.GetAsync("/tools/redline/config")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await t.Client.GetAsync("/__redline/config")).StatusCode);
     }
 }

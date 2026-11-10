@@ -27,7 +27,7 @@ public sealed class TestApp : IAsyncDisposable
         Client = app.GetTestClient();
     }
 
-    public static async Task<TestApp> StartAsync(Action<RedlineOptions>? configure = null, string environment = "Development", Action<IServiceCollection>? services = null)
+    public static async Task<TestApp> StartAsync(Action<RedlineOptions>? configure = null, string environment = "Development", Action<IServiceCollection>? services = null, Action<WebApplication>? pipeline = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "redline-test-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(Path.Combine(root, ".git"));
@@ -40,6 +40,7 @@ public sealed class TestApp : IAsyncDisposable
         builder.Services.AddRedline(configure);
         services?.Invoke(builder.Services);
         var app = builder.Build();
+        pipeline?.Invoke(app);
         app.MapGet("/", () => Results.Content(Page, "text/html; charset=utf-8"));
         app.MapGet("/fragment", () => Results.Content("<p>no head or body</p>", "text/html"));
         app.MapGet("/gzip", (HttpContext http) => { http.Response.Headers.ContentEncoding = "gzip"; return Results.Bytes(new byte[] { 31, 139, 8, 0 }, "text/html"); });

@@ -117,6 +117,18 @@ export interface RedlineOptions {
    * options; or `agent({…})` from the package. Needs `@umage.ai/redline-agent` installed.
    */
   agent?: boolean | string | AgentOptions | AgentPlugin;
+  /**
+   * Where the API is mounted: a path prefix, default `/__redline` (D60). Set it when that path is taken, or
+   * the app is served under a prefix (`/app/__redline`); the injected script tag then carries `data-api`, so
+   * the overlay calls it there. Not in Next (its rewrite is fixed) or the agent panel, which need the default.
+   */
+  apiBase?: string;
+}
+
+/** The `apiBase` option as a path: a leading slash, no trailing one; the default when unset or empty. */
+export function apiBaseOf(v: string | undefined): string {
+  const b = (v ?? '').trim().replace(/\/+$/, '');
+  return b ? (b.startsWith('/') ? b : '/' + b) : API_BASE;
 }
 
 const MARK = 'data-redline-client';
@@ -260,8 +272,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const store: NoteStore = typeof opts.store === 'function' ? opts.store({ root, dir, app }) : opts.store ?? envStore ?? createStore({ root, dir });
   const writers = opts.directEdit === true ? defaultWriters() : Array.isArray(opts.directEdit) ? opts.directEdit : [];
   const extFiles = (opts.extensions ?? []).map(e => typeof e === 'string' ? path.resolve(opts.serverRoot, e) : null);
-  const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${API_BASE}/ext/${i}.js` : e.url);
-  const agent = agentFor(opts.agent, root, API_BASE);
+  const base = apiBaseOf(opts.apiBase);
+  const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${base}/ext/${i}.js` : e.url);
+  const agent = agentFor(opts.agent, root, base);
   if (agent) extensions.push(agent.panel);
   const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
   const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);
@@ -296,7 +309,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
 
   // Let `redline mcp` find this server (D22): registered once per host it is reached on.
   const hosts = new Set<string>();
-  const register = (url: string) => { if (!hosts.has(url)) { hosts.add(url); void registerServer(root, dir, url, app); } };
+  const register = (url: string) => { if (!hosts.has(url)) { hosts.add(url); void registerServer(root, dir, url, app, base === API_BASE ? undefined : base); } };
 
   // The MCP endpoint's tools read and write this server's own store, with the same hooks as the API.
   const mcpBackend = (req: IncomingMessage): Backend => ({
@@ -321,15 +334,15 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
 
   const api: Middleware = (req, res, next) => {
     const url = req.url ?? '';
-    if (!url.startsWith(API_BASE + '/')) return next();
-    if (!url.startsWith(`${API_BASE}/mcp`) && refused(req)) {
+    if (!url.startsWith(base + '/')) return next();
+    if (!url.startsWith(`${base}/mcp`) && refused(req)) {
       res.statusCode = 403;
       res.setHeader('content-type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ error: 'Redline answers this machine only; set the network option to allow others' }));
       return;
     }
     if (req.headers.host) register(`${(req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${req.headers.host}`);
-    const [p] = url.slice(API_BASE.length).split('?');
+    const [p] = url.slice(base.length).split('?');
     const method = req.method ?? 'GET';
     // HEAD answers like GET (Node drops the body): link checkers and proxies probe with it.
     const read = method === 'GET' || method === 'HEAD';
@@ -436,7 +449,9 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     });
   };
 
-  const injector = htmlInjector(SNAPSHOT + `<script type="module" src="${API_BASE}/client.js" ${MARK}></script>`);
+  // A custom base goes to the client as data-api (boot.ts); the default tag stays as it always was.
+  const dataApi = base === API_BASE ? '' : ` data-api="${base.replace(/[&"<>]/g, c => `&#${c.charCodeAt(0)};`)}"`;
+  const injector = htmlInjector(SNAPSHOT + `<script type="module" src="${base}/client.js"${dataApi} ${MARK}></script>`, base);
   const inject: Middleware = (req, res, next) => (refused(req) ? next() : injector(req, res, next));
   return { api, inject, store, root, register };
 }
@@ -446,10 +461,10 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
  * Done at the HTTP level so it works for SPAs, SSR (SvelteKit) and Astro alike,
  * none of which share an HTML transform hook.
  */
-export function htmlInjector(tag: string): Middleware {
+export function htmlInjector(tag: string, base = API_BASE): Middleware {
   return (req, res, next) => {
     const accept = String(req.headers.accept ?? '');
-    if (req.method !== 'GET' || !accept.includes('text/html') || (req.url ?? '').startsWith(API_BASE)) return next();
+    if (req.method !== 'GET' || !accept.includes('text/html') || (req.url ?? '').startsWith(base)) return next();
 
     const origWrite = res.write.bind(res) as (...a: unknown[]) => boolean;
     const origEnd = res.end.bind(res) as (...a: unknown[]) => ServerResponse;

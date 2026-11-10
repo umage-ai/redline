@@ -36,14 +36,16 @@ public static class ServerRegistry
     }
 
     /// <summary>Add or refresh this process's entry for <paramref name="url"/>. Never throws: discovery is best effort.</summary>
-    public static async Task RegisterAsync(string root, string dir, string url, string app)
+    public static async Task RegisterAsync(string root, string dir, string url, string app, string? api = null)
     {
         await Lock.WaitAsync();
         try
         {
             url = url.TrimEnd('/');
             var list = Read(root, dir).Where(s => (string?)s["url"] != url).ToList();
-            list.Add(new JsonObject { ["url"] = url, ["app"] = app, ["pid"] = Environment.ProcessId, ["at"] = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture) });
+            var entry = new JsonObject { ["url"] = url, ["app"] = app, ["pid"] = Environment.ProcessId, ["at"] = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture) };
+            if (!string.IsNullOrEmpty(api)) entry["api"] = api;
+            list.Add(entry);
             Directory.CreateDirectory(Path.Combine(root, dir));
             var json = new JsonArray(list.Cast<JsonNode>().ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(FileOf(root, dir), json.Replace("\r\n", "\n") + "\n");

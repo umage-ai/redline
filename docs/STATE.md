@@ -1,6 +1,6 @@
 # State
 
-Last updated: 2026-11-09 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-11-10 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
@@ -57,6 +57,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Optimizely CMS 12 (13 compiles): CMS content/property in notes, drafts from text mode, no overlay in edit mode (D33) | ✅ sample on 5212 (LocalDB) | `optimizely.spec.ts` with `REDLINE_E2E_OPTIMIZELY=1` |
 | Online mode: role/policy-gated overlay and API, SQL store with author, remote MCP with site/personal tokens (D34–D36) | ✅ unit (TestServer, SQLite; SQL Server with `REDLINE_TEST_SQLSERVER`); browser on the Optimizely sample (LocalDB, panel token → MCP) | `OnlineTests.cs`, `StoreTests.cs`, `online.spec.ts`; not yet on a deployed site |
 | NuGet packages: `dotnet pack dotnet/Redline.slnx` | ✅ installed into a fresh Razor Pages app (stamps + overlay) | manual; no package test script yet |
+| API base for the self-starting script (D60, #22): `window.redlineConfig.apiBase` / `data-api`; Node `apiBase`, .NET `ApiBase`; a .NET `PathBase` reaches the client as `data-api`; `servers.json` records it for `redline mcp`. Not in Next or the agent panel | ✅ | `hosting.test.ts`, `hosting.spec.ts`, `MiddlewareTests.cs` |
 | Remote note store over HTTP (docs/PROTOCOL.md, D40): `remoteStore` / `REDLINE_STORE_URL` (Node), `UseRemoteStore` (.NET), reference server `notesProtocol`; store-only fields stripped from pages and kept out of markdown | ✅ | `remote.test.ts`, `RemoteStoreTests.cs` |
 | Live changes: store feed → `/__redline/events` (SSE) → overlay re-reads at once; polling 30 s meanwhile (D41) | ✅ Node | `remote.test.ts`, `remote.spec.ts` |
 | Resolved notes green with their reply, author on pins and cards, store link, `seen` sent once by the author (D42) | ✅ | `remote.spec.ts` |
@@ -81,7 +82,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 - Next.js: the live feed (`/events`, remote stores) and bodies over 10 MB through Next's proxy (it buffers them when the app has `middleware.ts`) are untested; Next before 15 is untested.
 - `extend.spec.ts` Astro case once timed out tearing down while all eight fixture servers ran; it passed on rerun and alone.
 - Agent panel (D53): macOS is untested (node-pty prebuilds; the `spawn-helper` bit is restored), Linux only in a container (no browser run). OpenCode 2.2 runs through its adapter (D55; status, done, prompts; checked by hand with a local Qwen model), but its menus aren't read (Allow/Deny + terminal); not tried with Codex or Gemini CLI. Fresh sessions can still edit the same files in parallel (no worktrees). Not in the .NET server. One terminal size for all viewers (the last resize wins); the app's CSP can block the iframe.
-- .NET: apps under a `PathBase` aren't supported (the client calls `/__redline` at the root); hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN.
+- .NET: hot reload compiles unstamped files; Optimizely rich text (XhtmlString), local-block property paths and CMS 13 at runtime are untested; online mode not yet tried behind a CDN.
 
 ## Next up
 

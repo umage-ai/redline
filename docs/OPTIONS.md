@@ -1,6 +1,6 @@
 # Options
 
-Last updated: 2026-11-09 · Cap: 150 lines · Every option with its default, in one place. Detail lives in README.md and the linked docs.
+Last updated: 2026-11-10 · Cap: 150 lines · Every option with its default, in one place. Detail lives in README.md and the linked docs.
 
 The same option is spelled `camelCase` in Node (`redline({ … })`, `withRedline(cfg, { … })`, `redlineMiddleware({ … })`,
 the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o => …)`). "—" means the server doesn't have it.
@@ -44,6 +44,15 @@ the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o =
 | — / `EnabledWhen` | Development only | When the .NET middleware runs. |
 | — / `Online`, `Policy`, `Roles`, `AllowedOrigins` | off | Deployed review for signed-in reviewers (D34). |
 | — / `ManualPlacement`, `Exclude` | off / none | Where the middleware sits; requests to skip (D31). |
+| `apiBase` / `ApiBase` | `/__redline` | Where the API is mounted; the script tag then carries `data-api` (D60). .NET adds the `PathBase`. Not in Next or with `agent`. |
+
+## The self-starting script (`client.js`, D60)
+
+Set `window.redlineConfig = { … }` before the script loads, or `data-*` on its tag; `redlineConfig` wins.
+
+| `redlineConfig` / attribute | Default | What it does |
+|---|---|---|
+| `apiBase` / `data-api` | `/__redline` | The API: a path on this origin or another origin's URL. The servers set `data-api` themselves. |
 
 ## `mount()` (embedding, D49)
 

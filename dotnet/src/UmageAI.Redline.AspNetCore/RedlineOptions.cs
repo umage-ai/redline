@@ -47,6 +47,12 @@ public sealed class RedlineOptions
     /// a page with hash-addressed views (a slide deck's <c>#/3</c>) keeps one notes file.
     /// </summary>
     public RedlinePageKey PageKey { get; set; } = RedlinePageKey.Route;
+    /// <summary>
+    /// Where the API is mounted, under the request's PathBase (D60). Default "/__redline". Under
+    /// <c>UsePathBase("/app")</c> the overlay calls "/app/__redline" by itself (the script tag carries <c>data-api</c>);
+    /// set this when "/__redline" is taken, or to put the API under a module route.
+    /// </summary>
+    public string ApiBase { get; set; } = "/__redline";
     /// <summary>Monorepos: the app's name in notes. Default: the content root relative to the repo root; "" at the root.</summary>
     public string? App { get; set; }
 
