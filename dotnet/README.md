@@ -44,6 +44,8 @@ ahead of `app.UseRedline()` (with `o.ManualPlacement = true`), the overlay calls
 `o.ApiBase = "/tools/redline"` moves the API itself (a route `/__redline` would clash with, a CMS module path).
 `o.CorsOrigins.Add("https://localhost:5002")` lets pages on that origin call the API (a standalone Blazor WebAssembly
 app, a headless frontend): preflights answered, credentials allowed, `etag` exposed; see docs/SETUPS.md "The API on another origin".
+`o.AllowInIframe = true` lets the overlay start inside iframes too (one per frame; docs/SETUPS.md "Inside an iframe"). The
+Optimizely package still keeps it out of the CMS's own edit and preview frames.
 
 Blazor WebAssembly components live in the `.Client` project; give it the stamps too:
 `<PackageReference Include="UmageAI.Redline.Build" Version="…" PrivateAssets="all" />`.

@@ -130,6 +130,11 @@ export interface RedlineOptions {
    * `content-type`, `if-none-match`), credentials, and `etag` exposed. The MCP and agent routes never do.
    */
   cors?: string[];
+  /**
+   * The overlay also starts inside iframes (D60), e.g. a CMS's preview frame or a component workbench. Default
+   * false: frames get none. Each frame gets its own overlay; the hotkey works in the focused one.
+   */
+  allowInIframe?: boolean;
 }
 
 export const CORS_HEADERS = 'x-redline, authorization, content-type, if-none-match';
@@ -294,7 +299,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     try { return normalizeLabels(await (opts.labels as Extract<LabelsSource<IncomingMessage>, Function>)({ req })); }
     catch (e) { console.warn('[redline] labels() failed:', e); return []; }
   };
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable !== false, launcherSize: opts.launcherSize, launcherPosition: opts.launcherPosition, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable !== false, launcherSize: opts.launcherSize, launcherPosition: opts.launcherPosition, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe, ...(opts.allowInIframe ? { allowInIframe: true } : {}) };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);

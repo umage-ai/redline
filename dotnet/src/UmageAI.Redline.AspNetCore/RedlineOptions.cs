@@ -60,6 +60,12 @@ public sealed class RedlineOptions
     /// mode accepts their mutations too. MCP never answers them.
     /// </summary>
     public List<string> CorsOrigins { get; } = new();
+    /// <summary>
+    /// The overlay also starts inside iframes (D60): a CMS preview frame, a component workbench. Default false.
+    /// Each frame gets its own overlay; the hotkey works in the focused one. (The Optimizely package still keeps it
+    /// out of the CMS's own edit and preview frames.)
+    /// </summary>
+    public bool AllowInIframe { get; set; }
     /// <summary>Monorepos: the app's name in notes. Default: the content root relative to the repo root; "" at the root.</summary>
     public string? App { get; set; }
 

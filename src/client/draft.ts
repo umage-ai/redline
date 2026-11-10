@@ -7,7 +7,7 @@ import type { RedlineBeforeSave } from '../shared/extension.ts';
 import { cmsInfo, describe, labelFor, sourceInfo } from './anchor.ts';
 import { startTabCapture, tabCaptureActive } from './capture.ts';
 import { bboxOf, sketchFile } from './sketch.ts';
-import { esc, h } from './dom.ts';
+import { esc, h, inFrame } from './dom.ts';
 import { nthOf, themeOf } from './page-dom.ts';
 import type { Ctx, Draft, Part } from './context.ts';
 import type { EditResult } from './transport.ts';
@@ -266,7 +266,7 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
 
 /** The POST body: the note with its target, page context, screenshot and sketch. */
 async function buildRequest(ctx: Ctx, d: Draft, body: string, wantShot: boolean) {
-  if (wantShot && ctx.store.get('tabcapture', '0') === '1' && !tabCaptureActive()) await startTabCapture();
+  if (wantShot && ctx.store.get('tabcapture', '0') === '1' && !tabCaptureActive() && !inFrame()) await startTabCapture();
   const el = d.whole ? null : d.el ?? null;
   const target = el ? enrich(ctx, el, describe(el, d.x, d.y)) : undefined;
   if (target && d.type === 'sketch' && d.sketch) {

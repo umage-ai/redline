@@ -208,6 +208,19 @@
             { "type": "array", "items": { "type": "string" } }
           ],
           "description": "Who besides this machine gets the overlay: true for everyone, or addresses, subnets (172.16.0.0/12) and host names (myapp.test)."
+        },
+        "apiBase": {
+          "type": "string",
+          "description": "Where the API is mounted. Default: /__redline. The script tag then carries data-api."
+        },
+        "cors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Origins whose pages may call the API from the browser (preflights, credentials, etag exposed). Default: none."
+        },
+        "allowInIframe": {
+          "type": "boolean",
+          "description": "The overlay also starts inside iframes; the hotkey works in the focused one. Default: false"
         }
       },
       "additionalProperties": false

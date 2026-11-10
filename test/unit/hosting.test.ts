@@ -100,6 +100,25 @@ test('cors: preflights answered for listed origins only, credentials allowed, et
   } finally { await s.close(); }
 });
 
+test('readBoot: allowInIframe and launcher from redlineConfig or data-* (an empty attribute is on, "false" off)', () => {
+  assert.equal(readBoot(undefined, {}).allowInIframe, undefined);
+  assert.equal(readBoot(undefined, { allowIframe: '' }).allowInIframe, true);
+  assert.equal(readBoot(undefined, { allowIframe: 'false' }).allowInIframe, undefined);
+  assert.equal(readBoot({ allowInIframe: false }, { allowIframe: '' }).allowInIframe, undefined);
+  assert.equal(readBoot({ allowInIframe: true }, undefined).allowInIframe, true);
+  assert.equal(readBoot(undefined, { launcher: 'false' }).launcher, false);
+  assert.equal(readBoot({ launcher: true }, { launcher: 'false' }).launcher, true);
+  assert.equal(readBoot(undefined, {}).launcher, undefined);
+});
+
+test('allowInIframe reaches /config only when set', async () => {
+  for (const [opt, want] of [[true, true], [undefined, undefined]] as const) {
+    const s = await serve({ allowInIframe: opt });
+    try { assert.equal((await (await fetch(s.url + '/__redline/config')).json()).allowInIframe, want); }
+    finally { await s.close(); }
+  }
+});
+
 test('without cors nothing changes: no CORS headers, a preflight is refused like any call without x-redline', async () => {
   const s = await serve();
   try {

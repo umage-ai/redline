@@ -200,9 +200,9 @@ test('direct edit: Angular templates (templateUrl .html and inline in the compon
   } finally { await s.close(); }
 });
 
-test('Angular builder schema accepts every JSON-safe option (pageKey and mcpTokens were missing after a merge, network in 0.7.0, draggable in D51, agent and launcherSize in D53, launcherPosition)', async () => {
+test('Angular builder schema accepts every JSON-safe option (pageKey and mcpTokens were missing after a merge, network in 0.7.0, draggable in D51, agent and launcherSize in D53, launcherPosition, apiBase, cors and allowInIframe in D60)', async () => {
   const schema = JSON.parse(await fs.readFile(new URL('../../src/angular-schema.json', import.meta.url), 'utf8'));
   const keys = Object.keys(schema.properties.redline.properties).sort();
-  assert.deepEqual(keys, ['agent', 'app', 'dir', 'directEdit', 'draggable', 'extensions', 'hotkey', 'launcher', 'launcherPosition', 'launcherSize', 'mcpTokens', 'network', 'pageKey', 'root', 'templateSourceLocations']);
+  assert.deepEqual(keys, ['agent', 'allowInIframe', 'apiBase', 'app', 'cors', 'dir', 'directEdit', 'draggable', 'extensions', 'hotkey', 'launcher', 'launcherPosition', 'launcherSize', 'mcpTokens', 'network', 'pageKey', 'root', 'templateSourceLocations']);
   assert.equal(schema.properties.redline.additionalProperties, false);   // so a missing key is an ng serve error, not a silent drop
 });

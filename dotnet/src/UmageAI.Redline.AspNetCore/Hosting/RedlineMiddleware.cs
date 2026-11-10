@@ -291,6 +291,7 @@ public sealed class RedlineMiddleware
             ["guide"] = guide,
             ["pageKey"] = _rt.Options.PageKey == RedlinePageKey.Path ? "path" : "route",
         };
+        if (_rt.Options.AllowInIframe) o["allowInIframe"] = true;
         if (_rt.Options.Online) { o["online"] = true; o["user"] = user; }
         // The copy-prompt button (D47): absent = the markdown store's own prompt, false = hidden, text = the prompt.
         if (_rt.Options.Prompt is { Length: > 0 } prompt) o["prompt"] = prompt;

@@ -10,7 +10,7 @@ import type { RedlineGate, RedlineOp, RedlinePageKey } from '../shared/extension
 import { pageKey } from '../shared/page.ts';
 import { launcherPlace, launcherVars } from '../shared/place.ts';
 import { screenshot as builtInShot, stopTabCapture } from './capture.ts';
-import { h, Life, safely, storage } from './dom.ts';
+import { h, inFrame, Life, safely, storage } from './dom.ts';
 import { captureErrors } from './errors.ts';
 import { shieldApp } from './shield.ts';
 import { CSS } from './styles.ts';
@@ -52,7 +52,8 @@ export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   const errors = errorSource(opts.captureErrors, life);
   const { host, shadow, ui } = createHost(opts, life);
   const shield = shieldApp(host, life, shadow);
-  const store = storage(ns);
+  // A framed overlay (D60) keeps its own view state and positions: same-origin frames share the parent's storage.
+  const store = storage(inFrame() ? `${ns}~frame` : ns);
   const bus = events();
   life.add(bus.clear);
   life.add(stopTabCapture);

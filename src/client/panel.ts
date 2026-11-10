@@ -6,7 +6,7 @@ import type { NoteType } from '../shared/types.ts';
 import { isStale, relativeAge, STALE_DAYS } from '../shared/age.ts';
 import { clip } from './anchor.ts';
 import { startTabCapture, stopTabCapture } from './capture.ts';
-import { esc, h, safely } from './dom.ts';
+import { esc, h, safely, inFrame } from './dom.ts';
 import type { Ctx, Part } from './context.ts';
 import type { StoredNote } from './transport.ts';
 
@@ -240,7 +240,8 @@ export const panelPart: Part<'renderPanel' | 'togglePanel'> = ctx => {
 
   // Mobile browsers have no getDisplayMedia.
   function tabCaptureToggle() {
-    if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') return false;
+    // In a frame, tab capture would show the whole tab (D60): DOM capture only.
+    if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function' || inFrame()) return false;
     const tab = ctx.store.get('tabcapture', '0') === '1';
     return h('label', { title: t('tabCaptureTitle') },
       h('input', { type: 'checkbox', ...(tab ? { checked: true } : {}), onchange: async (e: Event) => {

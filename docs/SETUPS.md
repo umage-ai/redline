@@ -161,19 +161,22 @@ Comments, polling, screenshots, the live feed and Apply to file all go to that b
 For hosts with no server Redline can run in: a headless frontend whose notes live in the CMS, a standalone Blazor
 WebAssembly app whose API runs on another port. Where the host has a server, the same-origin proxy above stays the better choice.
 
-- **The page** points `data-api` / `apiBase` at the full URL and picks one mode. **Cookies:** `credentials: 'include'`
-  (or `data-credentials="include"`); every call and the live feed send them. The cookie must reach the API: same site
-  (subdomains, another port) with `SameSite=Lax`, or `SameSite=None; Secure` across sites. **A header:**
-  `window.redlineConfig = { apiBase, headers: async () => ({ authorization: 'Bearer ' + await token() }) }`, asked before
-  every call; images load as blob URLs and the feed is read with fetch. With `mount()`: `httpTransport(url, { credentials, headers })`.
-- **The API** lists the page's origin, exactly: `cors: ['https://www.example.com']` (Node) or `o.CorsOrigins.Add(…)` (.NET).
-  Listed origins get preflights answered (`x-redline`, `authorization`, `content-type`, `if-none-match`), `GET, HEAD, POST,
-  PATCH, DELETE`, credentials, and `etag` exposed so 304 polling works; `client.js` is served to them too (module scripts need CORS).
-  Others get nothing new, and MCP and the agent panel never answer cross-origin. .NET online mode accepts their mutations.
-- **Weaker than the proxy:** a token in page JS is readable by every script on that page (an XSS, a third-party tag),
-  and cookies with `SameSite=None` ride along on cross-site requests. Acceptable for a review build or an editor-only
-  frontend with short-lived, per-reviewer tokens; not for a public site with one shared token. **Status:** ✅ `hosting.spec.ts`
-  (page and API on two ports, both modes), `MiddlewareTests.cs`, `OnlineTests.cs`.
+- **The page** points `data-api` / `apiBase` at the full URL and picks one mode. **Cookies:** `credentials: 'include'` (or `data-credentials="include"`); every call and the live feed send them. The cookie must reach the API: same site (subdomains, another port) with `SameSite=Lax`, or `SameSite=None; Secure` across sites. **A header:** `window.redlineConfig = { apiBase, headers: async () => ({ authorization: 'Bearer ' + await token() }) }`, asked before every call; images load as blob URLs and the feed is read with fetch. With `mount()`: `httpTransport(url, { credentials, headers })`.
+- **The API** lists the page's origin, exactly: `cors: ['https://www.example.com']` (Node) or `o.CorsOrigins.Add(…)` (.NET). Listed origins get preflights answered (`x-redline`, `authorization`, `content-type`, `if-none-match`), `GET, HEAD, POST, PATCH, DELETE`, credentials, and `etag` exposed so 304 polling works; `client.js` is served to them too (module scripts need CORS). Others get nothing new, and MCP and the agent panel never answer cross-origin. .NET online mode accepts their mutations.
+- **Weaker than the proxy:** a token in page JS is readable by every script on that page (an XSS, a third-party tag), and cookies with `SameSite=None` ride along on cross-site requests. Acceptable for a review build or an editor-only frontend with short-lived, per-reviewer tokens; not for a public site with one shared token. **Status:** ✅ `hosting.spec.ts` (page and API on two ports, both modes), `MiddlewareTests.cs`, `OnlineTests.cs`.
+
+### Inside an iframe (D60)
+
+The self-starting script stays out of iframes unless the host opts in: `allowInIframe: true` on the server (every framed
+page), or `window.redlineConfig.allowInIframe` / `data-allow-iframe` on the framed page's tag. A CMS preview frame, a
+slide tool, a component workbench. How a parent's overlay and a frame's coexist:
+
+- **One per window.** Each frame mounts its own `<redline-root>` on its own `<html>`; no styles or events cross frames.
+- **Hotkey and keys** reach the focused document only, so Alt+Shift+R toggles that one. A same-origin parent can drive the frame's: `frame.contentWindow.postMessage({ redline: 'toggle' }, location.origin)` (`open`, `close`, `comment`, `text`, `sketch`, `notes`); messages from other origins are ignored. `data-launcher="false"` hides the frame's own launcher.
+- **Clicks:** each overlay shields its own app while picking; the parent's UI (on-page editing) keeps working outside the frame.
+- **Notes** carry the frame's own `url` and page; view state and positions are kept apart from the parent's.
+- **Screenshots** are DOM captures of the frame; tab capture is off in frames (it would show the whole tab).
+- **Status:** ✅ `iframe.spec.ts` (Chrome). The Optimizely package still keeps the overlay out of the CMS's own edit frames (D33).
 
 ---
 

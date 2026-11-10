@@ -282,6 +282,15 @@ public class MiddlewareTests
     }
 
     [Fact]
+    public async Task AllowInIframe_reaches_the_config_only_when_set()
+    {
+        await using (var off = await TestApp.StartAsync())
+            Assert.False((await JsonOf(await off.Client.GetAsync("/__redline/config"))).ContainsKey("allowInIframe"));
+        await using var on = await TestApp.StartAsync(o => o.AllowInIframe = true);
+        Assert.True((await JsonOf(await on.Client.GetAsync("/__redline/config")))["allowInIframe"]!.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task Without_CorsOrigins_no_cors_headers_are_sent()
     {
         await using var t = await TestApp.StartAsync();
