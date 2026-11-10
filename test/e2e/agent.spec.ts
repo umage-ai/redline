@@ -311,7 +311,10 @@ test('agent toolbar: ▾ picks the CLI (keyboard too), remembered in this browse
 
   // Remembered across a reload; the session list names each session's CLI.
   await page.reload({ waitUntil: 'networkidle' });
-  await page.keyboard.press('Alt+Shift+KeyA');
+  await expect(ui(page, '.launcher')).toBeAttached();
+  // A reload comes back to the same view (sessionStorage), where the shortcut would close the overlay.
+  if (!(await agentBar(page).isVisible())) await page.keyboard.press('Alt+Shift+KeyA');
+  await expect(agentBar(page)).toBeVisible();
   await expect(pick).toHaveAttribute('aria-label', 'Agent CLI: Fake Two');
   await page.setViewportSize({ width: 390, height: 760 });
   await expect(pick).toBeVisible();   // the phone layout keeps ▾

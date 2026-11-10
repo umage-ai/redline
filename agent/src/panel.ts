@@ -310,7 +310,8 @@ export default async function agentPanel(rl: RedlineApi) {
   let pickOpen = false;   // the CLI picker (▾) in the attached card
   let pickFocus: string | null = null;   // the picker item with keyboard focus, kept across re-renders
   let pickMenu: HTMLElement | null = null;   // the picker last drawn: where focus was before a re-render
-  let focusPick = false;   // give the ▾ focus back after the next render (a CLI was picked)
+  let focusPick = false;   // give the ▾ focus back after the next render (a CLI was picked, or it had focus)
+  let pickBtn: HTMLElement | null = null;   // the ▾ last drawn
   // Ending a session is one action: stop the CLI and close its tab. One working or asking asks first
   // ("End?"), a second press within 2.5 s ends it.
   let arming: string | null = null, armTimer = 0;
@@ -352,6 +353,8 @@ export default async function agentPanel(rl: RedlineApi) {
       const ae = (pickMenu.getRootNode() as Document | ShadowRoot).activeElement as HTMLElement | null;
       pickFocus = ae && pickMenu.contains(ae) ? ae.dataset.cliId ?? null : null;
     }
+    // The ▾ is redrawn too: keep its focus (a re-render right after a pick replaced it, and focus was lost).
+    if (pickBtn?.isConnected && (pickBtn.getRootNode() as Document | ShadowRoot).activeElement === pickBtn) focusPick = true;
     const info = cur(), st = stateLabel(info), s = info.status;
     const blocked = info.running && s.state === 'blocked';
     const asked = blocked && !!info.prompt?.options.length;   // the card shows the options
@@ -397,7 +400,8 @@ export default async function agentPanel(rl: RedlineApi) {
       pk.setAttribute('aria-label', `Agent CLI: ${pickName()}`);
       pk.setAttribute('aria-haspopup', 'menu');
       pk.setAttribute('aria-expanded', String(pickOpen));
-      if (focusPick) { focusPick = false; requestAnimationFrame(() => pk.focus()); }
+      pickBtn = pk;
+      if (focusPick) requestAnimationFrame(() => { if (focusPick && pk.isConnected) { focusPick = false; pk.focus(); } });
       actions.push(pk);
     }
     const mode = modeButton('ag-desk');
