@@ -26,11 +26,21 @@ interface Info {
   /** The menu on the agent's screen (a permission prompt, stepped questions), read off it by the server. */
   prompt?: PromptView;
 }
-export interface Session extends Info { id: string; label: string; app?: string }
+export interface Session extends Info { id: string; label: string; app?: string; /** The CLI it runs, an id in `Setup.clis` (D59). */ cli?: string }
 /** All of the project's sessions: one that keeps its context ('shared'), or one per prompt ('fresh'). */
 interface Group { mode: 'shared' | 'fresh'; max: number; sessions: Session[] }
 interface Command { label: string; prompt: string; title?: string }
-interface Setup extends Group { command: string; token: string; commands: Command[]; approve: boolean; hotkey: string | false; key?: string | false }
+/** A CLI the picker offers (D59): `name` for people, `command` as run. */
+export interface Cli { id: string; name: string; command: string }
+interface Setup extends Group { command: string; token: string; commands: Command[]; approve: boolean; hotkey: string | false; key?: string | false; clis?: Cli[]; cli?: string }
+
+/** The viewer's CLI (D59): the one remembered if it is still offered, else the server's default, else the first. */
+export function pickCli(clis: Cli[], remembered: string | null | undefined, fallback?: string): string {
+  return clis.find(c => c.id === remembered)?.id ?? clis.find(c => c.id === fallback)?.id ?? clis[0]?.id ?? '';
+}
+const PICK_KEY = 'redline.agent.cli';
+const recall = () => { try { return localStorage.getItem(PICK_KEY); } catch { return null; } };
+const remember = (id: string) => { try { localStorage.setItem(PICK_KEY, id); } catch { /* private window: this page only */ } };
 
 const RANK: Record<State, number> = { blocked: 4, working: 3, error: 2, done: 1, idle: 0 };
 /** The session the indicator shows: the one that most needs you (asking, then working, failed, done). */
@@ -203,6 +213,14 @@ const CSS = `
 .ag-head h4 { margin: 0; }
 .ag-head .ag-mode { padding: 4px 10px; border-radius: 7px; background: var(--bg-3); color: var(--fg-2); }
 .ag-head .ag-mode.on { background: color-mix(in srgb, #4f8cff 28%, var(--bg-3)); color: var(--fg); }
+.bar button.ag-pick { padding: 0 6px; margin-left: -2px; }
+.ag-clis .ag-cli { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--bg-2); color: var(--fg); text-align: left; cursor: pointer; border: 1px solid transparent; }
+.ag-clis .ag-cli:hover, .ag-clis .ag-cli:focus-visible { background: var(--bg-3); }
+.ag-clis .ag-cli[aria-checked="true"] { border-color: color-mix(in srgb, #4f8cff 60%, var(--line)); }
+.ag-clis .ag-cli b { font-weight: 650; }
+.ag-clis .ag-cli span { color: var(--fg-2); font: 12px ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-clis .ag-cli::before { content: ""; flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--fg-2); }
+.ag-clis .ag-cli[aria-checked="true"]::before { background: #4f8cff; box-shadow: none; }
 .bar .ag-phone { display: none; }
 .bar button.ag-switch { gap: 5px; font-variant-numeric: tabular-nums; }
 .ag-switch .ag-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
@@ -236,14 +254,21 @@ export default async function agentPanel(rl: RedlineApi) {
   } catch { return; }
   let group: Group = setup;
   const name = () => setup.command;
-  const NONE = (): Session => ({ id: '', label: '', running: false, command: name(), status: { state: 'idle', source: 'none' }, sent: [] });
+  // The CLIs to pick from (D59), with a ▾ by the prompt buttons when there are several; the choice is the viewer's.
+  const clis = () => setup.clis ?? [];
+  const multi = () => clis().length > 1;
+  let pick = pickCli(clis(), recall(), setup.cli);
+  const pickName = () => clis().find(c => c.id === pick)?.name ?? name();
+  /** The CLI a session runs, by name: shown when there are several CLIs. */
+  const nameOf = (s: Pick<Session, 'cli'>) => (multi() && clis().find(c => c.id === s.cli)?.name) || name();
+  const NONE = (): Session => ({ id: '', label: '', running: false, command: name(), cli: pick, status: { state: 'idle', source: 'none' }, sent: [] });
   // The session the toolbar, the card and the terminal are on: picked by a tab, or the newest.
   let sel: string | null = null;
   const cur = (): Session => group.sessions.find(s => s.id === sel) ?? group.sessions[group.sessions.length - 1] ?? NONE();
   const several = () => group.sessions.length > 1;
   const fresh = () => group.mode === 'fresh';
   /** "claude", or "claude #2" when there are several sessions. */
-  const who = (s: Session) => several() && s.label ? `${name()} ${s.label}` : name();
+  const who = (s: Session) => several() && s.label ? `${nameOf(s)} ${s.label}` : nameOf(s);
   const sent = () => new Set(group.sessions.flatMap(s => s.sent ?? []));
   const hotkeyText = () => setup.hotkey ? setup.hotkey.split('+').map(k => k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1)).join('+') : '';
 
@@ -260,10 +285,11 @@ export default async function agentPanel(rl: RedlineApi) {
   /** A prompt button: starts the CLI when needed (the server holds the prompt until it is ready); the terminal stays closed. */
   const run = async (c: Command) => {
     const notes = usesIds(c) ? handed() : [];
-    if (fresh()) rl.toast(`Starting a new ${name()} session…`);
-    else if (!cur().running) rl.toast(`Starting ${name()}…`);
+    const what = multi() ? pickName() : name();
+    if (fresh()) rl.toast(`Starting a new ${what} session…`);
+    else if (!cur().running || (multi() && cur().cli !== pick)) rl.toast(`Starting ${what}…`);
     try {
-      const r = await post('/send', { text: fill(c.prompt, rl, notes), notes, ...(!fresh() && cur().id ? { id: cur().id } : {}) });
+      const r = await post('/send', { text: fill(c.prompt, rl, notes), notes, ...(!fresh() && cur().id ? { id: cur().id } : {}), ...(multi() ? { cli: pick } : {}) });
       if (r?.id) { sel = r.id; sync(); }
     } catch (e) { fail(e); }
   };
@@ -281,6 +307,10 @@ export default async function agentPanel(rl: RedlineApi) {
   let lastCur = { id: '', asking: false };
   let typing = false;   // a typed answer in the card's field: no switching sessions under it
   let listOpen = false;   // the session list ("+N") in the attached card
+  let pickOpen = false;   // the CLI picker (▾) in the attached card
+  let pickFocus: string | null = null;   // the picker item with keyboard focus, kept across re-renders
+  let pickMenu: HTMLElement | null = null;   // the picker last drawn: where focus was before a re-render
+  let focusPick = false;   // give the ▾ focus back after the next render (a CLI was picked)
   // Ending a session is one action: stop the CLI and close its tab. One working or asking asks first
   // ("End?"), a second press within 2.5 s ends it.
   let arming: string | null = null, armTimer = 0;
@@ -317,6 +347,11 @@ export default async function agentPanel(rl: RedlineApi) {
   addAgentButton();
 
   function renderToolbar(box: HTMLElement) {
+    // The picker is redrawn with every render: note which item has focus, to give it back (none: focus is left alone).
+    if (pickMenu?.isConnected) {
+      const ae = (pickMenu.getRootNode() as Document | ShadowRoot).activeElement as HTMLElement | null;
+      pickFocus = ae && pickMenu.contains(ae) ? ae.dataset.cliId ?? null : null;
+    }
     const info = cur(), st = stateLabel(info), s = info.status;
     const blocked = info.running && s.state === 'blocked';
     const asked = blocked && !!info.prompt?.options.length;   // the card shows the options
@@ -334,7 +369,7 @@ export default async function agentPanel(rl: RedlineApi) {
     let more: HTMLElement | null = null;
     if (hidden.length) {
       const top = overall(hidden.filter(x => x.running && (x.status.state === 'working' || x.status.state === 'blocked')));
-      more = btn(`+${hidden.length}`, `${hidden.length} more session${hidden.length === 1 ? '' : 's'}: show all`, () => { listOpen = !listOpen; toolbar?.render(); }, 'ag-more' + (top ? ' lit' : '') + (listOpen ? ' on' : ''));
+      more = btn(`+${hidden.length}`, `${hidden.length} more session${hidden.length === 1 ? '' : 's'}: show all`, () => { listOpen = !listOpen; pickOpen = false; toolbar?.render(); }, 'ag-more' + (top ? ' lit' : '') + (listOpen ? ' on' : ''));
       if (top) more.style.setProperty('--c', stateLabel(top).color);
     }
     const tabs = several() || (fresh() && group.sessions.length) ? el('div', { class: 'ag-tabs' }, ...group.sessions.filter(x => vis.shown.includes(x.id)).map(x => {
@@ -350,18 +385,28 @@ export default async function agentPanel(rl: RedlineApi) {
       : setup.commands.map(c => {
         const n = usesIds(c) ? handed().length : -1;
         const busy = n >= 0 ? openIds(rl).length - n : 0;   // open notes a running session already has
-        const b = btn(c.label, (c.title ?? c.prompt) + (fresh() ? ' (in a new session)' : '') + (busy ? ` · ${busy} note${busy === 1 ? ' is' : 's are'} already with a session` : ''), () => void run(c), '', ...(n >= 0 ? [el('span', { class: 'count' }, String(n))] : []));
+        const b = btn(c.label, (c.title ?? c.prompt) + (fresh() ? ' (in a new session)' : '') + (multi() ? ` · with ${pickName()}` : '') + (busy ? ` · ${busy} note${busy === 1 ? ' is' : 's are'} already with a session` : ''), () => void run(c), '', ...(n >= 0 ? [el('span', { class: 'count' }, String(n))] : []));
         b.disabled = n === 0 || (blocked && !fresh());
         b.dataset.cmd = c.label;
         return b;
       });
+    // Several CLIs: ▾ after the prompt buttons opens the picker (D59).
+    if (multi() && !approval) {
+      const pk = btn('▾', `Runs ${pickName()}: pick the agent CLI`, () => { pickOpen = !pickOpen; listOpen = false; pickFocus = pickOpen ? pick : null; toolbar?.render(); }, 'ag-pick' + (pickOpen ? ' on' : ''));
+      pk.dataset.pick = pick;
+      pk.setAttribute('aria-label', `Agent CLI: ${pickName()}`);
+      pk.setAttribute('aria-haspopup', 'menu');
+      pk.setAttribute('aria-expanded', String(pickOpen));
+      if (focusPick) { focusPick = false; requestAnimationFrame(() => pk.focus()); }
+      actions.push(pk);
+    }
     const mode = modeButton('ag-desk');
     const cli = btn(blocked && !approval && !asked ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${who(info)}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
     cli.dataset.cli = '';
     // One session and no tabs: End in the toolbar (tabs carry their own ×).
     const endB = info.id && !tabs ? btn(arming === info.id ? 'End?' : 'End', endTitle(info), () => end(info), 'ag-end ag-desk' + (arming === info.id ? ' armed' : '')) : null;
     // Phones: one button for the session on screen; the list it opens has the tabs, Fresh and End.
-    const sw = btn(`${info.label || 'Sessions'} ▾`, 'All sessions, Fresh, end a session', () => { listOpen = !listOpen; toolbar?.render(); }, 'ag-switch ag-phone' + (listOpen ? ' on' : ''));
+    const sw = btn(`${info.label || 'Sessions'} ▾`, 'All sessions, Fresh, end a session', () => { listOpen = !listOpen; pickOpen = false; toolbar?.render(); }, 'ag-switch ag-phone' + (listOpen ? ' on' : ''));
     sw.prepend(el('span', { class: 'ag-dot' }));
     sw.style.setProperty('--c', st.color);
     sw.dataset.state = info.running ? s.state : 'stopped';
@@ -389,7 +434,7 @@ export default async function agentPanel(rl: RedlineApi) {
   function renderCard(box: HTMLElement) {
     const info = cur();
     const pv = info.running ? info.prompt : undefined;
-    if (!pv?.options.length) { if (listOpen) renderList(box); return; }   // a question comes first
+    if (!pv?.options.length) { if (pickOpen && multi()) renderPicker(box); else if (listOpen) renderList(box); return; }   // a question comes first
     const st = stateLabel(info);
     const card = el('div', { class: 'ag-card', data: { kind: info.status.kind ?? '', session: info.id } });
     card.style.setProperty('--c', st.color);
@@ -427,6 +472,36 @@ export default async function agentPanel(rl: RedlineApi) {
       el('button', { title: 'Show ' + who(info) + "'s terminal", onclick: () => win?.show() }, 'CLI')));
     box.append(style(), card);
   }
+  /**
+   * The CLI picker (D59): one item per CLI, the viewer's choice checked. Arrows move, Enter or a click
+   * picks (remembered in this browser), and focus goes back to the ▾.
+   */
+  function renderPicker(box: HTMLElement) {
+    const menu = el('div', { class: 'ag-list ag-clis' }, el('h4', {}, 'Agent CLI'));
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Agent CLI');
+    const items = clis().map(c => {
+      const b = el('button', { class: 'ag-cli', title: `Run ${c.name} (${c.command}) for the next prompt${fresh() ? '' : ', in place of the shared session'}`, data: { cliId: c.id },
+        onclick: () => { pick = c.id; remember(c.id); pickOpen = false; pickFocus = null; focusPick = true; sync(); } },
+        el('b', {}, c.name), c.name !== c.command ? el('span', {}, c.command) : null);
+      b.setAttribute('role', 'menuitemradio');
+      b.setAttribute('aria-checked', String(c.id === pick));
+      b.tabIndex = c.id === (pickFocus ?? pick) ? 0 : -1;
+      return b;
+    });
+    menu.addEventListener('keydown', (e: KeyboardEvent) => {
+      const at = items.indexOf(e.target as HTMLButtonElement);
+      const to = e.key === 'ArrowDown' ? at + 1 : e.key === 'ArrowUp' ? at - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : null;
+      if (to === null) return;
+      e.preventDefault();
+      items[(to + items.length) % items.length].focus();
+    });
+    menu.append(...items);
+    pickMenu = menu;
+    box.append(style(), menu);
+    const f = pickFocus && items.find(b => b.dataset.cliId === pickFocus);
+    if (f) requestAnimationFrame(() => { if (f.isConnected) f.focus(); });
+  }
   /** Every session (the "+N" list), newest first: state, message, its notes; a click shows it, × closes an ended one. */
   function renderList(box: HTMLElement) {
     const ended = group.sessions.filter(x => !x.running);
@@ -434,7 +509,7 @@ export default async function agentPanel(rl: RedlineApi) {
       const xl = stateLabel(x), n = x.sent?.length ?? 0;
       const r = el('button', { class: 'ag-row' + (x.id === cur().id ? ' cur' : ''), title: `${who(x)}: ${xl.label}${xl.msg ? ` · ${xl.msg}` : ''}`, data: { id: x.id, state: x.running ? x.status.state : 'stopped' }, onclick: () => { sel = x.id; listOpen = false; sync(); } },
         el('span', { class: 'ag-dot' }), el('span', { class: 'l' }, x.label), el('b', {}, xl.label),
-        el('span', { class: 'm' }, [n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')),
+        el('span', { class: 'm' }, [multi() ? nameOf(x) : '', n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')),
         endX(x));
       r.style.setProperty('--c', xl.color);
       return r;
@@ -459,7 +534,7 @@ export default async function agentPanel(rl: RedlineApi) {
   toolbar = rl.addToolbar({
     id: 'agent', hotkey: setup.hotkey || undefined, render: renderToolbar, attached: renderCard,
     onShow() { if (cur().id) void here('/ack').catch(() => {}); sync(); },
-    onHide() { sync(); },
+    onHide() { pickOpen = false; pickFocus = null; sync(); },
   });
 
   win = rl.addWindow({
@@ -534,7 +609,7 @@ export default async function agentPanel(rl: RedlineApi) {
     for (const ev of ['hello', 'status']) es.addEventListener(ev, e => { group = JSON.parse((e as MessageEvent).data); sync(); });
     es.onerror = async () => {
       if (es?.readyState !== EventSource.CLOSED) return;
-      try { const r = await fetch(`${BASE}/info`); if (r.ok) { setup = await r.json(); group = setup; sync(); setTimeout(connect, 1000); } } catch { /* down: retried on the next open */ }
+      try { const r = await fetch(`${BASE}/info`); if (r.ok) { setup = await r.json(); group = setup; pick = pickCli(clis(), pick, setup.cli); sync(); setTimeout(connect, 1000); } } catch { /* down: retried on the next open */ }
     };
   };
   connect();

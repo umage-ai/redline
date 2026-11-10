@@ -274,3 +274,53 @@ test('agent toolbar: End asks first while the agent is busy, then stops and clos
   await expect(chip(page)).toHaveText(/Not started/);
   expect((await (await request.get(`${f.url}/__redline/agent/info`)).json()).sessions).toEqual([]);
 });
+
+test('agent toolbar: ▾ picks the CLI (keyboard too), remembered in this browser; sessions name their CLI; on a phone too (D59)', async ({ page, request }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
+  await page.keyboard.press('a');
+  const pick = agentBar(page).locator('button.ag-pick');
+  await expect(pick).toHaveAttribute('aria-label', `Agent CLI: ${NAME}`);
+  await expect(pick).toHaveAttribute('aria-expanded', 'false');
+
+  // Keyboard: Enter on ▾ opens the list on the current CLI, ↓ moves, Enter picks, focus goes back to ▾.
+  await pick.focus();
+  await page.keyboard.press('Enter');
+  const menu = ui(page, '.attach[data-toolbar="agent"] .ag-clis');
+  await expect(menu.getByRole('menuitemradio')).toHaveText([new RegExp(NAME), /Fake Two/]);
+  await expect(menu.locator('[aria-checked="true"]')).toHaveAttribute('data-cli-id', 'fake');
+  await expect(menu.locator('[data-cli-id="fake"]')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.locator('[data-cli-id="fake-two"]')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(pick).toBeFocused();
+  await expect(pick).toHaveAttribute('aria-label', 'Agent CLI: Fake Two');
+  const apply = agentBar(page).locator('button[data-cmd="Apply notes"]');
+  await expect(apply).toHaveAttribute('title', /with Fake Two/);
+
+  // Apply runs the picked CLI; its tab and the chip name it.
+  await agentBar(page).locator('button.ag-mode').click();   // Fresh: a tab per session
+  await apply.click();
+  const tabs = agentBar(page).locator('.ag-tab');
+  await expect(tabs).toHaveText([/^#1/], { timeout: 20_000 });
+  await expect(tabs.first()).toHaveAttribute('title', /^Fake Two: /);
+  await expect(chip(page)).toHaveAttribute('title', /^Fake Two: /);
+  await expect.poll(async () => (await (await request.get(`${f.url}/__redline/agent/info`)).json()).sessions.map((x: { cli: string; app?: string }) => `${x.cli}:${x.app}`), { timeout: 20_000 }).toEqual(['fake-two:fake-two']);
+
+  // Remembered across a reload; the session list names each session's CLI.
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.keyboard.press('Alt+Shift+KeyA');
+  await expect(pick).toHaveAttribute('aria-label', 'Agent CLI: Fake Two');
+  await page.setViewportSize({ width: 390, height: 760 });
+  await expect(pick).toBeVisible();   // the phone layout keeps ▾
+  await agentBar(page).locator('button.ag-switch').click();
+  await expect(ui(page, '.attach[data-toolbar="agent"] .ag-list .ag-row .m')).toContainText('Fake Two');
+  await pick.click();   // the picker in place of the session list
+  await expect(menu).toBeVisible();
+  await expect(ui(page, '.attach[data-toolbar="agent"] .ag-row')).toHaveCount(0);
+  await menu.locator('[data-cli-id="fake"]').click();
+  await expect(pick).toHaveAttribute('aria-label', `Agent CLI: ${NAME}`);
+  await page.setViewportSize({ width: 1280, height: 720 });
+});

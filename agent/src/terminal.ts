@@ -18,12 +18,17 @@ document.head.append(Object.assign(document.createElement('style'), {
 }));
 
 async function main() {
-  const setup = await (await fetch(`${BASE}/info`)).json() as { token: string; command: string; sessions: { id: string; label: string }[] };
+  type Cli = { id: string; command: string };
+  const setup = await (await fetch(`${BASE}/info`)).json() as { token: string; command: string; sessions: { id: string; label: string; cli?: string }[]; clis?: Cli[] };
   const token = setup.token;
   // The session this page shows (`?id=`, set by the toolbar), or the newest; none yet: Start makes one.
   const asked = new URLSearchParams(location.search).get('id');
   const session = setup.sessions.find(x => x.id === asked) ?? setup.sessions[setup.sessions.length - 1];
   const id = session?.id;
+  // Its CLI; none yet: the one picked in the toolbar (D59, remembered in this browser), which Start runs.
+  const picked = (() => { try { return localStorage.getItem('redline.agent.cli'); } catch { return null; } })();
+  const cli = (setup.clis?.length ?? 0) > 1 ? setup.clis!.find(c => c.id === (session ? session.cli : picked)) : undefined;
+  const command = cli?.command ?? setup.command;
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace',
@@ -69,13 +74,13 @@ async function main() {
     start.replaceChildren();
     const box = document.createElement('div');
     const what = document.createElement('div');
-    what.append(exitCode !== undefined ? `${setup.command} exited (${exitCode ?? '?'})` : 'Run ', exitCode === undefined ? Object.assign(document.createElement('code'), { textContent: setup.command }) : '', exitCode === undefined ? ' here, in this project' : '');
+    what.append(exitCode !== undefined ? `${command} exited (${exitCode ?? '?'})` : 'Run ', exitCode === undefined ? Object.assign(document.createElement('code'), { textContent: command }) : '',exitCode === undefined ? ' here, in this project' : '');
     const btn = document.createElement('button');
     btn.textContent = exitCode !== undefined ? 'Restart' : 'Start';
     btn.onclick = async () => {
       btn.disabled = true;
       refit();
-      const r = await post('/start', { cols: term.cols, rows: term.rows });
+      const r = await post('/start', { cols: term.cols, rows: term.rows, ...(!id && cli ? { cli: cli.id } : {}) });
       if (!r.ok) return showStart(exitCode, (await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
       // A new session (none was here): this page shows it from now on, and the toolbar too.
       const started = (await r.json().catch(() => null))?.id as string | undefined;

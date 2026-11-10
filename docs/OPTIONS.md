@@ -60,9 +60,10 @@ the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o =
 
 | Option | Default | What it does |
 |---|---|---|
-| `command`, `args`, `env`, `cwd`, `label` | the first installed of `claude`, `opencode`; none, none, `root`, the command | The CLI to run. |
+| `command`, `args`, `env`, `cwd`, `label` | every installed one of `claude`, `opencode` (picked with ▾, D59); none, none, `root`, the command | The CLI to run; a `command` means that one alone. `args` go with it or with each detected CLI. |
+| `clis` | none (the installed adapters) | The CLIs the toolbar's ▾ offers, the installed ones, the first the default: `'claude'`, `'opencode'`, any command, or `{ command, args, label, id, env }`. Wins over `command`. |
 | `model` | the CLI's own | Passed as the CLI's flag (Claude Code `--model`); over ACP the agent's `model` config option (OpenCode: `provider/model`); else a warning. |
-| `protocol` | `'acp'` when the adapter has an ACP mode (OpenCode), else `'pty'` | `'acp'`: Agent Client Protocol over stdio, no terminal (D58); `'pty'`: the CLI in a pseudo-terminal. |
+| `protocol` | `'acp'` when the adapter has an ACP mode (OpenCode), else `'pty'` | `'acp'`: Agent Client Protocol over stdio, no terminal (D58); `'pty'`: the CLI in a pseudo-terminal. Per CLI picked: by its adapter, unless set. |
 | `adapters` | built-in: Claude Code, OpenCode | Your own `AgentAdapter`s, tried first (D55). |
 | `sessions` | **0.10:** `'fresh'` (was `'shared'`) | A new session per prompt with just its notes; `'shared'` keeps one. |
 | `maxSessions` | `3` | Fresh sessions at once (1–8). |

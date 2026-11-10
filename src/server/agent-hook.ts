@@ -47,12 +47,31 @@ export interface AgentAdapter {
   acp?: string[];
 }
 
+/** One CLI in the agent toolbar's picker (D59): its command, arguments, name and extra environment. */
+export interface AgentCli {
+  command: string;
+  args?: string[];
+  /** The name in the picker, tabs and tooltips. Default: the adapter's (`Claude Code`), else the command and arguments. */
+  label?: string;
+  /** What the panel and the `cli` field of a start or prompt call it. Default: the adapter's id (`claude-code`), else the command's base name. */
+  id?: string;
+  /** Extra environment, on top of `env`. */
+  env?: Record<string, string>;
+}
+
 export interface AgentOptions {
   /**
    * The CLI to run, looked up on PATH (Windows: PATHEXT, so `claude` finds claude.exe or claude.cmd).
-   * Default: the first installed of the adapters' commands (`claude`, then `opencode`); `claude` if none is.
+   * Default: every installed one of the adapters' commands (`claude`, `opencode`), picked in the
+   * toolbar (D59), the first one by default; `claude` if none is. A command set here means just that one.
    */
   command?: string;
+  /**
+   * The CLIs the toolbar's picker offers (D59), those installed: an adapter's id or command (`'claude'`,
+   * `'opencode'`, with `args`), any other command, or `{ command, args, label }`. The first is the default.
+   * Wins over `command`.
+   */
+  clis?: (string | AgentCli)[];
   /** The model, passed the way the CLI takes it (Claude Code: `--model`). A CLI without a model flag logs a warning and uses its own config. */
   model?: string;
   /** Your own adapters, tried before the built-in ones (D55). */

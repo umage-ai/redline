@@ -10,10 +10,10 @@ import path from 'node:path';
 import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent/src/program-status.ts';
 import { resolveCommand, withInstructions } from '../../agent/src/server.ts';
 import { agent } from '../../agent/src/index.ts';
-import { adapterFor, defaultCommand, openCode } from '../../agent/src/adapters.ts';
+import { adapterFor, cliChoices, defaultCommand, openCode } from '../../agent/src/adapters.ts';
 import { agentFor } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
-import { freeIds, noteTag, overall, stateLabel, tagFor, visibleTabs } from '../../agent/src/panel.ts';
+import { freeIds, noteTag, overall, pickCli, stateLabel, tagFor, visibleTabs } from '../../agent/src/panel.ts';
 
 const ESC = '\x1b', ST = ESC + '\\';
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
@@ -294,7 +294,7 @@ test('agent routes: fresh sessions (one per prompt, the cap, a finished one make
     return { status: r.status, body: await r.json().catch(() => null) };
   };
   const feed = sse(`${base}/stream?status=1&token=${token}`);
-  type S = { id: string; running: boolean; status: { state: string; kind?: string; msg?: string }; prompt?: unknown; sent: string[] };
+  type S = { id: string; app?: string; running: boolean; status: { state: string; kind?: string; msg?: string }; prompt?: unknown; sent: string[] };
   const when = (pred: (ss: S[]) => boolean) => feed.until(e => (e.event === 'status' || e.event === 'hello') && pred(e.data.sessions));
   const byId = (ss: S[], id: string) => ss.find(x => x.id === id);
   try {
@@ -317,9 +317,9 @@ test('agent routes: fresh sessions (one per prompt, the cap, a finished one make
 
     // At the cap (2 running): a new prompt stops the oldest finished session to make room.
     assert.equal((await call('/send', { text: 'slow three' })).body.id, 's3');
-    await when(ss => byId(ss, 's1')?.running === false && byId(ss, 's3')?.status.state === 'working');
+    await when(ss => byId(ss, 's1')?.running === false && byId(ss, 's3')?.status.state === 'working' && byId(ss, 's3')?.app !== undefined);   // reported: the prompt is in, not just start-up output
     assert.equal((await call('/send', { text: 'slow four' })).body.id, 's4');
-    await when(ss => byId(ss, 's2')?.running === false && byId(ss, 's4')?.status.state === 'working');
+    await when(ss => byId(ss, 's2')?.running === false && byId(ss, 's4')?.status.state === 'working' && byId(ss, 's4')?.app !== undefined);
     // Both running ones busy: refused.
     const busy = await call('/send', { text: 'five' });
     assert.equal(busy.status, 409);
@@ -477,6 +477,92 @@ test('agent adapters: a CLI that reports idle instead of done (OpenCode) shows d
   } finally {
     feed.close();
     await call('/end', {}).catch(() => {});
+    await new Promise(r => setTimeout(r, 1000));
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test('agent CLIs (D59): every installed adapter, a configured list, or one command; ids, names, the remembered pick', () => {
+  const ids = (o: object, has: (c: string) => boolean) => cliChoices(o, has).map(c => `${c.id}=${c.name}:${[c.command, ...c.args].join(' ')}`);
+  // Detected: each installed adapter, the option's args with each, the default first; none installed: claude.
+  assert.deepEqual(ids({}, () => true), ['claude-code=Claude Code:claude', 'opencode=OpenCode:opencode']);
+  assert.deepEqual(ids({ args: ['-x'] }, c => c === 'opencode'), ['opencode=OpenCode:opencode -x']);
+  assert.deepEqual(ids({}, () => false), ['claude-code=Claude Code:claude']);
+  // An explicit command: that one alone, installed or not (its start says it wasn't found).
+  assert.deepEqual(ids({ command: 'codex', args: ['-y'], label: 'Codex' }, () => true), ['codex=Codex:codex -y']);
+  // clis: by adapter id or command, any other command, or an object; the installed ones; duplicates once, ids unique.
+  const warn = console.warn, warnings: string[] = [];
+  console.warn = (m: string) => warnings.push(m);
+  try {
+    assert.deepEqual(ids({ clis: ['opencode', 'claude-code', 'aider', { command: 'node', args: ['a.mjs'] }, { command: 'node', args: ['b.mjs'], label: 'B' }, 'claude'], command: 'ignored' }, c => c !== 'aider'),
+      ['opencode=OpenCode:opencode', 'claude-code=Claude Code:claude', 'node=node a.mjs:node a.mjs', 'node-2=B:node b.mjs']);
+    assert.match(warnings.join('\n'), /not installed, left out of the picker: aider/);
+    assert.deepEqual(ids({ clis: [{ command: 'x', id: 'mine', label: 'Mine' }] }, () => false), ['mine=Mine:x'], 'none installed: the first, to fail at start');
+  } finally { console.warn = warn; }
+  assert.equal(cliChoices({ clis: [{ command: 'node', env: { A: '1' } }] }, () => true)[0].env?.A, '1');
+  // The panel's pick: remembered if still offered, else the server's default, else the first.
+  const list = [{ id: 'a', name: 'A', command: 'a' }, { id: 'b', name: 'B', command: 'b' }];
+  assert.equal(pickCli(list, 'b', 'a'), 'b');
+  assert.equal(pickCli(list, 'gone', 'a'), 'a');
+  assert.equal(pickCli(list, null, 'nope'), 'a');
+  assert.equal(pickCli([], 'b'), '');
+});
+
+test('agent CLIs (D59): sessions of two CLIs side by side (fresh); shared switches CLI only between turns', { timeout: 90_000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-clis-'));
+  const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
+  // The fake agent twice, as two CLIs that report different apps.
+  const clis = [
+    { id: 'one', label: 'Fake One', command: process.execPath, args: [fake], env: { FAKE_APP: 'fake-one' } },
+    { id: 'two', label: 'Fake Two', command: process.execPath, args: [fake, '--two'], env: { FAKE_APP: 'fake-two' } },
+  ];
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ clis, sessions: 'fresh' }) });
+  const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
+  const info = await (await fetch(`${base}/info`)).json();
+  assert.deepEqual(info.clis, [{ id: 'one', name: 'Fake One', command: 'Fake One' }, { id: 'two', name: 'Fake Two', command: 'Fake Two' }]);
+  assert.equal(info.cli, 'one', 'the first is the default');
+  const call = async (p: string, body: unknown) => {
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': info.token }, body: JSON.stringify(body) });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+  const feed = sse(`${base}/stream?status=1&token=${info.token}`);
+  type S = { id: string; cli: string; app?: string; running: boolean; status: { state: string; msg?: string } };
+  const when = (pred: (ss: S[]) => boolean) => feed.until(e => (e.event === 'status' || e.event === 'hello') && pred(e.data.sessions));
+  const byId = (ss: S[], id: string) => ss.find(x => x.id === id);
+  try {
+    assert.equal(await feed.ready, 200);
+    assert.equal((await call('/send', { text: 'x', cli: 'nope' })).status, 400, 'an unknown CLI');
+    // Fresh: each prompt its own session, of the CLI it names (none: the default).
+    assert.equal((await call('/send', { text: 'first', cli: 'two' })).body.id, 's1');
+    assert.equal((await call('/send', { text: 'second' })).body.id, 's2');
+    const both = await when(ss => ss.length === 2 && ss.every(x => x.status.state === 'done'));
+    assert.deepEqual(both.data.sessions.map((x: S) => [x.id, x.cli, x.app]), [['s1', 'two', 'fake-two'], ['s2', 'one', 'fake-one']]);
+    // The terminal's Start: a new session of the CLI named.
+    const started = await call('/start', { cli: 'two' });
+    assert.equal(started.body.cli, 'two');
+    await call('/end', {});
+    await when(ss => ss.length === 0);
+
+    // Shared: a prompt naming another CLI stops the shared session and starts that one; never mid-turn.
+    assert.equal((await call('/mode', { mode: 'shared' })).status, 200);
+    assert.equal((await call('/send', { text: 'slow one', cli: 'one' })).body.id, 's1');
+    await when(ss => byId(ss, 's1')?.app === 'fake-one' && byId(ss, 's1')?.status.state === 'working');   // reported: the prompt is in
+    const busy = await call('/send', { text: 'now', cli: 'two' });
+    assert.equal(busy.status, 409);
+    assert.match(busy.body.error, /is busy: wait until it is done, or end it, to switch to Fake Two/);
+    assert.equal((await call('/send', { text: 'more', cli: 'one' })).body.id, 's1', 'the same CLI: the same session');
+    await when(ss => byId(ss, 's1')?.status.msg === 'did more');
+    assert.equal((await call('/send', { text: 'switched', cli: 'two' })).body.id, 's2');
+    const switched = await when(ss => byId(ss, 's1')?.running === false && byId(ss, 's2')?.status.msg === 'did switched');
+    assert.equal(byId(switched.data.sessions, 's2')!.app, 'fake-two');
+    assert.equal(switched.data.sessions.filter((x: S) => x.running).length, 1, 'shared: one running session');
+    assert.equal((await call('/send', { text: 'again' })).body.id, 's2', 'no CLI named: the shared session as it is');
+  } finally {
+    feed.close();
+    await call('/stop', {}).catch(() => {});
     await new Promise(r => setTimeout(r, 1000));
     server.closeAllConnections();
     server.close();

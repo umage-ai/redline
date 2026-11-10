@@ -5,11 +5,11 @@
 // terminal, 7501 status when the CLI sends it). Adapters from the `adapters` option are tried first.
 
 import { createHash } from 'node:crypto';
-import { statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentAdapter, AgentStart } from '../../src/server/agent-hook.ts';
+import type { AgentAdapter, AgentCli, AgentOptions, AgentStart } from '../../src/server/agent-hook.ts';
 
 /** A command's base name, either slash, without a Windows extension: `C:\tools\claude.exe` → `claude`. */
 export const baseName = (command: string) => (command.split(/[\\/]/).pop() ?? '').replace(/\.(exe|cmd|bat|com)$/i, '').toLowerCase();
@@ -77,7 +77,55 @@ export function onPath(command: string, env: NodeJS.ProcessEnv = process.env, pl
   return dirs.some(d => exts.some(e => { try { return statSync(path.join(d, command + e)).isFile(); } catch { return false; } }));
 }
 
-/** `agent: true`: the first adapter whose command is installed; `claude` when none is (its "not found" error says so). */
+/** The first adapter whose command is installed; `claude` when none is (its "not found" error says so). */
 export function defaultCommand(extra: AgentAdapter[] = [], has = (c: string) => onPath(c)): string {
   return [...extra, ...BUILT_IN].find(a => has(a.command))?.command ?? 'claude';
+}
+
+/** What the panel calls the CLI: paths shortened to their base names, Windows extensions dropped. */
+export const commandName = (opts: { command?: string; args?: string[]; label?: string }) => opts.label ?? [opts.command ?? 'claude', ...(opts.args ?? [])]
+  .map((a, i) => (i === 0 || /[\\/]/.test(a) ? path.basename(a).replace(/\.(exe|cmd|bat|com)$/i, '') : a)).join(' ');
+
+/** A command is installed: a path that exists, or a name on PATH. */
+export const installed = (command: string) => (/[\\/]/.test(command) ? existsSync(command) : onPath(command));
+
+/** One CLI the toolbar can run (D59): `id` for the panel and the `cli` field, `name` for people. */
+export interface CliChoice { id: string; name: string; command: string; args: string[]; label?: string; env?: Record<string, string> }
+
+const MISSING = new Set<string>();
+/**
+ * The CLIs the toolbar offers (D59), the default first. `clis`: those of them installed. Else
+ * `command`: that one alone (no picker; a missing one fails at start, saying so). Else every adapter
+ * whose command is installed; `claude` when none is. The option's `args` go with `command`, the
+ * detected CLIs and the `clis` given as strings; an object in `clis` has its own.
+ */
+export function cliChoices(opts: AgentOptions, has: (command: string) => boolean = installed): CliChoice[] {
+  const known = [...(opts.adapters ?? []), ...BUILT_IN];
+  const args = opts.args ?? [];
+  let list: AgentCli[];
+  if (opts.clis?.length) {
+    const given = opts.clis.filter(c => typeof c === 'string' ? !!c : !!c && typeof c.command === 'string' && !!c.command)
+      .map(c => typeof c === 'string' ? { command: known.find(a => a.id === c || a.command === c)?.command ?? c, args } : c);
+    list = given.filter(c => has(c.command));
+    const missing = given.filter(c => !list.includes(c)).map(c => c.command).join(', ');
+    if (missing && !MISSING.has(missing)) { MISSING.add(missing); console.warn(`[redline] agent clis: not installed, left out of the picker: ${missing}`); }
+    if (!list.length) list = given.slice(0, 1);
+  } else if (opts.command) list = [{ command: opts.command, args, label: opts.label }];
+  else list = known.filter(a => has(a.command)).map(a => ({ command: a.command, args }));
+  if (!list.length) list = [{ command: 'claude', args }];
+  const out: CliChoice[] = [], ids = new Set<string>(), seen = new Set<string>();
+  for (const c of list) {
+    const a = c.args ?? [];
+    const key = JSON.stringify([c.command, a]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const adapter = adapterFor(c.command, undefined, opts.adapters);
+    const base = c.id || (adapter !== generic ? adapter.id : baseName(c.command) || 'cli');
+    let id = base;
+    for (let n = 2; ids.has(id); n++) id = `${base}-${n}`;
+    ids.add(id);
+    const name = c.label ?? (adapter !== generic ? adapter.name : commandName({ command: c.command, args: a }));
+    out.push({ id, name, command: c.command, args: a, ...(c.label ? { label: c.label } : {}), ...(c.env ? { env: c.env } : {}) });
+  }
+  return out;
 }

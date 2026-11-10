@@ -169,9 +169,11 @@ export class AcpSession {
   readonly root: string;
   readonly id: string;
   readonly label: string;
+  /** The CLI's id in the picker (D59). */
+  readonly cli: string;
   private onChange: () => void;
-  constructor(opts: AgentOptions, cwd: string, root: string, n: number, onChange: () => void) {
-    this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange;
+  constructor(opts: AgentOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
+    this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange; this.cli = cli;
   }
 
   get running() { return !!this.child || !!this.starting; }
@@ -185,7 +187,7 @@ export class AcpSession {
       records: this.child ? 1 : 0, source: this.child ? 'acp' : 'none',
     };
     return {
-      id: this.id, label: this.label, running: !!this.child, ...(this.agentName ? { app: this.agentName } : {}), command: this.command, exitCode: this.exitCode,
+      id: this.id, label: this.label, running: !!this.child, ...(this.agentName ? { app: this.agentName } : {}), command: this.command, cli: this.cli, exitCode: this.exitCode,
       status, sent: [...this.sent], ...(this.child && this.permission ? { prompt: this.permission.view } : {}), protocol: 'acp',
     };
   }

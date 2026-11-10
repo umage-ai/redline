@@ -18,8 +18,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { json, readBody } from '../../src/server/http.ts';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState, type ProgramStatus } from './program-status.ts';
 import { Screen, type PromptView } from './screen.ts';
-import { adapterFor, claudeCode, defaultCommand } from './adapters.ts';
+import { adapterFor, claudeCode, cliChoices, commandName, type CliChoice } from './adapters.ts';
 import { AcpSession, usesAcp } from './acp.ts';
+export { commandName };
 
 import type { AgentAdapter, AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
 
@@ -41,6 +42,8 @@ export interface AgentInfo {
   /** The program's name from its OSC 7501 reports (`claude-code`), once it reported one. */
   app?: string;
   command: string;
+  /** The CLI it runs: its id in `clis` of /agent/info (D59). */
+  cli: string;
   /** Exit code of the last run, when it has ended. */
   exitCode?: number | null;
   status: ProgramStatus & { source: '7501' | 'activity' | 'acp' | 'none' };
@@ -176,9 +179,11 @@ class AgentSession {
   readonly root: string;
   readonly id: string;
   readonly label: string;
+  /** The CLI's id (D59); `opts` has its command, arguments and environment. */
+  readonly cli: string;
   private onChange: () => void;
-  constructor(opts: AgentOptions, cwd: string, root: string, n: number, onChange: () => void) {
-    this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange;
+  constructor(opts: AgentOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
+    this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange; this.cli = cli;
   }
 
   get running() { return !!this.pty || !!this.starting; }
@@ -216,7 +221,7 @@ class AgentSession {
     const source = this.reported ? '7501' : this.pty ? 'activity' : 'none';
     const status = source === 'activity' ? { ...s, state: (Date.now() - this.lastOutput < ACTIVE_MS ? 'working' : 'idle') as ProgramState } : s;
     return {
-      id: this.id, label: this.label, running: !!this.pty, ...(this.app ? { app: this.app } : {}), command: this.command, exitCode: this.exitCode,
+      id: this.id, label: this.label, running: !!this.pty, ...(this.app ? { app: this.app } : {}), command: this.command, cli: this.cli, exitCode: this.exitCode,
       status: { ...status, source }, sent: [...this.sent], ...(this.pty && this.view ? { prompt: this.view } : {}),
     };
   }
@@ -471,8 +476,10 @@ class AgentGroup {
   readonly opts: AgentOptions;
   readonly cwd: string;
   readonly root: string;
-  constructor(opts: AgentOptions, cwd: string, root: string) {
-    this.opts = opts; this.cwd = cwd; this.root = root;
+  /** The CLIs a session can run (D59), the default first. */
+  readonly clis: CliChoice[];
+  constructor(opts: AgentOptions, cwd: string, root: string, clis: CliChoice[]) {
+    this.opts = opts; this.cwd = cwd; this.root = root; this.clis = clis;
     this.mode = opts.sessions === 'shared' ? 'shared' : 'fresh';
   }
   get max() { return clampSize(this.opts.maxSessions ?? 3, 1, 8); }
@@ -482,27 +489,40 @@ class AgentGroup {
     return typeof id === 'string' && id ? this.sessions.find(s => s.id === id) : this.sessions[this.sessions.length - 1];
   }
 
-  /** A new session; ended ones past KEEP_ENDED are dropped, oldest first. */
-  create(): AgentSession | AcpSession {
+  /** A new session of a CLI (default: the first), over ACP when its options say so (D58); ended ones past KEEP_ENDED are dropped, oldest first. */
+  create(cli: CliChoice = this.clis[0]): AgentSession | AcpSession {
     const ended = this.sessions.filter(s => !s.running);
     for (const s of ended.slice(0, Math.max(0, ended.length - KEEP_ENDED + 1))) this.drop(s);
     if (!this.sessions.length) this.n = 0;   // all closed: numbering starts over at #1
-    const s = new (usesAcp(this.opts) ? AcpSession : AgentSession)(this.opts, this.cwd, this.root, ++this.n, () => this.push());
+    const opts: AgentOptions = { ...this.opts, command: cli.command, args: cli.args, label: cli.label, env: { ...this.opts.env, ...cli.env } };
+    const s = new (usesAcp(opts) ? AcpSession : AgentSession)(opts, this.cwd, this.root, ++this.n, () => this.push(), cli.id);
     this.sessions.push(s);
     this.push();
     return s;
   }
 
-  /** The session for a prompt or a start: 'shared' reuses `id` (or the newest), 'fresh' makes room and starts a new one. */
-  forPrompt(id?: unknown): AgentSession | AcpSession {
-    if (this.mode === 'shared') return this.get(id) ?? this.create();
+  /**
+   * The session for a prompt or a start: 'shared' reuses `id` (or the newest), 'fresh' makes room and
+   * starts a new one. `cli` (D59): 'fresh' starts that CLI; 'shared' switching to another CLI stops the
+   * shared session (refused while it works or asks) and starts the new one, so one session still runs.
+   */
+  forPrompt(id?: unknown, cli?: CliChoice): AgentSession | AcpSession {
+    if (this.mode === 'shared') {
+      const s = this.get(id);
+      if (s && (!cli || s.cli === cli.id)) return s;
+      if (s?.running) {
+        if (!s.resting) throw Object.assign(new Error(`${s.command} is busy: wait until it is done, or end it, to switch to ${cli!.name}`), { status: 409 });
+        s.stop();
+      }
+      return this.create(cli);
+    }
     const running = this.sessions.filter(s => s.running);
     if (running.length >= this.max) {
       const done = running.find(s => s.resting);
       if (!done) throw Object.assign(new Error(`${running.length} sessions are busy: stop one, or wait until one is done`), { status: 409 });
       done.stop();
     }
-    return this.create();
+    return this.create(cli);
   }
 
   drop(s: AgentSession | AcpSession) {
@@ -541,21 +561,17 @@ class AgentGroup {
 // a config change; the agents should not), and killed when the dev server process exits.
 const GROUPS = Symbol.for('umage.redline.agentGroups');
 const g = globalThis as { [GROUPS]?: Map<string, AgentGroup> };
-function groupFor(opts: AgentOptions, cwd: string, root: string): AgentGroup {
+function groupFor(opts: AgentOptions, cwd: string, root: string, clis: CliChoice[]): AgentGroup {
   const map = g[GROUPS] ??= (() => {
     const m = new Map<string, AgentGroup>();
     process.once('exit', () => { for (const s of m.values()) s.dispose(); });
     return m;
   })();
-  const key = JSON.stringify([cwd, opts.command ?? 'claude', opts.args ?? [], usesAcp(opts)]);
+  const key = JSON.stringify([cwd, clis.map(c => [c.command, c.args, usesAcp({ ...opts, command: c.command })])]);
   let s = map.get(key);
-  if (!s) { s = new AgentGroup(opts, cwd, root); map.set(key, s); }
+  if (!s) { s = new AgentGroup(opts, cwd, root, clis); map.set(key, s); }
   return s;
 }
-
-/** What the panel calls the CLI: paths shortened to their base names, Windows extensions dropped. */
-export const commandName = (opts: AgentOptions) => opts.label ?? [opts.command ?? 'claude', ...(opts.args ?? [])]
-  .map((a, i) => (i === 0 || /[\\/]/.test(a) ? path.basename(a).replace(/\.(exe|cmd|bat|com)$/i, '') : a)).join(' ');
 
 /** The terminal page the agent window frames: xterm.js in its own document, out of the app's and the overlay's key handling. */
 const terminalPage = (base: string) => `<!doctype html><html><head><meta charset="utf-8"><title>Agent</title>
@@ -564,13 +580,14 @@ const terminalPage = (base: string) => `<!doctype html><html><head><meta charset
 
 /** The panel's routes for one project root, under the API base (`/__redline`). */
 export function agentRoutes(options: AgentOptions, root: string, base: string): AgentRoutes {
-  // `agent: true`: the first CLI installed of the adapters' (claude, then opencode).
-  const opts: AgentOptions = { ...options, command: options.command ?? defaultCommand(options.adapters) };
-  const adapter = adapterFor(opts.command!, undefined, opts.adapters);
+  // The CLIs to pick from (D59): `clis`, else `command`, else every adapter's installed one; the default first.
+  const clis = cliChoices(options);
+  const opts: AgentOptions = { ...options, command: clis[0].command, args: clis[0].args, label: clis[0].label ?? options.label };
   const cwd = opts.cwd ? path.resolve(root, opts.cwd) : root;
-  const group = groupFor(opts, cwd, root);
+  const group = groupFor(opts, cwd, root, clis);
   const commands = (opts.commands ?? DEFAULT_COMMANDS).filter(c => c && typeof c.label === 'string' && typeof c.prompt === 'string');
-  const keys = opts.keys === false ? false : { ...DEFAULT_KEYS, ...adapter.keys, ...opts.keys };
+  // Allow and Deny: the keys of the session's CLI (its adapter's), the option's over them.
+  const keysFor = (s: { adapter: AgentAdapter }) => opts.keys === false ? false : { ...DEFAULT_KEYS, ...s.adapter.keys, ...opts.keys };
   const hotkey = opts.hotkey === false ? false : typeof opts.hotkey === 'string' && opts.hotkey ? opts.hotkey : 'alt+shift+a';
   const key = opts.key === false ? false : typeof opts.key === 'string' && opts.key.length === 1 ? opts.key.toLowerCase() : 'a';
 
@@ -599,7 +616,7 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
         res.end(terminalPage(base));
         return;
       }
-      if (method === 'GET' && p === '/agent/info') return json(res, 200, { ...group.info(), command: commandName(opts), token: group.token, commands, approve: !!keys, hotkey, key });
+      if (method === 'GET' && p === '/agent/info') return json(res, 200, { ...group.info(), command: commandName(opts), clis: group.clis.map(c => ({ id: c.id, name: c.name, command: commandName(c) })), cli: group.clis[0].id, token: group.token, commands, approve: opts.keys !== false, hotkey, key });
 
       const url = new URL(req.url ?? '', 'http://x');
       const token = method === 'GET' ? url.searchParams.get('token') : req.headers['x-redline-agent'];
@@ -621,11 +638,14 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
       // The session a call is for: `id`, or the newest.
       const session = group.get(body.id);
       if (named && !session) return json(res, 404, { error: 'no such agent session' });
+      // The CLI a new session runs (D59): `cli`, an id from /agent/info's `clis`. None: the default (shared: the session's own).
+      const cli = typeof body.cli === 'string' && body.cli ? group.clis.find(c => c.id === body.cli) : undefined;
+      if (body.cli !== undefined && body.cli !== '' && !cli) return json(res, 400, { error: `no such agent CLI: ${String(body.cli)}` });
       switch (p) {
         case '/agent/start': {
           // A named session (re)starts; none named: 'shared' the one session, 'fresh' a new one.
           try {
-            const s = named ? session! : group.forPrompt();
+            const s = named ? session! : group.forPrompt(undefined, cli);
             await s.start(Number(body.cols), Number(body.rows));
             return json(res, 200, s.info());
           } catch (e) { return failed(e); }
@@ -633,7 +653,7 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
         case '/agent/send': {
           if (typeof body.text !== 'string' || !body.text.trim()) return json(res, 400, { error: 'text is required' });
           try {
-            const s = group.forPrompt(body.id);
+            const s = group.forPrompt(body.id, cli);
             await s.send(body.text, Array.isArray(body.notes) ? body.notes.slice(0, 200) as string[] : []);
             return json(res, 200, { ok: true, id: s.id });
           } catch (e) { return failed(e); }
@@ -665,7 +685,7 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
           session.resize(Number(body.cols), Number(body.rows));
           return json(res, 200, { ok: true });
         case '/agent/answer': {
-          const key = keys && (body.choice === 'allow' ? keys.allow : body.choice === 'deny' ? keys.deny : undefined);
+          const keys = keysFor(session), key = keys && (body.choice === 'allow' ? keys.allow : body.choice === 'deny' ? keys.deny : undefined);
           if (!key) return json(res, 400, { error: 'choice must be allow or deny' });
           if (!session.answer(key, body.choice as string)) return json(res, 409, { error: 'the agent is not waiting for approval' });
           return json(res, 200, { ok: true });

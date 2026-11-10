@@ -38,8 +38,9 @@ build tools: `npm i -D @lydell/node-pty` instead.
 Turn it on with Redline's `agent` option, in any setup (Vite, Astro, Next, Angular, the Node server):
 
 ```js
-redline({ agent: true })                 // the first installed: claude, then opencode
-redline({ agent: 'opencode' })           // a CLI by name (any CLI runs; see Adapters below)
+redline({ agent: true })                 // every installed one of claude, opencode: ▾ picks (below)
+redline({ agent: 'opencode' })           // one CLI by name, no picker (any CLI runs; see Adapters below)
+redline({ agent: { clis: ['claude', 'opencode', { command: 'codex', label: 'Codex' }] } })   // the picker's list
 redline({
   agent: {
     command: 'claude', args: ['--permission-mode', 'acceptEdits'],
@@ -60,6 +61,16 @@ Redline finds this package in your project. Or hand it over yourself (typed, and
 import { agent } from '@umage.ai/redline-agent';
 redline({ agent: agent({ command: 'codex' }) })
 ```
+
+### Several CLIs
+
+With more than one CLI (`agent: true` with Claude Code and OpenCode both installed, or a `clis` list), a ▾ next to
+the prompt buttons opens the list (arrow keys and Enter work too). Your pick is remembered in this browser and named
+on the prompt button's tooltip; each session runs the CLI it was started with (OpenCode over ACP) and its tab says which. With Fresh,
+sessions of different CLIs run side by side; with one shared session, a prompt for another CLI stops the shared
+one (between turns, not while it works or asks; its tab stays, ended) and starts the new one. `clis` takes adapter ids or commands
+(`'claude'`, `'opencode'`, with the option's `args`), any other command, or `{ command, args, label, id, env }`;
+the installed ones are offered, the first is the default. A `command` alone means just that CLI.
 
 ### Adapters
 
@@ -96,7 +107,7 @@ and tags those notes "sent". Prompts wait until the CLI is ready for input.
 read at every start. Claude Code gets it as `--append-system-prompt-file`; any other CLI ahead of the session's
 first prompt. The agent starts in the project root (where `.redline/` is), or `cwd`.
 
-How it works and why: [D53](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md). MIT licensed.
+How it works and why: [D53, D55, D59](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md). MIT licensed.
 
 ---
 
