@@ -38,7 +38,7 @@ export type * from '../shared/extension.ts';
 export { httpTransport } from './transport.ts';
 export { captureErrors, type ErrorCapture } from './errors.ts';
 
-const DEFAULTS: OverlayConfig = { hotkey: 'alt+shift+r', launcher: true, dir: '.redline' };
+const DEFAULTS: OverlayConfig = { hotkey: 'alt+shift+r', launcher: true, draggable: true, dir: '.redline' };
 
 export async function mount(opts: MountOptions = {}): Promise<RedlineHandle> {
   const transport = opts.transport ?? httpTransport();

@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-08 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-09 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -136,23 +136,19 @@ Prune entries whose cause is gone from the code.
 
 ## L40 — Every page logged an EventSource error when the store had no change feed
 - **Cause:** the first version opened `/__redline/events` unconditionally; the markdown store answers 404, and Chrome logs the refused stream on every load.
-- **Fix:** `/config` carries `events: !!store.subscribe`, and the overlay opens the stream only then (D41).
-- **Guard:** `remote.spec.ts` "without a change feed the overlay never opens /events"; `remote.test.ts` checks `/config`.
+- **Fix:** `/config` carries `events: !!store.subscribe`, and the overlay opens the stream only then (D41). **Guard:** `remote.spec.ts` "without a change feed the overlay never opens /events"; `remote.test.ts` checks `/config`.
 
 ## L41 — A live-update test passed without the live update
 - **Cause:** the overlay's first poll runs about 1 s after load (`lastPoll` starts at 0), so a note served right after load arrived by polling, not by the pushed event.
-- **Fix:** the test waits past the first poll before changing the notes; it was checked to fail with the push removed.
-- **Guard:** `remote.spec.ts` "a pushed change shows a colleague's new note at once".
+- **Fix:** the test waits past the first poll before changing the notes; it was checked to fail with the push removed. **Guard:** `remote.spec.ts` "a pushed change shows a colleague's new note at once".
 
 ## L42 — `SyntaxError: TypeScript parameter property is not supported in strip-only mode`, though `tsc` passed
 - **Cause:** node:test runs `.ts` through Node's type stripping, which can't compile `constructor(public status: number)`.
-- **Fix:** declare the field and assign it in the constructor (`HubError`, `hub/src/store.ts`). No enums, namespaces or parameter properties in code the tests load.
-- **Guard:** `hub.test.ts` (any test importing the file fails to load).
+- **Fix:** declare the field and assign it in the constructor (`HubError`, `hub/src/store.ts`). No enums, namespaces or parameter properties in code the tests load. **Guard:** `hub.test.ts` (any test importing the file fails to load).
 
 ## L43 — The hub printed SQLite's ExperimentalWarning despite the filter
 - **Cause:** the Node-version check (`process.getBuiltinModule('node:sqlite')`) loaded the module, and with it the warning, before `quietSqliteWarning()` ran.
-- **Fix:** install the filter first; `db.ts` takes the module through `getBuiltinModule`, so a static import can't hoist it above the filter.
-- **Guard:** `scripts/test-hub-package.mjs` fails when stderr contains ExperimentalWarning.
+- **Fix:** install the filter first; `db.ts` takes the module through `getBuiltinModule`, so a static import can't hoist it above the filter. **Guard:** `scripts/test-hub-package.mjs` fails when stderr contains ExperimentalWarning.
 
 ## L44 — Next: `failed to read input source map … invalid type: string` on every .tsx
 - **Cause / fix:** Next's SWC loader accepts a loader's source map only as an object (webpack takes a string); `next-loader.ts` passes `JSON.parse(map)`.
@@ -196,3 +192,6 @@ Prune entries whose cause is gone from the code.
 
 ## L56 — The agent's question card answered once, then froze, picked from a menu already gone, or stayed up
 - **Cause / fix:** a menu left on screen after its answer (a CLI that doesn't erase it) still parsed, since the key hint was looked for in the last 6 lines: the hint must be the bottom line (as on every captured Claude screen). And two timing gaps. The headless screen (`@xterm/headless`) parses writes asynchronously, so `/choose` read the menu before the CLI's last redraw (it had already closed); `Screen.settled()` now waits for pending writes before each read, and the 250 ms status tick skips a read while one is pending (else it kept a closed menu in the status until the next output). And the core doesn't redraw an attached card while a field in it has focus (so typing survives the 2 s re-renders): after sending a typed answer the field kept focus and the card kept the old step, so the panel blurs it on send. **Guard:** `agent-screen.test.ts` ("a menu already answered…"), `agent.test.ts` (`/choose` with no menu → 409; a typed answer then the review step), `agent.spec.ts` (the card goes after a choice: failed 1 run in 6; the stepped questions test).
+
+## L57 — OpenCode lost the first prompt, and never turned green after a turn
+- **Cause / fix:** OpenCode 2.2 reports `idle` before its input box takes keys, so a prompt typed at once vanished; and it reports working → idle, never `done` (anomalyco/opencode#60411). Its adapter (D55) has `settleMs` (idle plus quiet output first) and `doneOnIdle` (idle after a turn it worked on shows as done, idle again once seen). **Guard:** `agent.test.ts` "a CLI that reports idle instead of done" (fake agent with `FAKE_NO_DONE`); checked by hand against OpenCode 2.2.6.

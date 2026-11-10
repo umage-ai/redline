@@ -39,7 +39,7 @@ Rules that hold in every setup:
 | Astro | `integrations: [redline()]` from `@umage.ai/redline/astro` |
 | Angular CLI 17+ | `serve` builder `@umage.ai/redline:dev-server` in `angular.json` |
 | Next.js 15+ (webpack or Turbopack) | `withRedline(config)` from `@umage.ai/redline/next` in `next.config`, plus `<Redline />` from `@umage.ai/redline/next/script` in the root layout |
-| Other Node servers (Express, http) | `redlineMiddleware()` from `@umage.ai/redline/server` → `app.use(api); app.use(inject)` |
+| Other Node servers (Express, http) | `redlineMiddleware()` from `@umage.ai/redline/server` → `app.use(api); app.use(inject)`; this machine only unless `network` says more (since 0.10) |
 | ASP.NET Core, Razor, Blazor, Optimizely | `AddRedline()`. **Not on NuGet yet**: build the packages from `dotnet/` ([dotnet/README.md](../dotnet/README.md)) |
 
 - **Status:** ✅ `@umage.ai/redline` on npm, with every framework above covered by e2e tests. .NET is tested

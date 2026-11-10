@@ -10,6 +10,7 @@ import path from 'node:path';
 import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent/src/program-status.ts';
 import { resolveCommand, withInstructions } from '../../agent/src/server.ts';
 import { agent } from '../../agent/src/index.ts';
+import { adapterFor, defaultCommand, openCode } from '../../agent/src/adapters.ts';
 import { agentFor } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
 import { freeIds, noteTag, overall, stateLabel, tagFor, visibleTabs } from '../../agent/src/panel.ts';
@@ -141,7 +142,7 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-'));
   const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
   // It reports itself as Claude Code: its menus are read (menus: 'auto').
-  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], env: { FAKE_APP: 'claude-code' }, commands: [{ label: 'Go', prompt: 'go {page}' }] }) });
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], env: { FAKE_APP: 'claude-code' }, commands: [{ label: 'Go', prompt: 'go {page}' }], sessions: 'shared' }) });
   const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
@@ -266,7 +267,8 @@ test('agent routes: stopping a running agent leaves the dev server up (node-pty 
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
   try {
-    const { token } = await (await fetch(`${base}/info`)).json();
+    const { token, mode } = await (await fetch(`${base}/info`)).json();
+    assert.equal(mode, 'fresh', 'fresh sessions by default (since 0.10)');
     const h = { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token };
     assert.equal((await fetch(`${base}/start`, { method: 'POST', headers: h, body: '{}' })).status, 200);
     await new Promise(r => setTimeout(r, 1500));
@@ -328,6 +330,11 @@ test('agent routes: fresh sessions (one per prompt, the cap, a finished one make
     assert.equal((await call('/dismiss', { id: 's1' })).status, 200);
     assert.equal((await call('/input', { id: 's1', data: 'x' })).status, 404);
     await when(ss => !byId(ss, 's1'));
+
+    // End: stop and close in one, running or not.
+    assert.equal((await call('/end', { id: 's4' })).status, 200);
+    await when(ss => !byId(ss, 's4'));
+    assert.equal((await call('/end', { id: 's4' })).status, 404);
 
     // Back to one shared session: a prompt goes to the newest.
     assert.equal((await call('/mode', { mode: 'shared' })).body.mode, 'shared');
@@ -427,4 +434,51 @@ test('agent option: the core loads @umage.ai/redline-agent only when asked; miss
   } finally { console.warn = warn; }
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /npm i -D @umage\.ai\/redline-agent/);
+});
+
+test('agent adapters (D55): picked by command or reported app, model and instructions per CLI, agent: true picks an installed one', async () => {
+  assert.equal(adapterFor('claude').id, 'claude-code');
+  assert.equal(adapterFor(String.raw`C:\tools\opencode.cmd`).id, 'opencode');
+  assert.equal(adapterFor('node', 'opencode').id, 'opencode', 'the app a CLI reports picks it too');
+  assert.equal(adapterFor('codex').id, 'generic');
+  const mine = { ...openCode, id: 'mine', matches: (c: string) => c === 'opencode' };
+  assert.equal(adapterFor('opencode', undefined, [mine]).id, 'mine', 'your adapters first');
+  // The model: Claude Code's flag (not twice); OpenCode has none, so a warning and its own config.
+  assert.deepEqual(await withInstructions('claude', [], { text: '' }, 'opus'), { args: ['--model', 'opus'], preamble: '' });
+  assert.deepEqual((await withInstructions('claude', ['--model', 'x'], { text: '' }, 'opus')).args, ['--model', 'x']);
+  const oc = await withInstructions('opencode', [], { text: 'Rules.' }, 'qwen');
+  assert.deepEqual([oc.args, oc.preamble], [[], 'Rules.']);
+  assert.match(oc.warning ?? '', /OpenCode takes no model flag/);
+  // agent: true → the first installed of claude, opencode; claude when neither is.
+  assert.equal(defaultCommand([], c => c === 'opencode'), 'opencode');
+  assert.equal(defaultCommand([], c => c === 'claude' || c === 'opencode'), 'claude');
+  assert.equal(defaultCommand([], () => false), 'claude');
+});
+
+test('agent adapters: a CLI that reports idle instead of done (OpenCode) shows done after a turn, idle once seen', { timeout: 60_000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-oc-'));
+  const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ command: process.execPath, args: [fake], env: { FAKE_APP: 'opencode', FAKE_NO_DONE: '1' }, sessions: 'shared' }) });
+  const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
+  const { token } = await (await fetch(`${base}/info`)).json();
+  const call = (p: string, body: unknown) => fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
+  const feed = sse(`${base}/stream?status=1&token=${token}`);
+  type S = { app?: string; status: { state: string } };
+  const when = (pred: (ss: S[]) => boolean) => feed.until(e => (e.event === 'status' || e.event === 'hello') && pred(e.data.sessions));
+  try {
+    assert.equal(await feed.ready, 200);
+    await call('/send', { text: 'go' });
+    await when(ss => ss[0]?.app === 'opencode' && ss[0].status.state === 'working');
+    await when(ss => ss[0]?.status.state === 'done');   // it said idle; the turn it worked on is done
+    await call('/ack', {});
+    await when(ss => ss[0]?.status.state === 'idle');
+  } finally {
+    feed.close();
+    await call('/end', {}).catch(() => {});
+    await new Promise(r => setTimeout(r, 1000));
+    server.closeAllConnections();
+    server.close();
+  }
 });

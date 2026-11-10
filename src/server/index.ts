@@ -8,9 +8,9 @@ import { clientFile } from '../vite.ts';
 import { createHandler, type RedlineOptions } from './handler.ts';
 
 export function redlineMiddleware(opts: RedlineOptions & { serverRoot?: string } = {}) {
-  // Open to the network by default, unlike the dev-server plugins: a deployed review server (docs/SETUPS.md 3)
-  // decides who gets the overlay itself.
-  return createHandler({ ...opts, network: opts.network ?? true, serverRoot: opts.serverRoot ?? process.cwd(), clientFile });
+  // This machine only by default, like the plugins (secure first, since 0.10): a deployed review server
+  // (docs/SETUPS.md 3) that gates reviewers itself sets `network: true`.
+  return createHandler({ ...opts, serverRoot: opts.serverRoot ?? process.cwd(), clientFile });
 }
 
 export { createStore, newId, stamp, validId, cleanPatch } from './store.ts';
@@ -24,7 +24,7 @@ export { decodeEntities, editAt, editUnique, tokenize } from './edit.ts';
 export type { Token, Edit, Nth } from './edit.ts';
 export type { RedlineOptions };
 export type { RedlineHooks } from './handler.ts';
-export type { AgentOptions, AgentCommand, AgentPlugin, AgentRoutes } from './agent-hook.ts';
+export type { AgentOptions, AgentCommand, AgentPlugin, AgentRoutes, AgentAdapter, AgentStart } from './agent-hook.ts';
 export type { NoteStore, NotePatch, StoreContext } from './store.ts';
 export type { SourceWriter, EditRequest, EditResult, WriterContext, Inspection } from './writers.ts';
 export type { Note, NewNoteRequest, Target, SourceLoc } from '../shared/types.ts';

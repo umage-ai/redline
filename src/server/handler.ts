@@ -41,7 +41,7 @@ export interface RedlineOptions {
   hotkey?: string;
   /** Show the small launcher button when the overlay is closed. Default true. Without it: the hotkey, or a `data-redline-open` element. */
   launcher?: boolean;
-  /** The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51). Default false. */
+  /** The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51). Default true (since 0.10); false pins them. */
   draggable?: boolean;
   /** The launcher's size: 'small' (26 px), 'medium' (32 px, default), 'large' (40 px), or px (20–64). */
   launcherSize?: 'small' | 'medium' | 'large' | number;
@@ -72,7 +72,8 @@ export interface RedlineOptions {
   /**
    * Text mode can write the change straight into source when the text is static there (D20).
    * true = the built-in writers (Astro/Svelte/JSX/Vue markup, static .html); or your own list,
-   * e.g. [myCmsWriter(), ...defaultWriters()]. Default false: text edits are notes only.
+   * e.g. [myCmsWriter(), ...defaultWriters()]. Default true in the dev-server plugins (Vite, Astro, Next,
+   * Angular; since 0.10), false in `redlineMiddleware`: false keeps text edits notes only.
    */
   directEdit?: boolean | SourceWriter[];
   /**
@@ -99,7 +100,8 @@ export interface RedlineOptions {
    * a loopback caller with a local Host. A list adds callers: addresses and subnets (`192.168.1.20`,
    * `172.16.0.0/12`, `fd00::/8`) match the caller's address, whatever its Host; host names (`myapp.test`,
    * `*.myapp.test`) match the Host of a call from this machine (a proxy here with its own domain).
-   * `true`: everyone, the default of `redlineMiddleware` (a deployed review server gates reviewers itself).
+   * `true`: everyone, e.g. a deployed review server that gates reviewers itself (`redlineMiddleware` answers
+   * this machine only too since 0.10: secure first).
    * MCP keeps its own rule (`mcpTokens`).
    */
   network?: boolean | string[];
@@ -268,7 +270,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     try { return normalizeLabels(await (opts.labels as Extract<LabelsSource<IncomingMessage>, Function>)({ req })); }
     catch (e) { console.warn('[redline] labels() failed:', e); return []; }
   };
-  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable === true, launcherSize: opts.launcherSize, launcherPosition: opts.launcherPosition, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
+  const config = { hotkey: opts.hotkey ?? 'alt+shift+r', launcher: opts.launcher !== false, draggable: opts.draggable !== false, launcherSize: opts.launcherSize, launcherPosition: opts.launcherPosition, prompt, dir: store.dir, app, directEdit: writers.length > 0, extensions, pageKey: opts.pageKey === 'path' ? 'path' : 'route', events: !!store.subscribe };
 
   const fixTarget = (t?: Target) => {
     if (t?.source?.file) t.source.file = normaliseSource(t.source.file, root, opts.serverRoot);

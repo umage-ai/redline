@@ -16,8 +16,8 @@ public sealed class RedlineOptions
     public string Hotkey { get; set; } = "alt+shift+r";
     /// <summary>Show the small launcher button when the overlay is closed.</summary>
     public bool Launcher { get; set; } = true;
-    /// <summary>The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51).</summary>
-    public bool Draggable { get; set; }
+    /// <summary>The launcher and the toolbar (by its icon) can be dragged around; kept per viewer (D51). Default true (since 0.10).</summary>
+    public bool Draggable { get; set; } = true;
     /// <summary>The launcher's size: "small" (26 px), "medium" (32 px, default), "large" (40 px), or px ("28", 20–64).</summary>
     public string? LauncherSize { get; set; }
     /// <summary>
@@ -67,9 +67,10 @@ public sealed class RedlineOptions
 
     /// <summary>
     /// Text mode can write the change straight into source when the text is static there (D20):
-    /// .cshtml/.razor/.html. Default false: text edits are notes only. <see cref="Writers"/> run first.
+    /// .cshtml/.razor/.html. Default true (since 0.10; online mode never writes files); false keeps
+    /// text edits notes only. <see cref="Writers"/> run first.
     /// </summary>
-    public bool DirectEdit { get; set; }
+    public bool DirectEdit { get; set; } = true;
     /// <summary>Your own writers (tried before the built-in ones). Writers registered in DI as <see cref="ISourceWriter"/> are added too.</summary>
     public List<ISourceWriter> Writers { get; } = new();
 

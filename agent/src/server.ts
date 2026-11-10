@@ -8,10 +8,9 @@
 // the x-redline header (a cross-site page can't send it without a preflight) and the session token,
 // and the stream needs the token too. node-pty (an optional dependency of this package) is loaded on first start.
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, statSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -19,8 +18,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { json, readBody } from '../../src/server/http.ts';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState, type ProgramStatus } from './program-status.ts';
 import { Screen, type PromptView } from './screen.ts';
+import { adapterFor, claudeCode, defaultCommand } from './adapters.ts';
 
-import type { AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
+import type { AgentAdapter, AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
 
 // This file's folder: dist/ in the package (CommonJS), src/ when run from source (tests). The browser files are in dist/.
 const HERE = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
@@ -63,7 +63,7 @@ const MAX_SENT = 500;
 const KEEP_ENDED = 4;   // ended sessions kept listed (their terminal and status), the oldest dropped first
 
 /** Claude Code: the command's base name (either slash, on any OS). Its menus are the ones `screen.ts` reads (D53). */
-export const isClaude = (command: string) => /^claude$/i.test((command.split(/[\\/]/).pop() ?? '').replace(/\.(exe|cmd|bat|com)$/i, ''));
+export const isClaude = (command: string) => claudeCode.matches(command);
 
 interface Pty {
   pid: number;
@@ -131,20 +131,16 @@ export function resolveCommand(command: string, args: string[], env: NodeJS.Proc
 }
 
 /**
- * The `instructions` option for a start: Claude Code takes them as a system-prompt file (a file, not
- * an argument: no quoting through cmd.exe; text is written to a temp file); any other CLI gets them
- * ahead of the session's first prompt (`preamble`).
+ * A start's arguments from the CLI's adapter (D55): the `instructions` and `model` options as flags
+ * where the CLI has them (Claude Code: `--append-system-prompt-file`, `--model`), else the
+ * instructions typed ahead of the session's first prompt (`preamble`) and a warning for the model.
  */
-export async function withInstructions(command: string, args: string[], extra: { text: string; file?: string }): Promise<{ args: string[]; preamble: string }> {
-  if (!extra.text) return { args, preamble: '' };
-  if (!isClaude(command)) return { args, preamble: extra.text };
-  let file = extra.file;
-  if (!file) {
-    file = path.join(os.tmpdir(), `redline-agent-${createHash('sha1').update(extra.text).digest('hex').slice(0, 12)}.md`);
-    await writeFile(file, extra.text);
-  }
-  return { args: [...args, '--append-system-prompt-file', file], preamble: '' };
+export async function withInstructions(command: string, args: string[], extra: { text: string; file?: string }, model?: string, adapters?: AgentAdapter[]): Promise<{ args: string[]; preamble: string; warning?: string }> {
+  const a = adapterFor(command, undefined, adapters);
+  const r = a.start ? await a.start({ args, model, instructions: extra }) : { args, preamble: extra.text };
+  return { args: r.args, preamble: r.preamble ?? '', ...(r.warning ? { warning: r.warning } : {}) };
 }
+const WARNED = new Set<string>();
 
 class AgentSession {
   private pty: Pty | null = null;
@@ -170,6 +166,7 @@ class AgentSession {
   private sent = new Set<string>();
   private app: string | undefined;   // from the program's 7501 reports
   private preamble = '';   // instructions still to go ahead of the first prompt (a CLI without a flag for them)
+  private worked = false;   // working was reported since the last prompt (doneOnIdle adapters: idle after it is done)
 
   readonly opts: AgentOptions;
   readonly cwd: string;
@@ -188,10 +185,12 @@ class AgentSession {
     const s = this.info().status.state;
     return s === 'idle' || s === 'done' || s === 'error';
   }
-  /** Menus are read off the screen for Claude Code (whose menus `screen.ts` knows), or when asked to (`menus`). */
+  /** The CLI's adapter (D55): by command, or by the `app` its 7501 reports name. */
+  get adapter() { return adapterFor(this.opts.command ?? 'claude', this.app, this.opts.adapters); }
+  /** Menus are read off the screen for CLIs whose menus `screen.ts` knows (Claude Code), or when asked to (`menus`). */
   private get menus() {
     const m = this.opts.menus ?? 'auto';
-    return m === true || (m === 'auto' && (isClaude(this.opts.command ?? 'claude') || /^claude/i.test(this.app ?? '')));
+    return m === true || (m === 'auto' && !!this.adapter.menus);
   }
 
   /** The `instructions` option's text ('' for none); a file is read at every start, so edits apply to the next session. */
@@ -208,7 +207,9 @@ class AgentSession {
   get command() { return commandName(this.opts); }
 
   info(): AgentInfo {
-    const s = this.records.status();
+    let s = this.records.status();
+    // A CLI that never reports done (OpenCode): idle after a turn it worked on is done.
+    if (this.reported && this.worked && s.state === 'idle' && this.adapter.doneOnIdle) s = { ...s, state: 'done' };
     const source = this.reported ? '7501' : this.pty ? 'activity' : 'none';
     const status = source === 'activity' ? { ...s, state: (Date.now() - this.lastOutput < ACTIVE_MS ? 'working' : 'idle') as ProgramState } : s;
     return {
@@ -226,7 +227,8 @@ class AgentSession {
       if (!pty) throw new Error('the agent panel needs node-pty: npm i -D node-pty (Linux without build tools: @lydell/node-pty)');
       const env = { ...process.env, ...this.opts.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as NodeJS.ProcessEnv;
       const command = this.opts.command ?? 'claude';
-      const { args, preamble } = await withInstructions(command, this.opts.args ?? [], await this.instructions());
+      const { args, preamble, warning } = await withInstructions(command, this.opts.args ?? [], await this.instructions(), this.opts.model, this.opts.adapters);
+      if (warning && !WARNED.has(warning)) { WARNED.add(warning); console.warn(`[redline] agent: ${warning}`); }
       this.preamble = preamble;
       const spawn = resolveCommand(command, args, env);
       if (!spawn) throw new Error(`"${command}" was not found on PATH`);
@@ -238,6 +240,7 @@ class AgentSession {
       this.exitCode = undefined;
       this.reported = false;
       this.records.clear();
+      this.worked = false;
       this.scrollback = '';
       this.screen?.dispose();
       this.screen = new Screen(this.cols, this.rows);
@@ -265,7 +268,11 @@ class AgentSession {
     for (const ev of this.scanner.feed(d)) {
       if (ev.type === 'probe') p.write(PROBE_REPLY);
       else if (ev.type === 'da1') p.write(DA1_REPLY);
-      else { this.reported = true; this.records.apply(ev.report); if (ev.report.app) this.app = ev.report.app; }
+      else {
+        this.reported = true; this.records.apply(ev.report);
+        if (ev.report.app) this.app = ev.report.app;
+        if (this.records.status().state === 'working') this.worked = true;
+      }
     }
     const on = d.lastIndexOf('\x1b[?2004h'), off = d.lastIndexOf('\x1b[?2004l');
     if (on > off) this.bracketedPaste = true; else if (off > on) this.bracketedPaste = false;
@@ -301,7 +308,11 @@ class AgentSession {
     if (!this.pty) return false;
     const now = Date.now();
     if (now - this.startedAt > 30_000) return true;
-    if (this.reported) { const s = this.records.status().state; return s === 'idle' || s === 'done' || s === 'error'; }
+    if (this.reported) {
+      const s = this.records.status().state;
+      // Some CLIs report idle before their input takes keys (OpenCode): wait for quiet output too.
+      return (s === 'idle' || s === 'done' || s === 'error') && now - this.lastOutput >= (this.adapter.settleMs ?? 0);
+    }
     return this.lastOutput > this.startedAt && now - this.lastOutput > 1200;
   }
 
@@ -317,6 +328,7 @@ class AgentSession {
     // The instructions, for a CLI without a flag for them: ahead of the session's first prompt.
     const clean = this.preamble ? `${this.preamble.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')}\n\n${text}` : text;
     this.preamble = '';
+    this.worked = false;
     p.write(this.bracketedPaste ? `\x1b[200~${clean}\x1b[201~` : clean);
     // A separate Enter, a moment later: TUIs treat text + CR in one read as a paste with a newline.
     setTimeout(() => { if (this.pty === p) p.write('\r'); }, 80);
@@ -393,7 +405,11 @@ class AgentSession {
     try { p.kill(); } catch { /* gone */ }
   }
 
-  acknowledge() { this.records.acknowledge(); this.pushStatus(); }
+  acknowledge() {
+    this.records.acknowledge();
+    if (this.adapter.doneOnIdle && this.records.status().state === 'idle') this.worked = false;   // a seen done is idle again
+    this.pushStatus();
+  }
 
   /** A terminal viewer: output and status. */
   attach(res: ServerResponse) {
@@ -454,7 +470,7 @@ class AgentGroup {
   readonly root: string;
   constructor(opts: AgentOptions, cwd: string, root: string) {
     this.opts = opts; this.cwd = cwd; this.root = root;
-    this.mode = opts.sessions === 'fresh' ? 'fresh' : 'shared';
+    this.mode = opts.sessions === 'shared' ? 'shared' : 'fresh';
   }
   get max() { return clampSize(this.opts.maxSessions ?? 3, 1, 8); }
 
@@ -544,11 +560,14 @@ const terminalPage = (base: string) => `<!doctype html><html><head><meta charset
 <body><div id="t"></div><script type="module" src="${base}/agent/terminal.js"></script></body></html>`;
 
 /** The panel's routes for one project root, under the API base (`/__redline`). */
-export function agentRoutes(opts: AgentOptions, root: string, base: string): AgentRoutes {
+export function agentRoutes(options: AgentOptions, root: string, base: string): AgentRoutes {
+  // `agent: true`: the first CLI installed of the adapters' (claude, then opencode).
+  const opts: AgentOptions = { ...options, command: options.command ?? defaultCommand(options.adapters) };
+  const adapter = adapterFor(opts.command!, undefined, opts.adapters);
   const cwd = opts.cwd ? path.resolve(root, opts.cwd) : root;
   const group = groupFor(opts, cwd, root);
   const commands = (opts.commands ?? DEFAULT_COMMANDS).filter(c => c && typeof c.label === 'string' && typeof c.prompt === 'string');
-  const keys = opts.keys === false ? false : { ...DEFAULT_KEYS, ...opts.keys };
+  const keys = opts.keys === false ? false : { ...DEFAULT_KEYS, ...adapter.keys, ...opts.keys };
   const hotkey = opts.hotkey === false ? false : typeof opts.hotkey === 'string' && opts.hotkey ? opts.hotkey : 'alt+shift+a';
   const key = opts.key === false ? false : typeof opts.key === 'string' && opts.key.length === 1 ? opts.key.toLowerCase() : 'a';
 
@@ -620,8 +639,12 @@ export function agentRoutes(opts: AgentOptions, root: string, base: string): Age
           if (body.mode !== 'shared' && body.mode !== 'fresh') return json(res, 400, { error: 'mode must be shared or fresh' });
           group.setMode(body.mode);
           return json(res, 200, group.info());
+        case '/agent/end':
+          // Stop and close in one: the session named, or (no id) every one. What the toolbar's End and × send.
+          for (const s of named ? [session!] : [...group.sessions]) group.drop(s);
+          return json(res, 200, { ok: true });
         case '/agent/stop':
-          // One session, or (no id) all of them.
+          // One session, or (no id) all of them; it stays listed as ended (the terminal's Restart).
           if (named) session!.stop(); else for (const s of group.sessions) s.stop();
           return json(res, 200, { ok: true });
         case '/agent/dismiss':

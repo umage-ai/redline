@@ -13,9 +13,45 @@ export const AGENT_PACKAGE = '@umage.ai/redline-agent';
 /** A button in the agent toolbar that sends a prompt; `{page}`, `{url}` and `{ids}` (the open notes on the page) are filled in. A prompt with `{ids}` shows their count and tags those notes "sent". */
 export interface AgentCommand { label: string; prompt: string; title?: string }
 
+/** What an adapter's `start` returns: the arguments, text to type ahead of the first prompt, and a warning to log once. */
+export interface AgentStart { args: string[]; preamble?: string; warning?: string }
+
+/**
+ * How Redline drives one agent CLI (D55). Built in: Claude Code (`claude`) and OpenCode (`opencode`);
+ * any other command runs with the generic one (Allow/Deny, the terminal, 7501 status if it sends it).
+ * Pass your own in `adapters` (tried first).
+ */
+export interface AgentAdapter {
+  /** The id, normally the `app` the CLI names in its OSC 7501 reports: `claude-code`, `opencode`. */
+  id: string;
+  /** Shown in the toolbar and tooltips: `Claude Code`. */
+  name: string;
+  /** What to run when the option names no command (`agent: true` picks the first one installed). */
+  command: string;
+  /** This adapter drives `command` (its base name, without .exe/.cmd), or the program that reported `app`. */
+  matches(command: string, app?: string): boolean;
+  /** A start's arguments: the model and the instructions as flags, or the instructions as a preamble. */
+  start?(o: { args: string[]; model?: string; instructions: { text: string; file?: string } }): AgentStart | Promise<AgentStart>;
+  /** Its menus are ones `screen.ts` reads into the toolbar's card (permission prompts, stepped questions). */
+  menus?: boolean;
+  /** What Allow and Deny send when its menus aren't read. Default Enter and Esc. */
+  keys?: { allow: string; deny: string };
+  /** It reports working, then idle, but never done: Redline shows done once a turn ends. */
+  doneOnIdle?: boolean;
+  /** Quiet output (ms) after it reports idle before a prompt is typed: its input box isn't ready at once. */
+  settleMs?: number;
+}
+
 export interface AgentOptions {
-  /** The CLI to run, looked up on PATH (Windows: PATHEXT, so `claude` finds claude.exe or claude.cmd). Default `claude`. */
+  /**
+   * The CLI to run, looked up on PATH (Windows: PATHEXT, so `claude` finds claude.exe or claude.cmd).
+   * Default: the first installed of the adapters' commands (`claude`, then `opencode`); `claude` if none is.
+   */
   command?: string;
+  /** The model, passed the way the CLI takes it (Claude Code: `--model`). A CLI without a model flag logs a warning and uses its own config. */
+  model?: string;
+  /** Your own adapters, tried before the built-in ones (D55). */
+  adapters?: AgentAdapter[];
   args?: string[];
   /** Extra environment for the CLI. */
   env?: Record<string, string>;
@@ -38,9 +74,9 @@ export interface AgentOptions {
    */
   key?: string | false;
   /**
-   * Where a prompt button's prompt goes. `'shared'` (default): one session that keeps its context.
-   * `'fresh'`: a new session for every prompt, with just those notes (no context from earlier ones),
-   * several at once (`maxSessions`). The toolbar can switch it while the dev server runs.
+   * Where a prompt button's prompt goes. `'fresh'` (default since 0.10): a new session for every prompt,
+   * with just those notes (no context from earlier ones), several at once (`maxSessions`).
+   * `'shared'`: one session that keeps its context. The toolbar can switch it while the dev server runs.
    */
   sessions?: 'shared' | 'fresh';
   /** Sessions running at once with `sessions: 'fresh'` (1–8, default 3). A new one stops the oldest one that has finished; none finished: it says so. */

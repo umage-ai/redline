@@ -287,12 +287,12 @@ test('draggable launcher and toolbar, page buttons open it, launcher can be hidd
     const w = window as unknown as Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
     w.handle.api.close();   // (the open state is kept per tab, and the toggle below should open)
     w.handle.unmount();
-    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { launcher: false } });
+    w.handle = await w.mount({ transport: w.memory, captureErrors: false, hostTag: 'drag-root', namespace: 'drag', config: { launcher: false, draggable: false } });
   });
   await expect(ui('.launcher')).toBeHidden();
   await page.locator('#mine').click();
   expect(await isOpen()).toBe(true);
-  await expect(ui('.bar .brand')).not.toHaveClass(/grab/);   // not draggable unless asked
+  await expect(ui('.bar .brand')).not.toHaveClass(/grab/);   // draggable: false pins them (on by default since 0.10)
 });
 
 test('launcherPosition: a side or the middle on each axis, px from the edge; a dragged launcher resets to it', async ({ page }) => {

@@ -2,7 +2,7 @@
 // and no second image; the price is that the build is the same for everyone (with source stamps,
 // every visitor's HTML carries file paths and component names; without them, notes have no file:line).
 //
-//   const { api, inject } = redlineMiddleware({ store, build: process.env.REVIEW_BUILD })
+//   const { api, inject } = redlineMiddleware({ store, network: true, build: process.env.REVIEW_BUILD })
 //   app.use(reviewersOnly(api, isReviewer))
 //   app.use(reviewersOnly(inject, isReviewer))
 //

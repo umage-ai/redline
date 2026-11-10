@@ -162,7 +162,7 @@
         },
         "draggable": {
           "type": "boolean",
-          "description": "The launcher and the toolbar (by its icon) can be dragged around. Default: false"
+          "description": "The launcher and the toolbar (by its icon) can be dragged around. Default: true"
         },
         "launcherSize": {
           "description": "The launcher's size: small (26 px), medium (32 px, default), large (40 px), or px (20-64).",
@@ -173,7 +173,7 @@
           "oneOf": [{ "type": "string" }, { "type": "object" }]
         },
         "agent": {
-          "description": "The agent panel (local dev): true runs claude, a string another CLI, or { command, args, env, cwd, label, commands, keys, hotkey, key, sessions, maxSessions, menus, instructions }. Needs @umage.ai/redline-agent.",
+          "description": "The agent panel (local dev): true runs claude (fresh sessions by default), a string another CLI, or { command, args, env, cwd, label, commands, keys, hotkey, key, sessions, maxSessions, menus, instructions }. Needs @umage.ai/redline-agent.",
           "oneOf": [{ "type": "boolean" }, { "type": "string" }, { "type": "object" }]
         },
         "app": {
@@ -182,7 +182,7 @@
         },
         "directEdit": {
           "type": "boolean",
-          "description": "Text edits can be written straight into templates. Default: false"
+          "description": "Text edits can be written straight into templates. Default: true"
         },
         "templateSourceLocations": {
           "type": "boolean",

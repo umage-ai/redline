@@ -15,9 +15,8 @@ test.afterEach(async ({ request }) => {
   const get = async () => (await request.get(`${f.url}/__redline/agent/info`)).json();
   const { token } = await get();
   const post = (p: string, data: object) => request.post(`${f.url}/__redline/agent${p}`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data });
-  await post('/stop', {});
-  await expect.poll(async () => (await get()).sessions.filter((x: { running: boolean }) => x.running).length, { timeout: 15_000 }).toBe(0);
-  for (const x of (await get()).sessions) await post('/dismiss', { id: x.id });
+  await post('/end', {});
+  await expect.poll(async () => (await get()).sessions.length, { timeout: 15_000 }).toBe(0);
   await post('/mode', { mode: 'shared' });
 });
 
@@ -53,7 +52,7 @@ test('agent toolbar: apply notes without the terminal, approve from the toolbar,
   await expect(chip(page)).toContainText("did Apply the open Redline notes");   // the program's message (cut at 40)
   await expect(outline(page)).toHaveCSS('--dot', '#3ecf8e');
   await expect(win(page)).toBeHidden();
-  await expect(agentBar(page).locator('.ag-stop')).toBeVisible();
+  await expect(agentBar(page).locator('.ag-end')).toBeVisible();
 
   // The notes panel: a status line (it opens the toolbar) and a tag on the note that was sent.
   await page.keyboard.press('n');
@@ -106,14 +105,16 @@ test('agent toolbar: apply notes without the terminal, approve from the toolbar,
   await ui(page, '.bar button[data-ext="agent"]').click();
   await expect(agentBar(page)).toBeVisible();
 
-  // A reload keeps the toolbar (and the window); stop brings the terminal's restart screen.
+  // A reload keeps the toolbar (and the window); End (the session is done: no confirmation) stops
+  // the CLI and closes the session in one: back to "Not started", the terminal on its start screen.
   await page.reload();
   await expect(agentBar(page)).toBeVisible();
   await expect(win(page)).toBeVisible();
   await expect(ui(page, '.panel section[data-ext="agent"] .ag-line')).toContainText('1 done');   // the panel part came up too
-  await agentBar(page).locator('.ag-stop').click();
-  await expect(terminal(page).getByRole('button', { name: 'Restart' })).toBeVisible();
-  await expect(agentBar(page).locator('.ag-stop')).toHaveCount(0);
+  await agentBar(page).locator('.ag-end').click();
+  await expect(chip(page)).toHaveText(/Not started/);
+  await expect(terminal(page).getByRole('button', { name: 'Start' })).toBeVisible();
+  await expect(agentBar(page).locator('.ag-end')).toHaveCount(0);
   expect(failures).toEqual([]);
 });
 
@@ -167,12 +168,13 @@ test('agent toolbar: stepped questions in the attached card (steps, descriptions
   await expect(card.locator('.ag-ctx')).toContainText('→ Blue');
   await expect(card.locator('.ag-ctx')).toContainText('→ XL');
 
-  // The toolbar moved to the top half (as a drag would): the card goes below it.
-  await page.evaluate(() => {
-    const bar = document.querySelector('redline-root')!.shadowRoot!.querySelector<HTMLElement>('.bar')!;
-    Object.assign(bar.style, { top: '24px', bottom: 'auto' });
-    dispatchEvent(new Event('resize'));
-  });
+  // The toolbar dragged to the top half by its icon (draggable is on by default): the card goes below it.
+  const grip = (await ui(page, '.bar .brand').boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2, 120, { steps: 8 });
+  await page.mouse.up();
+  await page.evaluate(() => localStorage.removeItem('redline:pos:bar'));   // later tests start with the bar in place
   const [cardBox, barBox] = [await card.boundingBox(), await ui(page, '.bar').boundingBox()];
   expect(cardBox!.y).toBeGreaterThanOrEqual(barBox!.y + barBox!.height);
 
@@ -195,7 +197,7 @@ test('agent toolbar: fresh sessions, a tab each; a new question brings its tab u
   await expect(mode).toHaveClass(/on/);
   await apply.click();
   const tabs = agentBar(page).locator('.ag-tab');
-  await expect(tabs).toHaveText(['#1'], { timeout: 20_000 });
+  await expect(tabs).toHaveText([/^#1/], { timeout: 20_000 });
   await expect(chip(page)).toHaveText(/Done/, { timeout: 20_000 });
   // While #1 runs, the note is its: a second session wouldn't get it.
   await expect(apply).toBeDisabled();
@@ -204,11 +206,11 @@ test('agent toolbar: fresh sessions, a tab each; a new question brings its tab u
   const { token } = await (await request.get(`${f.url}/__redline/agent/info`)).json();
   const r = await request.post(`${f.url}/__redline/agent/send`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data: { text: 'ask' } });
   expect((await r.json()).id).toBe('s2');
-  await expect(tabs).toHaveText(['#1', '#2']);
+  await expect(tabs).toHaveText([/^#1/, /^#2/]);
   const card = ui(page, '.attach[data-toolbar="agent"] .ag-card');
   await expect(card).toHaveAttribute('data-session', 's2', { timeout: 20_000 });
   await expect(card.locator('.ag-who')).toHaveText(/node fake-agent.mjs #2/);
-  await expect(agentBar(page).locator('.ag-tab.cur')).toHaveText('#2');
+  await expect(agentBar(page).locator('.ag-tab.cur')).toHaveText(/^#2/);
   await page.keyboard.press('n');   // the note's tag names the session that has it
   await expect(ui(page, '.card .ag-tag.sent')).toHaveText('⤳ sent to node fake-agent.mjs #1');
 
@@ -226,7 +228,7 @@ test('agent toolbar: fresh sessions, a tab each; a new question brings its tab u
   await expect(card).toHaveAttribute('data-session', 's2');
   await card.locator('.ag-opt', { hasText: /^1Yes$/ }).click();
   await expect(card).toHaveAttribute('data-session', 's1');
-  await expect(agentBar(page).locator('.ag-tab.cur')).toHaveText('#1');
+  await expect(agentBar(page).locator('.ag-tab.cur')).toHaveText(/^#1/);
   await card.locator('.ag-opt', { hasText: /^3No$/ }).click();
   await expect(chip(page)).toHaveText(/Done\s*denied/);
   await tabs.filter({ hasText: '#2' }).click();
@@ -249,9 +251,26 @@ test('agent toolbar: fresh sessions, a tab each; a new question brings its tab u
   await expect(list).toHaveCount(0);   // picked: the list closes
   await page.setViewportSize({ width: 1280, height: 720 });
 
-  // Stop #1: its tab gets a ×, which closes it.
-  await tabs.filter({ hasText: '#1' }).click();
-  await agentBar(page).locator('.ag-stop').click();
+  // Every tab has a ×: it ends that session (stop + close in one; #1 is done, so no confirmation).
+  await expect(agentBar(page).locator('.ag-end')).toHaveCount(0);   // tabs carry their own ×
   await tabs.filter({ hasText: '#1' }).locator('.ag-x').click();
-  await expect(tabs).toHaveText(['#2']);
+  await expect(tabs).toHaveText([/^#2/]);
+});
+
+test('agent toolbar: End asks first while the agent is busy, then stops and closes the session in one', async ({ page, request }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('a');
+  const { token } = await (await request.get(`${f.url}/__redline/agent/info`)).json();
+  const h = { 'x-redline': '1', 'x-redline-agent': token };
+  await request.post(`${f.url}/__redline/agent/start`, { headers: h, data: {} });
+  await expect(chip(page)).toHaveText(/Ready/, { timeout: 20_000 });
+  await request.post(`${f.url}/__redline/agent/input`, { headers: h, data: { data: 'ask\r' } });
+  await expect(chip(page)).toHaveText(/Needs your approval/);
+  const end = agentBar(page).locator('.ag-end');
+  await end.click();
+  await expect(end).toHaveText('End?');   // armed, nothing stopped yet
+  await expect(chip(page)).toHaveText(/Needs your approval/);
+  await end.click();
+  await expect(chip(page)).toHaveText(/Not started/);
+  expect((await (await request.get(`${f.url}/__redline/agent/info`)).json()).sessions).toEqual([]);
 });

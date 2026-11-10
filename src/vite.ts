@@ -42,7 +42,7 @@ export default function redline(options: RedlineViteOptions = {}): Plugin[] {
       root = options.root ?? findRoot(cfg.root);
     },
     configureServer(server) {
-      const { api, inject, register } = createHandler({ ...options, root, serverRoot: server.config.root, clientFile });
+      const { api, inject, register } = createHandler({ ...options, directEdit: options.directEdit ?? true, root, serverRoot: server.config.root, clientFile });
       // For `redline mcp` (D22): the URL is known once the server listens.
       server.httpServer?.once('listening', () => setTimeout(() => { const u = server.resolvedUrls?.local[0]; if (u) register(u.replace(/\/$/, '')); }, 0));
       // Added before the framework's own middleware so HTML from SvelteKit/Astro/

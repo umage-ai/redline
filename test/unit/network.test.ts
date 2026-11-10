@@ -60,10 +60,15 @@ test('plugins: another machine (as the Host shows) gets a 403 and a page without
   } finally { console.warn = warn; local.close(); open.close(); }
 });
 
-test('redlineMiddleware stays open by default: a deployed review server gates reviewers itself', async () => {
-  const s = await serve({}, true);
-  try { assert.equal((await s.get('/__redline/config', { host: 'review.example.com' })).status, 200); }
-  finally { s.close(); }
+test('redlineMiddleware answers this machine only by default (since 0.10); network: true opens it for a review server', async () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  const s = await serve({}, true), open = await serve({ network: true }, true);
+  try {
+    assert.equal((await s.get('/__redline/config', { host: 'review.example.com' })).status, 403);
+    assert.equal((await s.get('/__redline/config', { host: 'localhost:3000' })).status, 200);
+    assert.equal((await open.get('/__redline/config', { host: 'review.example.com' })).status, 200);
+  } finally { console.warn = warn; s.close(); open.close(); }
 });
 
 test('network list: addresses and subnets admit those callers, host names a call from this machine with that Host', () => {

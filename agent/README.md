@@ -6,7 +6,7 @@ server and drives it from the overlay, so reviewers never need to open a termina
 
 - **The agent toolbar**: **Agent** (A) in Redline's toolbar, or `Alt+Shift+A` from anywhere. It shows the
   agent's state and its own message, **Apply 3 notes** and your own prompt buttons, **CLI** for its
-  terminal (xterm.js), and stop.
+  terminal (xterm.js), and End (stop the CLI and close the session in one; × on a tab).
 - **Its questions in a card** on the toolbar: when the CLI shows a menu (a permission prompt with its diff, Claude Code's
   stepped questions, a trust dialog), the card shows the context, the question and every option, with a field for
   "Type something". It is read off the CLI's screen, so it is exactly what the terminal shows; a click moves the
@@ -14,9 +14,9 @@ server and drives it from the overlay, so reviewers never need to open a termina
   `claude`); other CLIs get **Allow**/**Deny** and the terminal (`menus: true` tries it anyway).
 - **Live status** from the CLI's OSC 7501 reports (Claude Code sends them): a light sweeping round the toolbar
   and a turning ring on the closed launcher while it works, an orange glow while it waits for you, green when done.
-- **Fresh sessions** (the toolbar's **Fresh**, or `sessions: 'fresh'`): every prompt starts its own session with
+- **Fresh sessions** (the default since 0.10; the toolbar's **Fresh** switches): every prompt starts its own session with
   only its notes (none that a running session already has), several at once, a tab each (3 shown, the rest
-  behind **+N**, a list of every session; on phones one session button opens it). The default is one shared
+  behind **+N**, a list of every session; on phones one session button opens it). `sessions: 'shared'` (or Fresh off) keeps one
   session that keeps its context; either way a note goes to one running session at a time.
 - **The notes panel** tags each note it was sent: being worked on, waiting for your answer, sent, or done.
 - **← and ✕**: ← goes back to the main toolbar (Esc too), ✕ closes the overlay.
@@ -38,16 +38,17 @@ build tools: `npm i -D @lydell/node-pty` instead.
 Turn it on with Redline's `agent` option, in any setup (Vite, Astro, Next, Angular, the Node server):
 
 ```js
-redline({ agent: true })                 // claude
-redline({ agent: 'codex' })              // another CLI
+redline({ agent: true })                 // the first installed: claude, then opencode
+redline({ agent: 'opencode' })           // a CLI by name (any CLI runs; see Adapters below)
 redline({
   agent: {
     command: 'claude', args: ['--permission-mode', 'acceptEdits'],
+    model: 'opus',                        // the CLI's model flag (Claude Code --model; OpenCode: its own config)
     commands: [{ label: 'Review page', prompt: 'Review page {page} against the open Redline notes {ids}' }],
     keys: { allow: '\r', deny: '\x1b' },  // what Allow / Deny send (Claude Code's prompt)
     hotkey: 'alt+shift+a',
     key: 'a',                             // the Agent button's key in the toolbar; false when an extension uses A
-    sessions: 'fresh', maxSessions: 3,    // a new session per prompt (default 'shared': one session)
+    sessions: 'fresh', maxSessions: 3,    // a new session per prompt (the default; 'shared': one session)
     instructions: { file: 'redline-agent.md' },  // or a string; see below
   },
 })
@@ -58,6 +59,19 @@ Redline finds this package in your project. Or hand it over yourself (typed, and
 ```js
 import { agent } from '@umage.ai/redline-agent';
 redline({ agent: agent({ command: 'codex' }) })
+```
+
+### Adapters
+
+What is particular to a CLI sits in an adapter (`AgentAdapter`): Claude Code (menus read into the card,
+`--model`, instructions as `--append-system-prompt-file`) and OpenCode (status from its OSC 7501 reports,
+"done" after a turn since it never reports one, a short wait before typing since its input box isn't ready the
+moment it says idle; Allow/Deny for its prompts). Any other CLI runs as is: Allow/Deny, the terminal, and 7501
+status if it sends it. Add or tune your own, tried before the built-in ones:
+
+```js
+import { agent, openCode } from '@umage.ai/redline-agent';
+redline({ agent: agent({ command: 'opencode', adapters: [{ ...openCode, settleMs: 2000 }] }) })
 ```
 
 Prompts fill in `{page}`, `{url}` and `{ids}` (the open notes on the page); a prompt with `{ids}` shows their count

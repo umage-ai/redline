@@ -50,7 +50,8 @@ public class MiddlewareTests
         await using var t = await TestApp.StartAsync();
         var config = await JsonOf(await t.Client.GetAsync("/__redline/config"));
         Assert.Equal(".redline", config["dir"]!.GetValue<string>());
-        Assert.False(config["directEdit"]!.GetValue<bool>());
+        Assert.True(config["directEdit"]!.GetValue<bool>());   // on by default since 0.10
+        Assert.True(config["draggable"]!.GetValue<bool>());
 
         var forbidden = await t.Client.SendAsync(TestApp.Json(HttpMethod.Post, "/__redline/notes", "{}", header: false));
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);

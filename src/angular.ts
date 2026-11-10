@@ -55,7 +55,7 @@ export async function* devServer(options: Json & { redline?: RedlineAngularOptio
   const { templateSourceLocations, root, directEdit, ...rest } = rl;
 
   const { api, inject, register } = createHandler({
-    ...rest, directEdit: directEdit === true, root: root ? path.resolve(ws, root) : undefined, serverRoot, clientFile,
+    ...rest, directEdit: directEdit !== false, root: root ? path.resolve(ws, root) : undefined, serverRoot, clientFile,
   });
   const ctx = templateSourceLocations === false ? context : withSourceLocations(context, project ?? 'app');
   const validated = await context.validateOptions(ngOptions, '@angular/build:dev-server');

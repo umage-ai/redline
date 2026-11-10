@@ -4,7 +4,7 @@
 // the agent's state and message, the prompt buttons ("Apply 3 notes", starting the CLI when needed),
 // a tab per session (several with "Fresh": one per prompt), the card with what it asks (Claude Code) or
 // Allow/Deny while it waits for approval, "CLI" for the terminal window (xterm.js in an iframe, see
-// terminal.ts) and stop. The notes panel only shows: a status line that opens the toolbar, and a
+// terminal.ts) and End (one action: stop the CLI and close the session; × on a tab). The notes panel only shows: a status line that opens the toolbar, and a
 // "sent"/"done by" tag on the notes a prompt handed over. The live indicator (`rl.setStatus`) comes
 // from the program's OSC 7501 status. Built on the public extension API (v5), so a product can write
 // its own panel the same way.
@@ -197,6 +197,7 @@ const CSS = `
 .ag-row .m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
 .ag-row .ag-x { padding: 0 4px; color: var(--fg-2); }
 .ag-row .ag-x:hover { color: var(--fg); }
+.ag-x.armed, .bar button.ag-end.armed { opacity: 1; color: #fff; background: #ff2d55; border-radius: 5px; padding: 0 5px; }
 .ag-row[data-state="working"] .ag-dot { animation: ag-beat 1.2s ease-in-out infinite; }
 .ag-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
 .ag-head h4 { margin: 0; }
@@ -206,7 +207,7 @@ const CSS = `
 .bar button.ag-switch { gap: 5px; font-variant-numeric: tabular-nums; }
 .ag-switch .ag-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
 /* Phones: what fits one row. The outline says the state, the list has the words: the
-   session button (its dot the state) in place of the chip and tabs, Fresh and stop in its list, then the prompts and CLI. */
+   session button (its dot the state) in place of the chip and tabs, Fresh and End in its list, then the prompts and CLI. */
 @media (max-width: 560px) {
   .ag-chip, .ag-chip + .sep { display: none; }
   .bar .ag-desk { display: none; }
@@ -280,6 +281,23 @@ export default async function agentPanel(rl: RedlineApi) {
   let lastCur = { id: '', asking: false };
   let typing = false;   // a typed answer in the card's field: no switching sessions under it
   let listOpen = false;   // the session list ("+N") in the attached card
+  // Ending a session is one action: stop the CLI and close its tab. One working or asking asks first
+  // ("End?"), a second press within 2.5 s ends it.
+  let arming: string | null = null, armTimer = 0;
+  const busy = (x: Session) => x.running && (x.status.state === 'working' || x.status.state === 'blocked');
+  const end = (x: Session) => {
+    if (busy(x) && arming !== x.id) {
+      arming = x.id; clearTimeout(armTimer);
+      armTimer = window.setTimeout(() => { arming = null; toolbar?.render(); }, 2500);
+      toolbar?.render();
+      return;
+    }
+    arming = null; clearTimeout(armTimer);
+    void post('/end', { id: x.id }).catch(fail);
+  };
+  const endTitle = (x: Session) => arming === x.id ? `Press again to end ${who(x)}` : x.running ? `End ${who(x)}: stop the CLI and close the session` : 'Close this session';
+  /** The × on a tab or a list row: ends that session (or closes an ended one). */
+  const endX = (x: Session) => el('span', { class: 'ag-x' + (arming === x.id ? ' armed' : ''), title: endTitle(x), data: { end: x.id }, onclick: (e: Event) => { e.stopPropagation(); end(x); } }, arming === x.id ? 'End?' : '×');
 
   let frame: HTMLIFrameElement | null = null;
   const toFrame = (msg: unknown) => frame?.contentWindow?.postMessage(msg, location.origin);
@@ -324,7 +342,7 @@ export default async function agentPanel(rl: RedlineApi) {
       const t = el('button', { class: 'ag-tab' + (x.id === info.id ? ' cur' : ''), title: `${who(x)}: ${xl.label}${xl.msg ? ` · ${xl.msg}` : ''}`, data: { id: x.id, state: x.running ? x.status.state : 'stopped' }, onclick: () => { sel = x.id; sync(); } },
         el('span', { class: 'ag-dot' }), x.label);
       t.style.setProperty('--c', xl.color);
-      if (!x.running) t.append(el('span', { class: 'ag-x', title: 'Close this session', onclick: (e: Event) => { e.stopPropagation(); void post('/dismiss', { id: x.id }).catch(fail); } }, '×'));
+      t.append(endX(x));
       return t;
     }), ...(more ? [more] : []), sep()) : null;
     const actions: HTMLElement[] = approval
@@ -340,14 +358,15 @@ export default async function agentPanel(rl: RedlineApi) {
     const mode = modeButton('ag-desk');
     const cli = btn(blocked && !approval && !asked ? 'Answer in CLI' : 'CLI', win?.isOpen() ? 'Hide the terminal' : `Show ${who(info)}'s terminal`, () => win?.toggle(), win?.isOpen() ? 'on' : '');
     cli.dataset.cli = '';
-    const stop = info.running ? btn('■', `Stop ${who(info)}`, () => void here('/stop').catch(fail), 'ag-stop ag-desk') : null;
-    // Phones: one button for the session on screen; the list it opens has the tabs, Fresh and stop.
-    const sw = btn(`${info.label || 'Sessions'} ▾`, 'All sessions, Fresh, stop', () => { listOpen = !listOpen; toolbar?.render(); }, 'ag-switch ag-phone' + (listOpen ? ' on' : ''));
+    // One session and no tabs: End in the toolbar (tabs carry their own ×).
+    const endB = info.id && !tabs ? btn(arming === info.id ? 'End?' : 'End', endTitle(info), () => end(info), 'ag-end ag-desk' + (arming === info.id ? ' armed' : '')) : null;
+    // Phones: one button for the session on screen; the list it opens has the tabs, Fresh and End.
+    const sw = btn(`${info.label || 'Sessions'} ▾`, 'All sessions, Fresh, end a session', () => { listOpen = !listOpen; toolbar?.render(); }, 'ag-switch ag-phone' + (listOpen ? ' on' : ''));
     sw.prepend(el('span', { class: 'ag-dot' }));
     sw.style.setProperty('--c', st.color);
     sw.dataset.state = info.running ? s.state : 'stopped';
     if (tabs) tabs.classList.add('ag-desk');
-    box.replaceChildren(style(), chip, sep(), ...(tabs ? [tabs] : []), sw, ...actions, mode, sep(), cli, ...(stop ? [stop] : []));
+    box.replaceChildren(style(), chip, sep(), ...(tabs ? [tabs] : []), sw, ...actions, mode, sep(), cli, ...(endB ? [endB] : []));
   }
 
   /** Fresh on or off: a new session for every prompt, or one shared session. */
@@ -416,13 +435,11 @@ export default async function agentPanel(rl: RedlineApi) {
       const r = el('button', { class: 'ag-row' + (x.id === cur().id ? ' cur' : ''), title: `${who(x)}: ${xl.label}${xl.msg ? ` · ${xl.msg}` : ''}`, data: { id: x.id, state: x.running ? x.status.state : 'stopped' }, onclick: () => { sel = x.id; listOpen = false; sync(); } },
         el('span', { class: 'ag-dot' }), el('span', { class: 'l' }, x.label), el('b', {}, xl.label),
         el('span', { class: 'm' }, [n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')),
-        x.running
-          ? el('span', { class: 'ag-x', title: `Stop ${who(x)}`, onclick: (e: Event) => { e.stopPropagation(); void post('/stop', { id: x.id }).catch(fail); } }, '■')
-          : el('span', { class: 'ag-x', title: 'Close this session', onclick: (e: Event) => { e.stopPropagation(); void post('/dismiss', { id: x.id }).catch(fail); } }, '×'));
+        endX(x));
       r.style.setProperty('--c', xl.color);
       return r;
     });
-    const closeEnded = async () => { for (const x of ended) await post('/dismiss', { id: x.id }).catch(fail); };
+    const closeEnded = async () => { for (const x of ended) await post('/end', { id: x.id }).catch(fail); };
     const running = group.sessions.filter(x => x.running).length;
     box.append(style(), el('div', { class: 'ag-list' },
       el('div', { class: 'ag-head' }, el('h4', {}, group.sessions.length ? `Sessions · ${running} running` : 'No sessions yet'), modeButton()), ...rows,

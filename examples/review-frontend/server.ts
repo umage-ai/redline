@@ -30,6 +30,8 @@ const store = env('NOTES_PROTOCOL_URL')
 
 const { api, inject } = redlineMiddleware({
   store,
+  // Reviewers reach this server from their own machines; the gateway in front decides who (shape A).
+  network: true,
   // The release the pages come from (your image tag or commit): agents read source lines at it.
   build: env('REVIEW_BUILD') || undefined,
   // Redline keeps a small registry under <root>/.redline for local agents; nothing to keep here,

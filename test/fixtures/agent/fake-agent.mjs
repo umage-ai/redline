@@ -7,7 +7,7 @@
 //   "form"  stepped questions: "← ☐ Color ☐ Size ✔ Submit →", options with descriptions,
 //           "Type something.", then a review step
 // Keys there: ↑/↓ move, a digit picks, Enter picks the ❯ row, ←/→ change step, Esc cancels.
-// "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent).
+// "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent); FAKE_NO_DONE: idle, not done, after a turn.
 
 const ESC = '\x1b', ST = ESC + '\\';
 const out = s => process.stdout.write(s);
@@ -119,7 +119,8 @@ function prompt(p) {
   setTimeout(() => {
     history.push(`did: ${p}`);
     draw();
-    report(`state=done:msg=${b64(`did ${p.slice(0, 40)}`)}`);
+    // FAKE_NO_DONE: like OpenCode 2.2, back to idle instead of done.
+    report(process.env.FAKE_NO_DONE ? 'state=idle' : `state=done:msg=${b64(`did ${p.slice(0, 40)}`)}`);
   }, p.includes('slow') ? 8000 : 1500);   // long enough for a test to see "working"; "slow": a while
 }
 

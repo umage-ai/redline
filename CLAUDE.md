@@ -14,16 +14,16 @@ AI agent applies them using `skill/SKILL.md`. Product overview and setup: `READM
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Numbered decisions (D1…) with the why and when to revisit | 200 lines |
 | [docs/LEARNINGS.md](docs/LEARNINGS.md) | Numbered gotchas (L1…): symptom → cause → fix → guarding test | 200 lines |
 | [docs/SETUPS.md](docs/SETUPS.md) | The four ways to run Redline (local dev, shared dev, deployed review, own backend), status of each | 200 lines |
+| [docs/OPTIONS.md](docs/OPTIONS.md) | Every option with its default (Node, .NET, `mount`, agent) | 150 lines |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | The remote note store protocol (HTTP calls, store-only fields, visibility, change feed) | 200 lines |
 | [skill/SKILL.md](skill/SKILL.md) | The agent-facing contract for `.redline/` notes (copied into consumer repos) | 120 lines |
 
 **Keep docs current. This is part of "done", in the same change as the code:**
-- Behaviour, feature or integration status changed → update `docs/STATE.md` (and `README.md` if user-facing: keys, options, setup; `docs/SETUPS.md` if it changes which setup fits or its status).
+- Behaviour, feature or integration status changed → update `docs/STATE.md` (and `README.md` if user-facing: keys, options, setup; `docs/OPTIONS.md` for any option or default; `docs/SETUPS.md` if it changes which setup fits or its status).
 - Chose between real alternatives, or reversed a choice → add or amend a `D<n>` in `docs/DECISIONS.md`.
 - Hit a non-obvious bug or tool quirk → add an `L<n>` to `docs/LEARNINGS.md`, naming the test that now guards it.
 - Changed the markdown format or note fields → update `skill/SKILL.md`, the preamble in `src/server/format.ts`, and the unit tests together.
-- Bump `Last updated:` in every doc you touch. Stay under the caps: merge or prune old entries rather than append forever.
-  One topic per entry, a few lines each, no narrative.
+- Bump `Last updated:` in every doc you touch. Stay under the caps: merge or prune old entries rather than append forever. One topic per entry, a few lines each, no narrative.
 - `npm run check:docs` (part of `npm test`) enforces caps, dates, links, and that this map lists every `docs/*.md`.
 
 ## Commands

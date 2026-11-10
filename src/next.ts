@@ -67,7 +67,7 @@ function stampPeers(own: http.Server, secret: string) {
 function sidecar(options: RedlineNextOptions, root: string, serverRoot: string): Promise<number> {
   const g = globalThis as { [SIDECAR]?: Promise<number> };
   return g[SIDECAR] ??= new Promise<number>((resolve, reject) => {
-    const { api, register } = createHandler({ ...options, root, serverRoot, clientFile });
+    const { api, register } = createHandler({ ...options, directEdit: options.directEdit ?? true, root, serverRoot, clientFile });
     const secret = randomBytes(16).toString('hex');
     const server = http.createServer((req, res) => {
       const stamp = req.headers[PEER_HEADER];
