@@ -1,69 +1,38 @@
 <h1 align="center">Redline</h1>
 <p align="center"><b>Mark up a running web UI, and let an AI agent apply the changes.</b></p>
-<p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline?label=npm&color=e5484d"></a> <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline?color=555"></a></p>
-<p align="center"><a href="https://umage.ai/products/redline"><b>Product page</b></a> · <a href="#packages">Packages</a> · <a href="#setup-in-a-repo">Setup</a> · <a href="docs/SETUPS.md">Setups</a> · <a href="https://github.com/umage-ai/redline/releases">Releases</a></p>
+<p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline?label=npm&color=e5484d"></a> <a href="https://github.com/umage-ai/redline/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline?color=555"></a></p>
+<p align="center"><a href="https://umage.ai/products/redline"><b>Product page</b></a> · <a href="#packages">Packages</a> · <a href="#quick-start">Setup</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md">Setups</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/USAGE.md">Guide</a> · <a href="https://github.com/umage-ai/redline/releases">Releases</a></p>
 
-![Commenting on a button: the popover shows the element and its React source, App.tsx:32](docs/images/comment.png)
+![Commenting on a button: the popover shows the element and its React source, App.tsx:32](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/comment.png)
 
-Redline is a dev-only overlay for any web app. Press **Alt+Shift+R** in the browser, then pin
-comments on elements, rewrite text in place, or sketch on the page. Each note is saved by the
-dev server as markdown under `.redline/` with everything an agent needs to find the code:
-- the URL, a CSS selector and XPath, and the test id
-- the **source file:line** and the **component chain**
-- the viewport and theme, recent console errors, and a screenshot with the target outlined
+Redline is a dev-only overlay for any web app. Press **Alt+Shift+R** in the browser, then pin comments on elements,
+rewrite text in place, or sketch on the page. Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …)
+then works through the notes, ticks each one off and replies inline, and the replies show up live in the overlay.
+It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, Next.js 15+, Angular 17+ and any Node
+server, with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in
+the dev server (`vite dev`, `astro dev`, `next dev`, `ng serve`, Debug builds), unless you opt in for a review site.
 
-Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …) works through the notes with the bundled
-`redline` skill. It ticks each note off and replies inline, and the replies show up live in the overlay.
+## How it works
 
-It works with React, Vue, Svelte/SvelteKit, Solid, Preact and Astro on Vite, with Next.js (15+), Angular (CLI 17+), with ASP.NET Core, Blazor and Optimizely coming as NuGet packages. Nothing ships to production: it only runs in the dev server (`vite dev`, `astro dev`, `next dev`, `ng serve`, Debug builds), unless you opt in for a review site. Local, shared, deployed or wired into your own systems: [docs/SETUPS.md](docs/SETUPS.md) says which setup fits.
-
-## Packages
-
-Start with the core; add the others only when you need them. Each has its own README.
-
-| Package | Version | What it is | Add it when |
-|---|---|---|---|
-| [`@umage.ai/redline`](https://www.npmjs.com/package/@umage.ai/redline) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline) | The core: dev-server plugins (Vite, Astro, Next.js, Angular, any Node server), the overlay, the agent skill, the MCP server and the CLI | Always: this is Redline ([setup](#setup-in-a-repo)) |
-| [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](agent/README.md)) | You want notes applied without opening a terminal (local dev) |
-| [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](hub/README.md)) | Several people review the same app |
-| [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
-
-## Modes
-
-| Key | Mode | What you do | What's saved |
-|---|---|---|---|
-| `C` | **Comment** | Click an element and type. `Alt`+click picks its parent, `Shift`+click comments on the whole page. Use **↑ Parent** to widen the target. | The instruction plus element context and a cropped screenshot |
-| `T` | **Text** | Click any text and edit it in place. `Enter` (or clicking outside) keeps the edit. | A `diff` block (`-` old / `+` new) plus an optional note |
-| `S` | **Sketch** | Draw with box `1`, arrow `2`, pen `3` and text `4`, in six colours (tap the colour dot to fold out the palette, or `C` to cycle). `Ctrl+Z` undoes, `Enter` finishes. | The SVG plus a viewport screenshot with the sketch drawn on top |
-| `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for your agent**. | |
-| `Esc` | | Steps back one level: draft → mode → panel → closed. | |
-
-Saving a note returns to idle; press `C` (or tap **Comment**) for the next one. Clicks never reach the app while you're picking,
-and the app never sees you using the overlay, so an open dropdown, popover or combobox stays open: open it, press `C` and click
-the item (try the **Export** menu, **⋯** row menus and driver filter in `npm run demo`). Notes show as numbered pins that follow their element; hovering a pin shows the note and the agent's reply.
-
-Tag a note with a **label** from the chips above the text box (**Bug**, **UX**, **Idea**, **Copy**), or start it with `#bug`. The label
-leads the note's heading, so the agent sees it first. Your own: `labels: ['Bug', { name: 'Perf', color: '#0c0' }]`; none: `labels: false`.
-
-**Phones and tablets** work too: open the app over your LAN (`vite --host`), tap the launcher, then the mode buttons. Toolbars grow their
-targets, a tap picks while a swipe scrolls, the popover stays above the keyboard and the panel goes full width. **↑ Parent** / **Page** replace `Alt`/`Shift`+click.
+1. **Pin.** A reviewer comments on an element, edits its text or sketches over the page, on desktop or phone.
+2. **Saved as markdown.** The dev server writes each note to `.redline/` with what an agent needs to find the code: the URL,
+   selector, XPath and test id, the **source file:line** and **component chain**, viewport and theme, recent console errors,
+   and a screenshot with the target outlined ([what gets written](https://github.com/umage-ai/redline/blob/main/docs/USAGE.md#what-gets-written)).
+3. **The agent applies it.** `npx redline init` installs the `redline` guide for your agent (or use the
+   [MCP server](https://github.com/umage-ai/redline/blob/main/docs/USAGE.md#mcp-server)); **Copy prompt for your agent** in the notes panel hands it the open notes.
 
 | Text: edit in place, saved as a diff | Sketch: box, arrow, pen and labels |
 |---|---|
-| ![Text mode diff](docs/images/text.png) | ![Sketch mode](docs/images/sketch.png) |
+| ![Text mode diff](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/text.png) | ![Sketch mode](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/sketch.png) |
 
-![The notes panel with an agent's reply on a done note](docs/images/panel.png)
-
-<sub>Screenshots are from the fictional demo app in [`examples/demo`](examples/demo) (`npm run demo`; regenerate with `npm run screenshots`).</sub>
-
-## Setup in a repo
+## Quick start
 
 ```bash
 npm install -D @umage.ai/redline
-npx redline init        # agent guide + AGENTS.md section, .redline/ in .gitignore (see Coding agents)
+npx redline init        # agent guide + AGENTS.md section, .redline/ in .gitignore
 ```
 
-**Vite** (React, Vue, Svelte/SvelteKit, Solid, Preact; `vite.config.ts`). Put Redline first, before the framework plugin:
+**Vite** (React, Vue, Svelte/SvelteKit, Solid, Preact): put Redline first in `vite.config.ts`, before the framework plugin.
 
 ```ts
 import redline from '@umage.ai/redline/vite'
@@ -71,128 +40,59 @@ import redline from '@umage.ai/redline/vite'
 export default defineConfig({ plugins: [redline(), react()] })   // or vue(), sveltekit(), solid(), preact()
 ```
 
-**Astro** (`astro.config.mjs`). It only activates under `astro dev`:
+Run `vite dev` and press **Alt+Shift+R**. Other stacks ([full setup per framework](https://github.com/umage-ai/redline/blob/main/docs/FRAMEWORKS.md)):
 
-```js
-import redline from '@umage.ai/redline/astro'
-
-export default defineConfig({ integrations: [redline()] })
-```
-
-**Angular** (CLI 17+, `angular.json`): swap the `serve` builder; the options are `@angular/build:dev-server`'s plus `redline`.
-In dev it turns on Angular's template source locations, so notes point at the template line. `ng build` is untouched.
-
-```json
-"serve": { "builder": "@umage.ai/redline:dev-server", "options": { "buildTarget": "app:build:development", "redline": { "directEdit": true } } }
-```
-
-**Next.js** (15+, webpack or Turbopack; only `next dev`): wrap the config; put `<Redline />` last in the root layout's `<body>` (Pages Router: `pages/_document.tsx`). `next dev` listens on your network and `/__redline/*` has no login, so Redline checks each caller's own address, as Next's server received it, and answers this machine only (see `network`).
-
-```tsx
-export default withRedline(nextConfig, { directEdit: true })   // next.config.ts, from '@umage.ai/redline/next'; keeps nextConfig's type (NextConfig)
-<body>{children}<Redline /></body>   // app/layout.tsx, from '@umage.ai/redline/next/script'; renders nothing outside development
-```
-
-**ASP.NET Core, Blazor, Optimizely CMS** (upcoming, not on NuGet yet): `UmageAI.Redline.AspNetCore` / `UmageAI.Redline.Optimizely`, then `AddRedline()`.
-Notes name the `.cshtml`/`.razor` line or the CMS property; an online mode serves editors on a live site. See [dotnet/README.md](dotnet/README.md).
-
-**Other Node dev servers**: `redlineMiddleware()` → `{ api, inject }` from `@umage.ai/redline/server`. **Working on Redline**: `npm link` a built checkout.
-
-Options: `redline({ root, dir: '.redline', hotkey: 'alt+shift+r', launcher: true, draggable: true, labels: [...], jsxSource: true, vueSource: true })`; every option and its default: [docs/OPTIONS.md](docs/OPTIONS.md). `root` is
-where notes go and what source paths are relative to (default: the nearest folder with `.git`). `launcher` and `draggable`: see below. `app` names the app in a monorepo (default: the dev server's folder, e.g. `apps/web`). `pageKey: 'path'` makes hash routes (a deck's `#/3`)
-share one notes file. `labels` may be a function of the request. `prompt` replaces the **Copy prompt** text (`{open}`, `{page}`), or `false`
-hides it (the default with a remote store). The overlay and its API answer this machine only; **`network`** adds addresses, subnets and host names (`['192.168.1.20', '172.17.0.1', 'myapp.test']`), or `true` for everyone (a deployed review server that gates reviewers itself; `redlineMiddleware` answers this machine only too, since 0.10). Phones, Docker, nginx: [docs/SETUPS.md](docs/SETUPS.md#reaching-the-dev-server-from-elsewhere).
-
-**Launcher and toolbar.** `launcherSize: 'small' | 'medium' | 'large'` (26, 32 or 40 px; or a number) sizes the round button; its bubble counts the open notes on the page. `launcherPosition` moves it off an app's own bottom-right button: `'bottom-left'`, `'top-right 24'` or `'bottom-center 16 80'` (px from the edges, x then y), or `{ x, y, offsetX, offsetY }` (.NET `LauncherPosition`). `draggable` (on by default since 0.10; `false` pins them) lets each reviewer move the launcher (drag it), the toolbar and the sketch tools (drag their icon; at phone width only up and down); the browser remembers where, and double-clicking an icon puts them back. `launcher: false`
-hides the round button: open with the hotkey or your own button, no script needed, in any framework or Razor view:
-`<button data-redline-open>Review</button>` toggles; `="comment"`, `"text"`, `"sketch"`, `"notes"`, `"open"`, `"close"` pick what.
-From script: `(window.redlineExtensions ||= []).push(rl => { myBtn.onclick = () => rl.open(); })`; with `mount()`, `rl.api.open()` and `data-<namespace>-open`.
-
-**Monorepos** work without extra setup: each app adds the plugin to its own dev server. Notes from every app go to one `.redline/`
-at the repo root, tagged with the app (`pages/apps-web--settings.md`); each app pins only its own (the panel's **All** tab lists the rest). Source paths are repo-relative. `npx redline init` anywhere sets up the repo root (`--here`: this folder).
-
-### Extending
-
-All optional; without them Redline behaves as described above. Types come from `@umage.ai/redline/server`.
-
-- **`directEdit`** (on by default in the dev-server plugins since 0.10; `false` turns it off): the text popover gets **Apply to file** when the edited text is static in source (Astro,
-  Svelte, JSX, Vue, Angular templates, plain `.html`). Inline markup such as `<b>` and links is kept as written; Ctrl+B / Ctrl+I add it. Entities stay as the file wrote them (`&mdash;`); repeated text on a static page is told apart by position.
-  Expressions like `{t('title')}`, components and rendered or translated text are refused with the reason, and you
-  save a note as usual. `[myWriter(), ...defaultWriters()]` adds your own writers (i18n files, a CMS).
-- **`store`**: a `NoteStore` (`version`, `list`, `create`, `update`, `remove`, `asset`, optional `subscribe`) or `({ root, dir, app }) => store`. **`remoteStore({ url, token })`**
-  (or `REDLINE_STORE_URL`/`_TOKEN`) shares notes through a hosted store, live, with authors and resolved notes in green ([docs/PROTOCOL.md](docs/PROTOCOL.md)); `npx @umage.ai/redline-hub` runs one, with projects, tokens, MCP and a UI ([hub/README.md](hub/README.md)). **`hooks`**: `onCreate`, `onUpdate`,
-  `onRemove`, `onSourceWrite`. **`buildSource: true`** keeps source stamps in `vite build` (a review build behind `redlineMiddleware`); **`build`** records the commit.
-- **`extensions`**: browser ES modules that add toolbar buttons (with keys), panel sections and event listeners.
-  A file path is served as plain JS; `{ url: '/src/redline.ext.ts' }` lets Vite compile it, or push onto
-  `window.redlineExtensions`. API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`; v4: `beforeSave`, card decorators and actions, `setPinStyle`, `addMode`, `addSketchTool`, and the `error`/`noteUpdated`/`noteRemoved`/`messageSent` events; v5: `addToolbar` (your own toolbar in place of the main one, with a hotkey), `addWindow` (a floating window), `setStatus` (the toolbar's outline or a dot, and a ring or dot on the closed launcher) with the `status` event, and `setBadge` (the launcher bubble: open notes by default). **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text ([docs/SETUPS.md](docs/SETUPS.md)).
-
-## Coding agents
-
-Redline isn't tied to one agent. The notes are plain markdown, and `npx redline init` installs the guide where agents look for it:
-
-| Written | Read by |
+| Stack | Setup |
 |---|---|
-| `.agents/skills/redline/SKILL.md` (always) | Agent Skills: Codex, Cursor, GitHub Copilot / VS Code, OpenCode, … |
-| a Redline section in `AGENTS.md` (always; created if missing) | Codex, Cursor, Copilot, Windsurf, Zed, Amp, Jules, Devin, Factory, … |
-| `.claude/skills/redline/SKILL.md` + a `CLAUDE.md` section pointing at it | Claude Code (the skill also shows up as `/redline`) |
-| a `GEMINI.md` section + `.gemini/commands/redline.toml` | Gemini CLI (`/redline`) |
-| `.github/prompts/redline.prompt.md` | Copilot Chat in VS Code (`/redline`) |
+| Astro | `integrations: [redline()]` from `@umage.ai/redline/astro` (only under `astro dev`) |
+| Next.js 15+ | `withRedline(nextConfig)` from `@umage.ai/redline/next` + `<Redline />` in the root layout |
+| Angular 17+ | the `@umage.ai/redline:dev-server` builder for `serve` in `angular.json` |
+| Other Node servers | `redlineMiddleware()` → `{ api, inject }` from `@umage.ai/redline/server` |
+| ASP.NET Core, Blazor, Optimizely (upcoming) | `AddRedline()` ([dotnet/README.md](https://github.com/umage-ai/redline/blob/main/dotnet/README.md)) |
 
-The last three are added when the repo already uses that agent (`CLAUDE.md` or `.claude/`, `GEMINI.md` or `.gemini/`,
-`.github/copilot-instructions.md`…), or when you ask: `npx redline init --agents=claude,gemini` (`all` / `none` work too). Re-running `init` refreshes the guide after an upgrade. In a terminal, `init` lists the changes and asks first (`--yes` skips the question); `--dry-run` only lists them.
+Local dev, shared notes, a deployed review site or your own backend: [docs/SETUPS.md](https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md) says which fits.
+Every option and its default: [docs/OPTIONS.md](https://github.com/umage-ai/redline/blob/main/docs/OPTIONS.md).
 
-**Copy prompt for your agent** in the notes panel copies a ready prompt, e.g. *Apply the open Redline notes in .redline/pages/settings.md (3 open). Follow .agents/skills/redline/SKILL.md.* Without `init`, the prompt spells out the note format itself, so any agent can work from it.
+## Keys
 
-**MCP server** (optional): `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS Code, Gemini, Cursor)
-with `list_notes`, `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom
-`store` works; without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server also serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from elsewhere; through `next dev` too).
+| Key | Mode |
+|---|---|
+| `C` | **Comment**: click an element and type (`Alt`+click: its parent, `Shift`+click: the whole page) |
+| `T` | **Text**: edit any text in place; saved as a diff, or written to the file with **Apply to file** |
+| `S` | **Sketch**: box `1`, arrow `2`, pen `3`, text `4`; `Enter` finishes |
+| `N` | **Notes**: the panel with every note, agent replies and **Copy prompt for your agent** |
+| `Esc` | One step back: draft → mode → panel → closed |
 
-**Agent panel** (local dev): `agent: true` (Claude Code or OpenCode, whichever is installed; or a command such as `'opencode'`, or `{ command, args, model, commands: [{ label, prompt }], keys, hotkey, sessions, instructions, adapters }`) runs your agent CLI from the overlay without opening a terminal: **Agent** (A), or `Alt+Shift+A` from anywhere, opens the agent toolbar with its state, **Apply 3 notes** and your own prompt buttons (`{page}`, `{ids}`), **CLI** for its terminal, and **End** (stops the CLI and closes the session in one; × on a session's tab; it asks first while the agent works or waits on you), plus a card on the toolbar whenever it asks (an edit with its diff, Claude's stepped questions) with every option and a field for your own answer; the notes panel tags the notes it is working on, waiting on you for, was sent and has done. In the agent toolbar ← goes back to the main toolbar and ✕ closes. Every prompt starts a new session, with only its notes, several at once, a tab each (the default since 0.10; **Fresh** in the toolbar, or `sessions: 'shared'`, keeps one session instead); `instructions: { file: 'redline-agent.md' }` adds your own rules to the sessions Redline starts. Its state from the CLI's OSC 7501 status on the toolbar's outline and as a ring around the closed launcher: a light sweeping round it while working, an orange glow while it waits for your approval, green when done (hover says what it is doing), which Claude Code reports. It is its own package: `npm i -D @umage.ai/redline-agent` ([agent/README.md](agent/README.md); node-pty comes with it). It runs on this machine only, with the CLI's own permission prompts.
+Labels, phones, the launcher and your own open buttons, screenshots, direct edit and more: [docs/USAGE.md](https://github.com/umage-ai/redline/blob/main/docs/USAGE.md).
 
-## What gets written
+![The notes panel with an agent's reply on a done note](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/panel.png)
 
-`.redline/INDEX.md` (open/done counts per page, regenerated on every change), `pages/<page>.md` (one file per URL path)
-and `assets/<id>.png|svg` (screenshots and sketches). A note:
+## Agent panel
 
-```markdown
-### [ ] Comment · `button` “Next” · src/components/LoginForm.tsx:48
-<!-- redline {"id":"…","type":"comment","url":"http://localhost:5173/login","target":{"selector":"div > form > button",
-  "source":{"file":"src/components/LoginForm.tsx","line":48,"col":9},"components":["LoginForm"],…},"viewport":[1366,860,1],"theme":"dark",…} -->
+With `@umage.ai/redline-agent` and `agent: true`, your agent CLI (Claude Code or OpenCode) runs from the overlay: **Apply 3 notes**,
+its questions and diffs in a card on the toolbar, a session per prompt, and its state as a ring on the launcher. Local dev only.
+See [agent/README.md](https://github.com/umage-ai/redline/blob/main/agent/README.md).
 
-Make this full-width on mobile only.
+## Packages
 
-![screenshot](../assets/mv6em12i784f.png)
+Start with the core; add the others only when you need them. Each has its own README.
 
-> Added `sm:w-auto`; full width below 640px (LoginForm.tsx:48).
-```
+| Package | Version | What it is | Add it when |
+|---|---|---|---|
+| [`@umage.ai/redline`](https://www.npmjs.com/package/@umage.ai/redline) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline) | The core: dev-server plugins (Vite, Astro, Next.js, Angular, any Node server), the overlay, the agent skill, the MCP server and the CLI | Always: this is Redline ([setup](#quick-start)) |
+| [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](https://github.com/umage-ai/redline/blob/main/agent/README.md)) | You want notes applied without opening a terminal (local dev) |
+| [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](https://github.com/umage-ai/redline/blob/main/hub/README.md)) | Several people review the same app |
+| [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](https://github.com/umage-ai/redline/blob/main/overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
 
-The markdown is the source of truth. Every write from the overlay re-reads the file first, so an agent's ticks and
-replies are never overwritten. The overlay polls about every 2 s, which is why replies appear without a reload.
+## Learn more
 
-## How source locations are found
+- [docs/FRAMEWORKS.md](https://github.com/umage-ai/redline/blob/main/docs/FRAMEWORKS.md): setup per framework, monorepos, how source locations are found
+- [docs/USAGE.md](https://github.com/umage-ai/redline/blob/main/docs/USAGE.md): the modes in full, coding agents and MCP, what gets written, extending and embedding
+- [docs/SETUPS.md](https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md) · [docs/OPTIONS.md](https://github.com/umage-ai/redline/blob/main/docs/OPTIONS.md) · [docs/PROTOCOL.md](https://github.com/umage-ai/redline/blob/main/docs/PROTOCOL.md) (remote stores) · [skill/SKILL.md](https://github.com/umage-ai/redline/blob/main/skill/SKILL.md) (the agent's guide)
+- Working on Redline: [CLAUDE.md](https://github.com/umage-ai/redline/blob/main/CLAUDE.md) has every command; [docs/USAGE.md](https://github.com/umage-ai/redline/blob/main/docs/USAGE.md#develop) covers testing and releasing.
 
-| Stack | Source of `file:line` | Components |
-|---|---|---|
-| Svelte 5 / SvelteKit | `__svelte_meta` (built into Svelte dev builds) | `__svelte_meta.parent` chain |
-| Astro | `data-astro-source-file/-loc` (snapshotted at parse time, because Astro's dev toolbar strips them) | `.astro` files up the tree |
-| React 19 (Vite) | The plugin stamps `data-redline-src="file:line:col Component"` on HTML elements in `.jsx`/`.tsx` during dev | Fiber owner chain, with router and provider plumbing filtered out |
-| Solid, Preact (Vite) | The same JSX stamp | The components the stamped elements are written in |
-| Next.js 15+ | The same JSX stamp, from a loader `withRedline` adds (webpack and Turbopack) | Client components that own the element, then every Server Component around it (page, route-group layouts, root layout) |
-| Vue 3 (Vite) | The plugin stamps HTML elements in `.vue` templates during dev | `__vueParentComponent` chain |
-| Angular 17+ | `data-ng-source-location` (Angular's `enableTemplateSourceLocations`, turned on by the builder in dev) | `ng.getOwningComponent`, then the host components around it |
-| Razor, Blazor (.NET) | Debug builds compile `.cshtml`/`.razor` copies stamped with `data-redline-src`; Optimizely adds CMS content + property | Stamped files up the tree |
-| Anything else | n/a | n/a. The selector, test id and text still identify the element. |
-
-## Screenshots
-
-By default the DOM is rendered to a canvas with [modern-screenshot](https://github.com/qq15725/modern-screenshot), page scroll and inner scroll containers included. WebGL canvases, cross-origin map tiles and video may come out blank this way. For those apps, tick **Pixel-perfect screenshots (tab capture)** in the panel: it captures the real tab pixels, and Chrome asks once per page load.
-
-## Develop
-
-`npm run dev` rebuilds on change, `npm test` runs the unit tests and the docs check, `npm run check` everything
-(with Playwright against every framework fixture), `npm run test:package` installs the packed tarballs into fresh apps.
-Releasing: on an up-to-date `main`, `npm run release -- patch` (or `minor`, `major`, `x.y.z`) bumps, tags `v<version>` and pushes; [`publish.yml`](.github/workflows/publish.yml) runs every check, publishes via Trusted Publishing and creates the release.
-Contributor guidance and every command: [CLAUDE.md](CLAUDE.md). State, decisions, learnings and roadmap: [docs/](docs/STATE.md#next-up).
+<sub>Screenshots are from the fictional demo app in [`examples/demo`](https://github.com/umage-ai/redline/tree/main/examples/demo) (`npm run demo`; regenerate with `npm run screenshots`).</sub>
 
 ## License
-[MIT](LICENSE)
+
+[MIT](https://github.com/umage-ai/redline/blob/main/LICENSE)

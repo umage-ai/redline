@@ -1,6 +1,6 @@
 # Setups
 
-Last updated: 2026-11-08 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
+Last updated: 2026-11-10 · Cap: 200 lines · Which way to run Redline, for people and for AI agents choosing one.
 
 Redline has one overlay (the browser part) and one note format. What changes between setups is **where
 the overlay runs** and **where the notes are kept**. Pick the first row that fits.
@@ -48,7 +48,7 @@ Rules that hold in every setup:
 - **Network:** the API has no login, so the plugins answer this machine only. See below for anything else.
 - **Launcher and toolbar:** `draggable: true` lets reviewers move them and the sketch tools (D51). `launcher: false` hides the round
   button; open with the hotkey or your own button: `<button data-redline-open>` (or `="comment"`, `"notes"`, …).
-- **Details:** [README.md](../README.md) "Setup in a repo" and "Launcher and toolbar".
+- **Details:** [FRAMEWORKS.md](FRAMEWORKS.md) and [USAGE.md](USAGE.md#launcher-and-toolbar).
 
 ### Reaching the dev server from elsewhere
 

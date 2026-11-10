@@ -1,6 +1,6 @@
 # Options
 
-Last updated: 2026-11-09 · Cap: 150 lines · Every option with its default, in one place. Detail lives in README.md and the linked docs.
+Last updated: 2026-11-10 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
 
 The same option is spelled `camelCase` in Node (`redline({ … })`, `withRedline(cfg, { … })`, `redlineMiddleware({ … })`,
 the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o => …)`). "—" means the server doesn't have it.

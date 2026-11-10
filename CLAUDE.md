@@ -2,9 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Redline**: a dev-only overlay for web UIs. A reviewer pins comments, text changes and sketches on the
-running app (Alt+Shift+R). The dev server saves them as markdown in the app's `.redline/` folder, and an
-AI agent applies them using `skill/SKILL.md`. Product overview and setup: `README.md`.
+**Redline**: a dev-only overlay for web UIs. A reviewer pins comments, text changes and sketches on the running app (Alt+Shift+R);
+the dev server saves them as markdown in `.redline/`, and an AI agent applies them using `skill/SKILL.md`. Overview: `README.md`.
 
 ## Docs map (read before larger changes)
 
@@ -15,11 +14,13 @@ AI agent applies them using `skill/SKILL.md`. Product overview and setup: `READM
 | [docs/LEARNINGS.md](docs/LEARNINGS.md) | Numbered gotchas (L1…): symptom → cause → fix → guarding test | 200 lines |
 | [docs/SETUPS.md](docs/SETUPS.md) | The four ways to run Redline (local dev, shared dev, deployed review, own backend), status of each | 200 lines |
 | [docs/OPTIONS.md](docs/OPTIONS.md) | Every option with its default (Node, .NET, `mount`, agent) | 150 lines |
+| [docs/FRAMEWORKS.md](docs/FRAMEWORKS.md) | Setup per framework, monorepos, how source locations are found (user-facing) | 150 lines |
+| [docs/USAGE.md](docs/USAGE.md) | Reviewer features, coding agents + MCP, note files, extending, embedding (user-facing) | 200 lines |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | The remote note store protocol (HTTP calls, store-only fields, visibility, change feed) | 200 lines |
 | [skill/SKILL.md](skill/SKILL.md) | The agent-facing contract for `.redline/` notes (copied into consumer repos) | 120 lines |
 
 **Keep docs current. This is part of "done", in the same change as the code:**
-- Behaviour, feature or integration status changed → update `docs/STATE.md` (and `README.md` if user-facing: keys, options, setup; `docs/OPTIONS.md` for any option or default; `docs/SETUPS.md` if it changes which setup fits or its status).
+- Behaviour, feature or integration status changed → update `docs/STATE.md` (and `README.md` + `docs/USAGE.md`/`docs/FRAMEWORKS.md` if user-facing: keys, features, setup; `docs/OPTIONS.md` for any option or default; `docs/SETUPS.md` if it changes which setup fits or its status).
 - Chose between real alternatives, or reversed a choice → add or amend a `D<n>` in `docs/DECISIONS.md`.
 - Hit a non-obvious bug or tool quirk → add an `L<n>` to `docs/LEARNINGS.md`, naming the test that now guards it.
 - Changed the markdown format or note fields → update `skill/SKILL.md`, the preamble in `src/server/format.ts`, and the unit tests together.
@@ -54,8 +55,7 @@ npx playwright test -c dotnet/playwright.config.ts      # browser smoke: Razor/B
 dotnet pack dotnet/Redline.slnx                         # the NuGet packages
 ```
 
-The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact,next}`, ports 5199–5206, Next on 5207 webpack + 5208 Turbopack) load `dist/`, so **rebuild
-before e2e**. They use the root `node_modules`, except Angular (own TypeScript major) and Next (large): their `serve.mjs` installs their own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
+The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact,next}`, ports 5199–5206, Next on 5207 webpack + 5208 Turbopack) load `dist/`, so **rebuild before e2e**. They use the root `node_modules`, except Angular (own TypeScript major) and Next (large): their `serve.mjs` installs their own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
 changing server-side code (handler/store/plugin), and restart Next's after any rebuild (L47). Client-only changes just need a rebuild and a page reload.
 
 ## Architecture (the parts that span files)
