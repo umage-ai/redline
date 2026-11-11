@@ -13,6 +13,9 @@ export const AGENT_PACKAGE = '@umage.ai/redline-agent';
 /** A button in the agent toolbar that sends a prompt; `{page}`, `{url}` and `{ids}` (the open notes on the page) are filled in. A prompt with `{ids}` shows their count and tags those notes "sent". */
 export interface AgentCommand { label: string; prompt: string; title?: string }
 
+/** A model or effort level a CLI offers (D62): `value` as passed to the CLI, `name` for people (default: the value). */
+export interface AgentChoice { value: string; name?: string }
+
 /** What an adapter's `start` returns: the arguments, text to type ahead of the first prompt, and a warning to log once. */
 export interface AgentStart { args: string[]; preamble?: string; warning?: string }
 
@@ -28,10 +31,17 @@ export interface AgentAdapter {
   name: string;
   /** What to run when the option names no command (`agent: true` picks the first one installed). */
   command: string;
-  /** This adapter drives `command` (its base name, without .exe/.cmd), or the program that reported `app`. */
-  matches(command: string, app?: string): boolean;
-  /** A start's arguments: the model and the instructions as flags, or the instructions as a preamble. */
-  start?(o: { args: string[]; model?: string; instructions: { text: string; file?: string } }): AgentStart | Promise<AgentStart>;
+  /** This adapter drives `command` (its base name, without .exe/.cmd) with `args`, or the program that reported `app`. */
+  matches(command: string, app?: string, args?: string[]): boolean;
+  /** A start's arguments: the model, the effort and the instructions as flags, or the instructions as a preamble. */
+  start?(o: { args: string[]; model?: string; effort?: string; instructions: { text: string; file?: string } }): AgentStart | Promise<AgentStart>;
+  /**
+   * The models the toolbar's settings offer for it (D62), passed to `start` as `model`: Claude Code's
+   * aliases. A viewer can pick only these (or the default); ACP agents list their own.
+   */
+  models?: (string | AgentChoice)[];
+  /** The effort levels the settings offer, passed to `start` as `effort` (Claude Code: `--effort`). */
+  efforts?: (string | AgentChoice)[];
   /** Its menus are ones `screen.ts` reads into the toolbar's card (permission prompts, stepped questions). */
   menus?: boolean;
   /** What Allow and Deny send when its menus aren't read. Default Enter and Esc. */
@@ -72,8 +82,13 @@ export interface AgentOptions {
    * Wins over `command`.
    */
   clis?: (string | AgentCli)[];
-  /** The model, passed the way the CLI takes it (Claude Code: `--model`). A CLI without a model flag logs a warning and uses its own config. */
+  /** The model, passed the way the CLI takes it (Claude Code: `--model`). A CLI without a model flag logs a warning and uses its own config. The default for the toolbar's settings (D62). */
   model?: string;
+  /**
+   * The effort level, where the CLI has one (Claude Code: `--effort low|medium|high|xhigh|max`; ACP: the
+   * agent's `thought_level` option). The default for the toolbar's settings (D62); other CLIs: a warning.
+   */
+  effort?: string;
   /** Your own adapters, tried before the built-in ones (D55). */
   adapters?: AgentAdapter[];
   args?: string[];
@@ -100,7 +115,7 @@ export interface AgentOptions {
   /**
    * Where a prompt button's prompt goes. `'fresh'` (default since 0.10): a new session for every prompt,
    * with just those notes (no context from earlier ones), several at once (`maxSessions`).
-   * `'shared'`: one session that keeps its context. The toolbar can switch it while the dev server runs.
+   * `'shared'`: one session that keeps its context. The toolbar's settings (⚙) switch it while the dev server runs.
    */
   sessions?: 'shared' | 'fresh';
   /** Sessions running at once with `sessions: 'fresh'` (1–8, default 3). A new one stops the oldest one that has finished; none finished: it says so. */

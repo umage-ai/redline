@@ -1,6 +1,6 @@
 // The agent CLIs the panel knows (D55): what is particular to each, behind one interface
-// (`AgentAdapter`, src/server/agent-hook.ts). Claude Code: menus read off its screen, instructions
-// and the model as flags. OpenCode: 7501 status without `done`, an input box that needs a moment
+// (`AgentAdapter`, src/server/agent-hook.ts). Claude Code: menus read off its screen, instructions,
+// the model and the effort as flags (the toolbar's settings offer its aliases and levels, D62). OpenCode: 7501 status without `done`, an input box that needs a moment
 // after it reports idle, its model from its own config. Anything else: generic (Allow/Deny, the
 // terminal, 7501 status when the CLI sends it). Adapters from the `adapters` option are tried first.
 
@@ -9,16 +9,31 @@ import { existsSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentAdapter, AgentCli, AgentOptions, AgentStart } from '../../src/server/agent-hook.ts';
+import type { AgentAdapter, AgentChoice, AgentCli, AgentOptions, AgentStart } from '../../src/server/agent-hook.ts';
 
 /** A command's base name, either slash, without a Windows extension: `C:\tools\claude.exe` → `claude`. */
 export const baseName = (command: string) => (command.split(/[\\/]/).pop() ?? '').replace(/\.(exe|cmd|bat|com)$/i, '').toLowerCase();
 
-const preamble = (o: { args: string[]; model?: string; instructions: { text: string } }, name: string): AgentStart => ({
-  args: o.args,
-  preamble: o.instructions.text,
-  ...(o.model ? { warning: `${name} takes no model flag: it uses the model from its own config (agent option model "${o.model}" ignored)` } : {}),
-});
+const preamble = (o: { args: string[]; model?: string; effort?: string; instructions: { text: string } }, name: string): AgentStart => {
+  const ignored = [o.model && `model "${o.model}"`, o.effort && `effort "${o.effort}"`].filter(Boolean).join(', ');
+  return {
+    args: o.args,
+    preamble: o.instructions.text,
+    ...(ignored ? { warning: `${name} takes no model or effort flag: it uses its own config (agent option ${ignored} ignored)` } : {}),
+  };
+};
+
+/** An adapter's `models` / `efforts` as choices: strings become `{ value }`, empty and repeated values are dropped. */
+export function choices(list: (string | AgentChoice)[] | undefined): AgentChoice[] {
+  const out: AgentChoice[] = [], seen = new Set<string>();
+  for (const c of list ?? []) {
+    const value = typeof c === 'string' ? c : c?.value;
+    if (typeof value !== 'string' || !value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(typeof c === 'string' || !c.name ? { value } : { value, name: String(c.name) });
+  }
+  return out;
+}
 
 export const claudeCode: AgentAdapter = {
   id: 'claude-code',
@@ -26,9 +41,14 @@ export const claudeCode: AgentAdapter = {
   command: 'claude',
   matches: (command, app) => baseName(command) === 'claude' || /^claude/i.test(app ?? ''),
   menus: true,
-  async start({ args, model, instructions }) {
+  // `claude --help`: --model takes an alias for the latest model ("fable", "opus", "sonnet") or a full
+  // name (the `model` option); --effort low, medium, high, xhigh or max.
+  models: [{ value: 'fable', name: 'Fable' }, { value: 'opus', name: 'Opus' }, { value: 'sonnet', name: 'Sonnet' }],
+  efforts: [{ value: 'low', name: 'Low' }, { value: 'medium', name: 'Medium' }, { value: 'high', name: 'High' }, { value: 'xhigh', name: 'Extra high' }, { value: 'max', name: 'Max' }],
+  async start({ args, model, effort, instructions }) {
     const out = [...args];
     if (model && !args.includes('--model')) out.push('--model', model);
+    if (effort && !args.includes('--effort')) out.push('--effort', effort);
     if (!instructions.text) return { args: out };
     // A file, not an argument: no quoting through cmd.exe. Text is written to a temp file.
     let file = instructions.file;
@@ -64,9 +84,9 @@ export const generic: AgentAdapter = {
 
 export const BUILT_IN: AgentAdapter[] = [claudeCode, openCode];
 
-/** The adapter for a command (and the `app` it reported, once it has): yours first, then the built-in ones, else generic. */
-export function adapterFor(command: string, app?: string, extra: AgentAdapter[] = []): AgentAdapter {
-  return [...extra, ...BUILT_IN].find(a => a.matches(command, app)) ?? generic;
+/** The adapter for a command (with its arguments, and the `app` it reported once it has): yours first, then the built-in ones, else generic. */
+export function adapterFor(command: string, app?: string, extra: AgentAdapter[] = [], args?: string[]): AgentAdapter {
+  return [...extra, ...BUILT_IN].find(a => a.matches(command, app, args)) ?? generic;
 }
 
 /** True when `command` is on PATH (Windows: with PATHEXT). */
@@ -119,7 +139,7 @@ export function cliChoices(opts: AgentOptions, has: (command: string) => boolean
     const key = JSON.stringify([c.command, a]);
     if (seen.has(key)) continue;
     seen.add(key);
-    const adapter = adapterFor(c.command, undefined, opts.adapters);
+    const adapter = adapterFor(c.command, undefined, opts.adapters, a);
     const base = c.id || (adapter !== generic ? adapter.id : baseName(c.command) || 'cli');
     let id = base;
     for (let n = 2; ids.has(id); n++) id = `${base}-${n}`;

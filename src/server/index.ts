@@ -24,7 +24,7 @@ export { decodeEntities, editAt, editUnique, tokenize } from './edit.ts';
 export type { Token, Edit, Nth } from './edit.ts';
 export type { RedlineOptions };
 export type { RedlineHooks } from './handler.ts';
-export type { AgentOptions, AgentCommand, AgentPlugin, AgentRoutes, AgentAdapter, AgentStart } from './agent-hook.ts';
+export type { AgentOptions, AgentCommand, AgentPlugin, AgentRoutes, AgentAdapter, AgentStart, AgentChoice } from './agent-hook.ts';
 export type { NoteStore, NotePatch, StoreContext } from './store.ts';
 export type { SourceWriter, EditRequest, EditResult, WriterContext, Inspection } from './writers.ts';
 export type { Note, NewNoteRequest, Target, SourceLoc } from '../shared/types.ts';

@@ -8,12 +8,13 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent/src/program-status.ts';
-import { resolveCommand, withInstructions } from '../../agent/src/server.ts';
+import { checkPick, resolveCommand, withInstructions } from '../../agent/src/server.ts';
 import { agent } from '../../agent/src/index.ts';
-import { adapterFor, cliChoices, defaultCommand, openCode } from '../../agent/src/adapters.ts';
-import { agentFor } from '../../src/server/agent-hook.ts';
+import { adapterFor, choices, claudeCode, cliChoices, defaultCommand, openCode } from '../../agent/src/adapters.ts';
+import { agentFor, type AgentAdapter } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
-import { freeIds, noteTag, overall, pickCli, stateLabel, tagFor, visibleTabs } from '../../agent/src/panel.ts';
+import { freeIds, initials, noteTag, overall, pickCli, shorten, stateLabel, tabRank, tabTitle, tagFor, visibleTabs } from '../../agent/src/panel.ts';
+import { pickFor } from '../../agent/src/settings.ts';
 
 const ESC = '\x1b', ST = ESC + '\\';
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
@@ -381,6 +382,7 @@ test('agent toolbar: the state chip and the note tags', () => {
   assert.deepEqual(st('idle', {}, false), { label: 'Not started', color: '#5c5c66' });
   assert.equal(stateLabel({ running: false, command: 'c', exitCode: 3, status: { state: 'idle', source: 'none' } }).label, 'Stopped (exit 3)');
   assert.equal(st('working', { progress: 40 }).label, 'Working 40%');
+  assert.equal(st('working').label, 'Working…');
   assert.deepEqual(st('blocked', { kind: 'permission', msg: 'Edit a.ts?' }), { label: 'Needs your approval', msg: 'Edit a.ts?', color: '#ff9f0a' });
   assert.equal(st('blocked', { kind: 'question' }).label, 'Needs your answer');
   assert.equal(st('done', { msg: 'did it' }, false).label, 'Done', 'a finished run still says done');
@@ -404,11 +406,21 @@ test('agent toolbar: the state chip and the note tags', () => {
   assert.deepEqual(tagFor({ id: 'a', done: false }, [ses('1', 'working', false, ['a'])], who), { cls: 'sent', text: '⤳ sent to c #1' }, 'stopped: just sent');
   assert.deepEqual(tagFor({ id: 'a', done: true }, [ses('1', 'done', true, ['a']), ses('2', 'working', true, ['a'])], who), { cls: 'done', text: '✓ done by c #2' }, 'the newest session that had it');
   assert.equal(tagFor({ id: 'z', done: false }, [ses('1', 'working', true, ['a'])], who), null);
-  // Many sessions: 3 tabs (the one on screen, any asking, then the newest running, then the newest ended), the rest behind "+N".
+  // Many sessions: 3 tabs (the one on screen, any asking, then the newest busy or unseen, resting, ended), the rest
+  // behind "+N"; on the toolbar busy ones first, ended ones last (D62), in session order within.
   const many = [ses('1', 'done', false), ses('2', 'blocked'), ses('3', 'done', false), ses('4', 'working'), ses('5', 'done'), ses('6', 'working')];
-  assert.deepEqual(visibleTabs(many, '1'), { shown: ['1', '2', '6'], hidden: ['3', '4', '5'] }, 'picked by hand and asking stay; the newest running fills up');
-  assert.deepEqual(visibleTabs(many, '6').shown, ['2', '5', '6'], 'in session order; a resting one before an ended one');
-  assert.deepEqual(visibleTabs(many.slice(0, 3), '3'), { shown: ['1', '2', '3'], hidden: [] }, 'three or fewer: all');
+  assert.deepEqual(visibleTabs(many, '1'), { shown: ['2', '6', '1'], hidden: ['4', '5', '3'] }, 'picked by hand and asking stay; the newest busy fills up; the ended one goes right');
+  assert.deepEqual(visibleTabs(many, '6').shown, ['2', '5', '6'], 'in session order among the busy');
+  assert.deepEqual(visibleTabs([ses('1', 'idle'), ses('2', 'done', false), ses('3', 'working')], '2'), { shown: ['3', '1', '2'], hidden: [] }, 'three or fewer: all; busy, then resting (seen), then ended');
+  assert.deepEqual([tabRank(ses('1', 'done')), tabRank(ses('1', 'idle')), tabRank(ses('1', 'working', false))], [0, 1, 2]);
+  // Tab names (D62): the first note's text, shortened, "+N" for more; a text change by its new text; no notes: the prompt's label.
+  const note = (body: string, extra: object = {}) => ({ body, type: 'comment', ...extra }) as never;
+  assert.equal(tabTitle([note('Purple button')], 'Apply notes'), 'Purple button');
+  assert.equal(tabTitle([note('Make this secondary, please'), note('b'), note('c')]), 'Make this seconda… +2');
+  assert.equal(tabTitle([note('', { type: 'text', to: 'Plan a  route' })]), 'Plan a route');
+  assert.equal(tabTitle([], 'Review page'), 'Review page');
+  assert.equal(shorten('  a\nb  '), 'a b');
+  assert.deepEqual(['Claude Code', 'OpenCode', 'codex', 'node fake-agent.mjs'].map(initials), ['CC', 'OC', 'C', 'NF']);
 });
 
 test('agent option: the core loads @umage.ai/redline-agent only when asked; missing, it warns and runs on', () => {
@@ -448,7 +460,7 @@ test('agent adapters (D55): picked by command or reported app, model and instruc
   assert.deepEqual((await withInstructions('claude', ['--model', 'x'], { text: '' }, 'opus')).args, ['--model', 'x']);
   const oc = await withInstructions('opencode', [], { text: 'Rules.' }, 'qwen');
   assert.deepEqual([oc.args, oc.preamble], [[], 'Rules.']);
-  assert.match(oc.warning ?? '', /OpenCode takes no model flag/);
+  assert.match(oc.warning ?? '', /OpenCode takes no model or effort flag/);
   // agent: true → the first installed of claude, opencode; claude when neither is.
   assert.equal(defaultCommand([], c => c === 'opencode'), 'opencode');
   assert.equal(defaultCommand([], c => c === 'claude' || c === 'opencode'), 'claude');
@@ -522,7 +534,7 @@ test('agent CLIs (D59): sessions of two CLIs side by side (fresh); shared switch
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
   const info = await (await fetch(`${base}/info`)).json();
-  assert.deepEqual(info.clis, [{ id: 'one', name: 'Fake One', command: 'Fake One' }, { id: 'two', name: 'Fake Two', command: 'Fake Two' }]);
+  assert.deepEqual(info.clis, [{ id: 'one', name: 'Fake One', command: 'Fake One', models: [], efforts: [] }, { id: 'two', name: 'Fake Two', command: 'Fake Two', models: [], efforts: [] }]);
   assert.equal(info.cli, 'one', 'the first is the default');
   const call = async (p: string, body: unknown) => {
     const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': info.token }, body: JSON.stringify(body) });
@@ -563,6 +575,83 @@ test('agent CLIs (D59): sessions of two CLIs side by side (fresh); shared switch
   } finally {
     feed.close();
     await call('/stop', {}).catch(() => {});
+    await new Promise(r => setTimeout(r, 1000));
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
+test('agent settings (D62): Claude Code takes a model alias and --effort; lists and checks per CLI', async () => {
+  // claude --help: --model takes "fable", "opus", "sonnet" (or a full name); --effort low|medium|high|xhigh|max.
+  assert.deepEqual(choices(claudeCode.models).map(c => c.value), ['fable', 'opus', 'sonnet']);
+  assert.deepEqual(choices(claudeCode.efforts).map(c => c.value), ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.deepEqual(await withInstructions('claude', [], { text: '' }, 'opus', undefined, 'high'), { args: ['--model', 'opus', '--effort', 'high'], preamble: '' });
+  assert.deepEqual((await withInstructions('claude', ['--effort', 'low'], { text: '' }, undefined, undefined, 'max')).args, ['--effort', 'low'], 'the args win');
+  assert.match((await withInstructions('codex', [], { text: '' }, undefined, undefined, 'high')).warning ?? '', /effort "high" ignored/);
+  assert.deepEqual(choices(['a', { value: 'b', name: 'B' }, 'a', '', { value: 'c' }]), [{ value: 'a' }, { value: 'b', name: 'B' }, { value: 'c' }]);
+  // The server takes only what it offered: never free text into a CLI's arguments.
+  const offer = { models: [{ value: 'opus' }], efforts: [{ value: 'high' }] };
+  assert.deepEqual(checkPick({ model: 'opus', effort: 'high' }, offer, 'Claude Code'), { model: 'opus', effort: 'high' });
+  assert.deepEqual(checkPick({ model: '', effort: null }, offer, 'Claude Code'), {}, 'empty: the default');
+  assert.match((checkPick({ model: '--dangerously-skip-permissions' }, offer, 'Claude Code') as { error: string }).error, /Claude Code offers no model/);
+  assert.ok('error' in checkPick({ effort: ['high'] }, offer, 'x'), 'not a string');
+  assert.ok('error' in checkPick({ model: 'opus' }, { models: [], efforts: [] }, 'x'), 'a CLI without models');
+  // The browser sends only what the CLI still offers.
+  const cli = { id: 'c', models: [{ value: 'opus' }], efforts: [{ value: 'high' }] };
+  assert.deepEqual(pickFor(cli, { c: { model: 'opus', effort: 'gone' } }), { model: 'opus' });
+  assert.deepEqual(pickFor(cli, { other: { model: 'opus' } }), {});
+});
+
+test('agent routes (D62): models and effort per CLI in /agent/info; only offered ones reach the CLI as flags, the rest is a 400', { timeout: 60_000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'redline-agent-set-'));
+  const fake = path.resolve('test/fixtures/agent/fake-agent.mjs');
+  // The fake agent with an adapter like Claude Code's: two models, two effort levels, as flags (it prints them).
+  const fakeCode: AgentAdapter = {
+    id: 'fake', name: 'Fake Code', command: process.execPath,
+    matches: (_c, _app, args) => !!args?.includes(fake) && !args.includes('--two'),
+    models: ['fast', { value: 'smart', name: 'Smart' }], efforts: ['low', 'high'],
+    start: o => ({ args: [...o.args, ...(o.model ? ['--model', o.model] : []), ...(o.effort ? ['--effort', o.effort] : [])] }),
+  };
+  const clis = [{ id: 'one', command: process.execPath, args: [fake] }, { id: 'two', label: 'Fake Two', command: process.execPath, args: [fake, '--two'] }];
+  const { api } = createHandler({ root, serverRoot: root, clientFile: import.meta.filename, agent: agent({ clis, adapters: [fakeCode], sessions: 'fresh', model: 'fast', effort: 'low' }) });
+  const server = http.createServer((rq, rs) => api(rq, rs, () => { rs.statusCode = 404; rs.end(); }));
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
+  const info = await (await fetch(`${base}/info`)).json();
+  const call = async (p: string, body: unknown) => {
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': info.token }, body: JSON.stringify(body) });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+  const streams: ReturnType<typeof sse>[] = [];
+  try {
+    assert.deepEqual(info.clis.map((c: { id: string; name: string; models: unknown; efforts: unknown }) => [c.id, c.name, c.models, c.efforts]),
+      [['one', 'Fake Code', [{ value: 'fast' }, { value: 'smart', name: 'Smart' }], [{ value: 'low' }, { value: 'high' }]], ['two', 'Fake Two', [], []]]);
+    assert.deepEqual(info.defaults, { sessions: 'fresh', model: 'fast', effort: 'low' }, 'what Reset goes back to');
+    // Refused: a model or effort the CLI doesn't offer (or one for a CLI that offers none), and anything not a string.
+    for (const body of [{ cli: 'one', model: 'opus' }, { cli: 'one', effort: 'max' }, { cli: 'two', model: 'fast' }, { cli: 'one', model: 42 }, { model: '--help' }]) {
+      const r = await call('/send', { text: 'go', ...body });
+      assert.equal(r.status, 400, JSON.stringify(body));
+      assert.match(r.body.error, /offers no (model|effort)/);
+    }
+    assert.equal((await call('/start', { cli: 'one', effort: 'xhigh' })).status, 400, '/start checks too');
+    assert.deepEqual((await (await fetch(`${base}/info`)).json()).sessions, [], 'nothing started');
+
+    // Offered: passed as the CLI's flags; the session names them, and the tab name and prompt the panel sent (cleaned).
+    const r = await call('/send', { text: 'go', cli: 'one', model: 'smart', effort: 'high', title: 'Purple\nbutton\x1b', task: 'Apply notes', notes: ['n1'] });
+    assert.equal(r.status, 200);
+    const one = sse(`${base}/stream?id=${r.body.id}&token=${info.token}`);
+    streams.push(one);
+    await one.until(e => (e.event === 'data' ? String(e.data) : String(e.data.scrollback ?? '')).includes('fake agent starting with --model smart --effort high'));
+    const s1 = (await (await fetch(`${base}/info`)).json()).sessions[0];
+    assert.deepEqual([s1.model, s1.effort, s1.title, s1.task], ['smart', 'high', 'Purple button', 'Apply notes']);
+    // None picked: the options' model and effort.
+    const r2 = await call('/send', { text: 'again', cli: 'one' });
+    const two = sse(`${base}/stream?id=${r2.body.id}&token=${info.token}`);
+    streams.push(two);
+    await two.until(e => (e.event === 'data' ? String(e.data) : String(e.data.scrollback ?? '')).includes('fake agent starting with --model fast --effort low'));
+  } finally {
+    for (const x of streams) x.close();
+    await call('/end', {}).catch(() => {});
     await new Promise(r => setTimeout(r, 1000));
     server.closeAllConnections();
     server.close();

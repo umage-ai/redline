@@ -9,7 +9,7 @@
 import type { AgentOptions, AgentPlugin } from '../../src/server/agent-hook.ts';
 import { agentRoutes } from './server.ts';
 
-export type { AgentOptions, AgentCommand, AgentPlugin, AgentRoutes, AgentAdapter, AgentStart } from '../../src/server/agent-hook.ts';
+export type { AgentOptions, AgentCommand, AgentPlugin, AgentRoutes, AgentAdapter, AgentStart, AgentChoice } from '../../src/server/agent-hook.ts';
 /** The built-in adapters (D55), to extend or wrap: `adapters: [{ ...openCode, settleMs: 2000 }]`. */
 export { claudeCode, openCode, adapterFor } from './adapters.ts';
 

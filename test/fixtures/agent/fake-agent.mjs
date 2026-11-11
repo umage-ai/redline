@@ -17,7 +17,9 @@ const RULE = '─'.repeat(70), DASH = '╌'.repeat(70);
 const dim = s => `${ESC}[2m${s}${ESC}[22m`, inv = s => `${ESC}[7m${s}${ESC}[27m`;
 
 let supported = false, probing = true, ready = false, line = '';
-const history = ['fake agent starting'];
+// Its arguments past --two (a model or effort flag from the toolbar's settings, D62) on the first line.
+const flags = process.argv.slice(2).filter(a => a !== '--two');
+const history = [`fake agent starting${flags.length ? ` with ${flags.join(' ')}` : ''}`];
 let menu = null;   // { kind, steps?, step, cursor, typing?, answers, ... }
 
 const COLOR = { q: 'Which colour should the button be?', header: 'Color', options: [['Red', 'Bold, for warnings and primary calls to action.'], ['Blue', 'Calm and trustworthy, a common default.'], ['Green', 'Positive, suits confirm actions.'], ['Type something.']] };

@@ -1,6 +1,6 @@
 // A stand-in Agent Client Protocol agent for the agent panel's ACP mode (D58): newline-delimited
 // JSON-RPC 2.0 on stdio. It answers initialize and session/new (a `model` config option with two
-// models), then per prompt streams a thought, a tool call and text, and ends the turn with "did <prompt>".
+// models, an `effort` one of category thought_level), then per prompt streams a thought, a tool call and text, and ends the turn with "did <prompt>".
 //   "ask"    asks one permission first (id 0 like OpenCode's first request, L58): "did ask: <optionId>"
 //   "slow"   works for 8 s (session/cancel ends it with stopReason cancelled)
 //   "crash"  exits with code 7 mid-turn
@@ -13,7 +13,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 let nextId = 0;   // the agent's own request ids start at 0 (OpenCode does)
 const waiting = new Map();
 const cancelled = new Set();
-let model = 'fake/one';
+let model = 'fake/one', effort = 'default';
 
 process.stderr.write('fake acp agent starting\n');
 let buf = '';
@@ -28,7 +28,10 @@ process.stdin.on('data', d => {
 });
 process.stdin.on('end', () => process.exit(0));
 
-const config = () => [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model, options: [{ value: 'fake/one', name: 'Fake One' }, { value: 'fake/two', name: 'Fake Two' }] }];
+const config = () => [
+  { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model, options: [{ value: 'fake/one', name: 'Fake One' }, { value: 'fake/two', name: 'Fake Two' }] },
+  { id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: effort, options: [{ value: 'default', name: 'Default' }, { value: 'low', name: 'Low' }, { value: 'high', name: 'High' }] },
+];
 
 async function handle(m) {
   if (m.method === undefined) {   // an answer to our request
@@ -46,6 +49,7 @@ async function handle(m) {
       return reply({ sessionId: 'sess_1', ...(process.env.FAKE_ACP_NO_MODELS ? {} : { configOptions: config() }) });
     case 'session/set_config_option':
       if (p.configId === 'model') model = p.value;
+      if (p.configId === 'effort') effort = p.value;
       return reply({ configOptions: config() });
     case 'session/cancel':
       cancelled.add(p.sessionId);
@@ -73,7 +77,7 @@ async function handle(m) {
       }
       if (text.includes('slow')) for (let t = 0; t < 80 && !cancelled.has(sid); t++) await sleep(100);
       if (cancelled.has(sid)) return reply({ stopReason: 'cancelled' });
-      update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Working on it.\nmodel ${model}\n` } });
+      update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Working on it.\nmodel ${model} effort ${effort}\n` } });
       update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `did ${text.trim()}${answer}` } });
       return reply({ stopReason: 'end_turn' });
     }

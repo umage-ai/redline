@@ -111,7 +111,7 @@ const CONTROL = /[\x00-\x08\x0b-\x1f\x7f]/g;
  */
 export function usesAcp(opts: AgentOptions): boolean {
   if (opts.protocol) return opts.protocol === 'acp';
-  return !!adapterFor(opts.command ?? 'claude', undefined, opts.adapters).acp;
+  return !!adapterFor(opts.command ?? 'claude', undefined, opts.adapters, opts.args).acp;
 }
 
 /** A permission request as the toolbar card shows it (the same shape as a menu read off a screen). */
@@ -171,6 +171,11 @@ export class AcpSession {
   readonly label: string;
   /** The CLI's id in the picker (D59). */
   readonly cli: string;
+  /** What the agent offered in `session/new` (its models and effort levels, D62): the toolbar's settings list them. */
+  onOffer?: (offer: AcpOffer) => void;
+  /** The tab's name and the prompt that started it (D62), set by the first prompt that names them. */
+  title?: string;
+  task?: string;
   private onChange: () => void;
   constructor(opts: AgentOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
     this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange; this.cli = cli;
@@ -179,7 +184,7 @@ export class AcpSession {
   get running() { return !!this.child || !!this.starting; }
   get resting() { return !!this.child && !this.turn && !this.queued.length && this.state !== 'working' && this.state !== 'blocked'; }
   get command() { return commandName(this.opts); }
-  get adapter() { return adapterFor(this.opts.command ?? 'claude', undefined, this.opts.adapters); }
+  get adapter() { return adapterFor(this.opts.command ?? 'claude', undefined, this.opts.adapters, this.opts.args); }
 
   info(): AgentInfo {
     const status: AgentInfo['status'] = {
@@ -189,6 +194,7 @@ export class AcpSession {
     return {
       id: this.id, label: this.label, running: !!this.child, ...(this.agentName ? { app: this.agentName } : {}), command: this.command, cli: this.cli, exitCode: this.exitCode,
       status, sent: [...this.sent], ...(this.child && this.permission ? { prompt: this.permission.view } : {}), protocol: 'acp',
+      ...meta(this),
     };
   }
 
@@ -243,6 +249,7 @@ export class AcpSession {
         const s = await rpc.request('session/new', { cwd: this.cwd, mcpServers: [] }, HANDSHAKE_MS);
         if (typeof s?.sessionId !== 'string') throw new Error('session/new returned no sessionId');
         this.sessionId = s.sessionId;
+        this.onOffer?.(offerOf(s));
         await this.setModel(s);
         this.print(`${C.dim}${[this.agentName, ai?.version].filter(Boolean).join(' ') || this.command} ready. Type a prompt and press Enter.${C.reset}\r\n`);
         this.pushStatus();
@@ -257,30 +264,32 @@ export class AcpSession {
   }
 
   /**
-   * The `model` option: the agent's `model` config option (`session/set_config_option`), or the older
-   * `models` list (`session/set_model`); a model it doesn't offer, or an agent with neither: a warning.
+   * The `model` and `effort` options (D62): the agent's `model` and `thought_level` config options
+   * (`session/set_config_option`), or for the model the older `models` list (`session/set_model`); a
+   * value it doesn't offer, or an agent with neither: a warning.
    */
   private async setModel(s: Json) {
-    const model = this.opts.model;
-    if (!model || !this.rpc) return;
-    const cfg = (Array.isArray(s.configOptions) ? s.configOptions : []).find((o: Json) => o?.category === 'model' || o?.id === 'model');
     const warn = (w: string) => { console.warn(`[redline] agent: ${w}`); this.print(`${C.yellow}${w}${C.reset}\r\n`); };
-    try {
-      if (cfg) {
-        const opt = (cfg.options ?? []).flatMap((o: Json) => Array.isArray(o?.options) ? o.options : [o]).find((o: Json) => o?.value === model || o?.name === model);
-        if (!opt) return warn(`${this.command} doesn't offer the model "${model}" (it uses ${cfg.currentValue})`);
-        if (opt.value !== cfg.currentValue) await this.rpc.request('session/set_config_option', { sessionId: this.sessionId, configId: cfg.id, value: opt.value }, HANDSHAKE_MS);
-        return;
-      }
-      const models = s.models;
-      if (Array.isArray(models?.availableModels)) {
-        const m = models.availableModels.find((x: Json) => x?.modelId === model || x?.name === model);
-        if (!m) return warn(`${this.command} doesn't offer the model "${model}" (it uses ${models.currentModelId})`);
-        if (m.modelId !== models.currentModelId) await this.rpc.request('session/set_model', { sessionId: this.sessionId, modelId: m.modelId }, HANDSHAKE_MS);
-        return;
-      }
-      warn(`${this.command} offers no model choice over ACP: it uses its own config (agent option model "${model}" ignored)`);
-    } catch (e) { warn(`couldn't set the model "${model}": ${(e as Error).message}`); }
+    for (const [what, value] of [['model', this.opts.model], ['effort', this.opts.effort]] as const) {
+      if (!value || !this.rpc) continue;
+      const cfg = configOption(s.configOptions, what);
+      try {
+        if (cfg) {
+          const opt = flatOptions(cfg).find((o: Json) => o?.value === value || o?.name === value);
+          if (!opt) { warn(`${this.command} doesn't offer the ${what} "${value}" (it uses ${cfg.currentValue})`); continue; }
+          if (opt.value !== cfg.currentValue) await this.rpc.request('session/set_config_option', { sessionId: this.sessionId, configId: cfg.id, value: opt.value }, HANDSHAKE_MS);
+          continue;
+        }
+        const models = s.models;
+        if (what === 'model' && Array.isArray(models?.availableModels)) {
+          const m = models.availableModels.find((x: Json) => x?.modelId === value || x?.name === value);
+          if (!m) { warn(`${this.command} doesn't offer the model "${value}" (it uses ${models.currentModelId})`); continue; }
+          if (m.modelId !== models.currentModelId) await this.rpc.request('session/set_model', { sessionId: this.sessionId, modelId: m.modelId }, HANDSHAKE_MS);
+          continue;
+        }
+        warn(`${this.command} offers no ${what} choice over ACP: it uses its own config (agent option ${what} "${value}" ignored)`);
+      } catch (e) { warn(`couldn't set the ${what} "${value}": ${(e as Error).message}`); }
+    }
   }
 
   /** The agent's requests to the client: permission only (no fs or terminal capabilities were offered). */
@@ -359,10 +368,11 @@ export class AcpSession {
   private newline() { if (!this.atLineStart) { this.print('\r\n'); this.atLineStart = true; } }
 
   /** A prompt from a panel button: started when needed; queued while a turn runs (one turn at a time). */
-  async send(text: string, notes: string[] = []) {
+  async send(text: string, notes: string[] = [], about: { title?: unknown; task?: unknown } = {}) {
     const clean = text.replace(CONTROL, '');
     if (!clean.trim()) return;
     this.remember(notes);
+    nameSession(this, about);
     this.queued.push(clean);
     if (!this.child) await this.start();
     this.pump();
@@ -537,6 +547,67 @@ export class AcpSession {
     this.broadcast('status', info);
     this.onChange();
   }
+}
+
+/** A session's tab name, prompt, model and effort for its info (D62). */
+export const meta = (s: { title?: string; task?: string; opts: AgentOptions }) => ({
+  ...(s.title ? { title: s.title } : {}), ...(s.task ? { task: s.task } : {}),
+  ...(s.opts.model ? { model: s.opts.model } : {}), ...(s.opts.effort ? { effort: s.opts.effort } : {}),
+});
+/** The first prompt that names the session sets its tab name and prompt label: no control characters, 80 characters at most. */
+export function nameSession(s: { title?: string; task?: string }, about: { title?: unknown; task?: unknown }) {
+  const clean = (v: unknown) => typeof v === 'string' ? v.replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+  if (!s.title && clean(about.title)) s.title = clean(about.title);
+  if (!s.task && clean(about.task)) s.task = clean(about.task);
+}
+
+/** The models and effort levels an ACP agent offers (D62), from its `session/new` reply. */
+export interface AcpOffer { models: { value: string; name?: string }[]; efforts: { value: string; name?: string }[] }
+/** The config option for the model (`category: 'model'`) or the effort (`category: 'thought_level'`). */
+function configOption(list: unknown, what: 'model' | 'effort'): Json | undefined {
+  const all: Json[] = Array.isArray(list) ? list : [];
+  return what === 'model' ? all.find(o => o?.category === 'model' || o?.id === 'model') : all.find(o => o?.category === 'thought_level' || o?.id === 'effort' || o?.id === 'thought_level');
+}
+/** A select option's values, groups flattened. */
+const flatOptions = (cfg: Json): Json[] => (Array.isArray(cfg.options) ? cfg.options : []).flatMap((o: Json) => Array.isArray(o?.options) ? o.options : [o]);
+/** The lists for the settings: values as the agent takes them ("default" is the settings' own Default), at most 500. */
+export function offerOf(s: Json): AcpOffer {
+  const list = (what: 'model' | 'effort') => {
+    const cfg = configOption(s?.configOptions, what);
+    const opts: Json[] = cfg ? flatOptions(cfg) : what === 'model' && Array.isArray(s?.models?.availableModels) ? s.models.availableModels.map((m: Json) => ({ value: m?.modelId, name: m?.name })) : [];
+    const seen = new Set<string>();
+    return opts.filter(o => typeof o?.value === 'string' && o.value && o.value !== 'default' && !seen.has(o.value) && !!seen.add(o.value))
+      .slice(0, 500).map(o => ({ value: String(o.value).slice(0, 200), ...(typeof o.name === 'string' && o.name !== o.value ? { name: o.name.slice(0, 200) } : {}) }));
+  };
+  return { models: list('model'), efforts: list('effort') };
+}
+
+/**
+ * What an ACP agent offers (D62), asked once for the toolbar's settings: spawn it, `initialize`,
+ * `session/new`, read its config options, stop it. Empty lists when it fails or takes over `ms`.
+ */
+export async function probeAcp(opts: AgentOptions, cwd: string, ms = 30_000): Promise<AcpOffer> {
+  const command = opts.command ?? 'claude';
+  const args = [...(adapterFor(command, undefined, opts.adapters, opts.args).acp ?? []), ...(opts.args ?? [])];
+  const env = { ...process.env, ...opts.env } as NodeJS.ProcessEnv;
+  const target = resolveCommand(command, args, env);
+  const none: AcpOffer = { models: [], efforts: [] };
+  if (!target) return none;
+  let child: ChildProcessWithoutNullStreams;
+  try { child = spawn(target.file, target.args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' }); }
+  catch { return none; }
+  const rpc = new JsonRpc(line => child.stdin.write(line));
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (d: string) => rpc.feed(d));
+  child.stderr.on('data', () => {});
+  child.stdin.on('error', () => {});
+  child.on('error', () => rpc.close('failed'));
+  child.once('exit', () => rpc.close('exited'));
+  try {
+    await rpc.request('initialize', { protocolVersion: ACP_PROTOCOL_VERSION, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'redline', title: 'Redline', version: '0' } }, ms);
+    return offerOf(await rpc.request('session/new', { cwd, mcpServers: [] }, ms));
+  } catch { return none; }
+  finally { rpc.close('done'); try { child.stdin.end(); } catch { /* closed */ } kill(child); }
 }
 
 const sse = (res: ServerResponse, event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);

@@ -225,3 +225,27 @@ test('ACP routes: a crashed agent shows as failed with its exit code; a failed h
     await bad.when(ss => ss[0]?.running === false && ss[0].status.state === 'error');
   } finally { await bad.close(); }
 });
+
+test('ACP settings (D62): the agent is asked once for its models and effort levels; only those reach session/set_config_option', { timeout: 60_000 }, async () => {
+  const t: Srv = await serve({ sessions: 'shared' });
+  let term: ReturnType<typeof sse> | undefined;
+  try {
+    // The first /info (serve's) started the probe in the background: the lists arrive on the feed and in /info.
+    type C = { models: { value: string; name?: string }[]; efforts: { value: string; name?: string }[]; pending?: boolean };
+    let cli: C | undefined;
+    for (let i = 0; i < 100 && !(cli && !cli.pending); i++) {
+      cli = (await (await fetch(`${t.base}/info`)).json()).clis[0];
+      if (cli?.pending) await new Promise(r => setTimeout(r, 100));
+    }
+    assert.deepEqual(cli!.models, [{ value: 'fake/one', name: 'Fake One' }, { value: 'fake/two', name: 'Fake Two' }]);
+    assert.deepEqual(cli!.efforts, [{ value: 'low', name: 'Low' }, { value: 'high', name: 'High' }], 'its "default" is the settings\' own Default');
+    assert.equal((await t.call('/send', { text: 'x', model: 'fake/three' })).status, 400);
+    assert.equal((await t.call('/send', { text: 'x', effort: 'max' })).status, 400);
+    assert.deepEqual((await t.call('/send', { text: 'fix it', model: 'fake/two', effort: 'high' })).body, { ok: true, id: 's1' });
+    const done = await t.when(ss => ss[0]?.status.state === 'done');
+    assert.deepEqual([done.data.sessions[0].model, done.data.sessions[0].effort], ['fake/two', 'high']);
+    term = sse(`${t.base}/stream?id=s1&token=${t.token}`);
+    const hello = await term.until(e => e.event === 'hello');
+    assert.match(hello.data.scrollback as string, /model fake\/two effort high/, 'both set through session/set_config_option');
+  } finally { term?.close(); await t.close(); }
+});

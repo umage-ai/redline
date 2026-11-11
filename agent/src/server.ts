@@ -18,11 +18,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { json, readBody } from '../../src/server/http.ts';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState, type ProgramStatus } from './program-status.ts';
 import { Screen, type PromptView } from './screen.ts';
-import { adapterFor, claudeCode, cliChoices, commandName, type CliChoice } from './adapters.ts';
-import { AcpSession, usesAcp } from './acp.ts';
+import { adapterFor, choices, claudeCode, cliChoices, commandName, type CliChoice } from './adapters.ts';
+import { AcpSession, meta, nameSession, probeAcp, usesAcp, type AcpOffer } from './acp.ts';
 export { commandName };
 
-import type { AgentAdapter, AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
+import type { AgentAdapter, AgentChoice, AgentCommand, AgentOptions, AgentRoutes } from '../../src/server/agent-hook.ts';
 
 // This file's folder: dist/ in the package (CommonJS), src/ when run from source (tests). The browser files are in dist/.
 const HERE = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
@@ -53,7 +53,16 @@ export interface AgentInfo {
   prompt?: PromptView;
   /** 'acp': an Agent Client Protocol session (D58), no terminal; absent: a pseudo-terminal. */
   protocol?: 'acp';
+  /** The tab's name (the first note's text, or the prompt's label) and the prompt that started it, from the panel (D62). */
+  title?: string;
+  task?: string;
+  /** The model and effort it was started with (the viewer's settings, else the options), when either was set (D62). */
+  model?: string;
+  effort?: string;
 }
+
+/** A CLI in /agent/info (D59, D62): what the settings offer for it. `pending`: an ACP agent not asked yet. */
+export interface AgentCliInfo { id: string; name: string; command: string; models: AgentChoice[]; efforts: AgentChoice[]; pending?: boolean }
 
 /** All of a project's sessions: what the toolbar shows. */
 export interface AgentGroupInfo {
@@ -137,13 +146,13 @@ export function resolveCommand(command: string, args: string[], env: NodeJS.Proc
 }
 
 /**
- * A start's arguments from the CLI's adapter (D55): the `instructions` and `model` options as flags
- * where the CLI has them (Claude Code: `--append-system-prompt-file`, `--model`), else the
- * instructions typed ahead of the session's first prompt (`preamble`) and a warning for the model.
+ * A start's arguments from the CLI's adapter (D55): the `instructions`, `model` and `effort` options as flags
+ * where the CLI has them (Claude Code: `--append-system-prompt-file`, `--model`, `--effort`), else the
+ * instructions typed ahead of the session's first prompt (`preamble`) and a warning for the model and effort.
  */
-export async function withInstructions(command: string, args: string[], extra: { text: string; file?: string }, model?: string, adapters?: AgentAdapter[]): Promise<{ args: string[]; preamble: string; warning?: string }> {
-  const a = adapterFor(command, undefined, adapters);
-  const r = a.start ? await a.start({ args, model, instructions: extra }) : { args, preamble: extra.text };
+export async function withInstructions(command: string, args: string[], extra: { text: string; file?: string }, model?: string, adapters?: AgentAdapter[], effort?: string): Promise<{ args: string[]; preamble: string; warning?: string }> {
+  const a = adapterFor(command, undefined, adapters, args);
+  const r = a.start ? await a.start({ args, model, ...(effort ? { effort } : {}), instructions: extra }) : { args, preamble: extra.text };
   return { args: r.args, preamble: r.preamble ?? '', ...(r.warning ? { warning: r.warning } : {}) };
 }
 const WARNED = new Set<string>();
@@ -173,6 +182,9 @@ class AgentSession {
   private app: string | undefined;   // from the program's 7501 reports
   private preamble = '';   // instructions still to go ahead of the first prompt (a CLI without a flag for them)
   private worked = false;   // working was reported since the last prompt (doneOnIdle adapters: idle after it is done)
+  /** The tab's name and the prompt that started it (D62), set by the first prompt that names them. */
+  title?: string;
+  task?: string;
 
   readonly opts: AgentOptions;
   readonly cwd: string;
@@ -194,7 +206,7 @@ class AgentSession {
     return s === 'idle' || s === 'done' || s === 'error';
   }
   /** The CLI's adapter (D55): by command, or by the `app` its 7501 reports name. */
-  get adapter() { return adapterFor(this.opts.command ?? 'claude', this.app, this.opts.adapters); }
+  get adapter() { return adapterFor(this.opts.command ?? 'claude', this.app, this.opts.adapters, this.opts.args); }
   /** Menus are read off the screen for CLIs whose menus `screen.ts` knows (Claude Code), or when asked to (`menus`). */
   private get menus() {
     const m = this.opts.menus ?? 'auto';
@@ -222,7 +234,7 @@ class AgentSession {
     const status = source === 'activity' ? { ...s, state: (Date.now() - this.lastOutput < ACTIVE_MS ? 'working' : 'idle') as ProgramState } : s;
     return {
       id: this.id, label: this.label, running: !!this.pty, ...(this.app ? { app: this.app } : {}), command: this.command, cli: this.cli, exitCode: this.exitCode,
-      status: { ...status, source }, sent: [...this.sent], ...(this.pty && this.view ? { prompt: this.view } : {}),
+      status: { ...status, source }, sent: [...this.sent], ...(this.pty && this.view ? { prompt: this.view } : {}), ...meta(this),
     };
   }
 
@@ -235,7 +247,7 @@ class AgentSession {
       if (!pty) throw new Error('the agent panel needs node-pty: npm i -D node-pty (Linux without build tools: @lydell/node-pty)');
       const env = { ...process.env, ...this.opts.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as NodeJS.ProcessEnv;
       const command = this.opts.command ?? 'claude';
-      const { args, preamble, warning } = await withInstructions(command, this.opts.args ?? [], await this.instructions(), this.opts.model, this.opts.adapters);
+      const { args, preamble, warning } = await withInstructions(command, this.opts.args ?? [], await this.instructions(), this.opts.model, this.opts.adapters, this.opts.effort);
       if (warning && !WARNED.has(warning)) { WARNED.add(warning); console.warn(`[redline] agent: ${warning}`); }
       this.preamble = preamble;
       const spawn = resolveCommand(command, args, env);
@@ -303,10 +315,11 @@ class AgentSession {
    * A prompt from a panel button. Not running: started, and the prompt waits until the program is
    * ready for input (it reported idle/done, or its output has been quiet for a moment, up to 30 s).
    */
-  async send(text: string, notes: string[] = []) {
+  async send(text: string, notes: string[] = [], about: { title?: unknown; task?: unknown } = {}) {
     const clean = text.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');   // no escape sequences, no control keys
     if (!clean.trim()) return;
     this.remember(notes);
+    nameSession(this, about);
     if (!this.pty || !this.ready()) { this.queued.push(clean); await this.start(); this.flush(); return; }
     this.type(clean);
   }
@@ -459,6 +472,24 @@ function release(p: Pty) {
   try { (p as unknown as { _agent?: { _conoutSocketWorker?: { _worker?: { unref?(): void } } } })._agent?._conoutSocketWorker?._worker?.unref?.(); } catch { /* internals changed */ }
 }
 
+/** A viewer's model and effort for a new session (D62), already checked against the CLI's offer. */
+type Picked = { model?: string; effort?: string };
+
+/**
+ * The model and effort a prompt or start asks for (D62), checked against what the settings offered
+ * for that CLI: never free text into the CLI's arguments. Absent or empty: the options' default.
+ */
+export function checkPick(body: Record<string, unknown>, offer: AcpOffer, cli: string): Picked | { error: string } {
+  const out: Picked = {};
+  for (const [key, list] of [['model', offer.models], ['effort', offer.efforts]] as const) {
+    const v = body[key];
+    if (v === undefined || v === null || v === '') continue;
+    if (typeof v !== 'string' || !list.some(c => c.value === v)) return { error: `${cli} offers no ${key} ${JSON.stringify(String(v).slice(0, 80))}` };
+    out[key] = v;
+  }
+  return out;
+}
+
 const clampSize = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(n) || lo)));
 const send = (res: ServerResponse, event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
@@ -489,13 +520,18 @@ class AgentGroup {
     return typeof id === 'string' && id ? this.sessions.find(s => s.id === id) : this.sessions[this.sessions.length - 1];
   }
 
-  /** A new session of a CLI (default: the first), over ACP when its options say so (D58); ended ones past KEEP_ENDED are dropped, oldest first. */
-  create(cli: CliChoice = this.clis[0]): AgentSession | AcpSession {
+  /**
+   * A new session of a CLI (default: the first), over ACP when its options say so (D58), with the
+   * viewer's model and effort (D62; checked against `offer` by the route) over the options'; ended
+   * ones past KEEP_ENDED are dropped, oldest first.
+   */
+  create(cli: CliChoice = this.clis[0], pick: Picked = {}): AgentSession | AcpSession {
     const ended = this.sessions.filter(s => !s.running);
     for (const s of ended.slice(0, Math.max(0, ended.length - KEEP_ENDED + 1))) this.drop(s);
     if (!this.sessions.length) this.n = 0;   // all closed: numbering starts over at #1
-    const opts: AgentOptions = { ...this.opts, command: cli.command, args: cli.args, label: cli.label, env: { ...this.opts.env, ...cli.env } };
+    const opts: AgentOptions = { ...this.opts, command: cli.command, args: cli.args, label: cli.label, env: { ...this.opts.env, ...cli.env }, ...pick };
     const s = new (usesAcp(opts) ? AcpSession : AgentSession)(opts, this.cwd, this.root, ++this.n, () => this.push(), cli.id);
+    if (s instanceof AcpSession) s.onOffer = o => this.offered(cli, o);   // a real session/new: the freshest list
     this.sessions.push(s);
     this.push();
     return s;
@@ -506,15 +542,15 @@ class AgentGroup {
    * starts a new one. `cli` (D59): 'fresh' starts that CLI; 'shared' switching to another CLI stops the
    * shared session (refused while it works or asks) and starts the new one, so one session still runs.
    */
-  forPrompt(id?: unknown, cli?: CliChoice): AgentSession | AcpSession {
+  forPrompt(id?: unknown, cli?: CliChoice, pick: Picked = {}): AgentSession | AcpSession {
     if (this.mode === 'shared') {
       const s = this.get(id);
-      if (s && (!cli || s.cli === cli.id)) return s;
+      if (s && (!cli || s.cli === cli.id)) return s;   // its model and effort as started: the settings apply to new sessions
       if (s?.running) {
         if (!s.resting) throw Object.assign(new Error(`${s.command} is busy: wait until it is done, or end it, to switch to ${cli!.name}`), { status: 409 });
         s.stop();
       }
-      return this.create(cli);
+      return this.create(cli, pick);
     }
     const running = this.sessions.filter(s => s.running);
     if (running.length >= this.max) {
@@ -522,7 +558,43 @@ class AgentGroup {
       if (!done) throw Object.assign(new Error(`${running.length} sessions are busy: stop one, or wait until one is done`), { status: 409 });
       done.stop();
     }
-    return this.create(cli);
+    return this.create(cli, pick);
+  }
+
+  /** The CLI a prompt or start goes to: the one named, else the shared session's, else the default. */
+  target(id: unknown, cli?: CliChoice): CliChoice {
+    const s = this.mode === 'shared' || (typeof id === 'string' && id) ? this.get(id) : undefined;
+    return cli ?? this.clis.find(c => c.id === s?.cli) ?? this.clis[0];
+  }
+
+  // What the settings offer per CLI (D62): an adapter's own lists, or what an ACP agent says in
+  // session/new (asked once in the background, `probeAcp`; a real session's reply updates it).
+  private offers = new Map<string, AcpOffer & { pending?: boolean }>();
+  offer(cli: CliChoice): AcpOffer & { pending?: boolean } {
+    const known = this.offers.get(cli.id);
+    if (known) return known;
+    const opts: AgentOptions = { ...this.opts, command: cli.command, args: cli.args, env: { ...this.opts.env, ...cli.env } };
+    if (!usesAcp(opts)) {
+      const a = adapterFor(cli.command, undefined, this.opts.adapters, cli.args);
+      const o = { models: choices(a.models), efforts: choices(a.efforts) };
+      this.offers.set(cli.id, o);
+      return o;
+    }
+    const pending = { models: [], efforts: [], pending: true };
+    this.offers.set(cli.id, pending);
+    void probeAcp(opts, this.cwd).then(o => { if (this.offers.get(cli.id) === pending) this.offered(cli, o); });
+    return pending;
+  }
+  private offered(cli: CliChoice, o: AcpOffer) {
+    const was = this.offers.get(cli.id);
+    if (was && !was.pending && JSON.stringify(was) === JSON.stringify(o)) return;
+    this.offers.set(cli.id, o);
+    const info = this.clisInfo();
+    for (const r of this.watchers) send(r, 'clis', info);
+  }
+  /** The CLIs for /agent/info and the feed: names and what each offers. */
+  clisInfo(): AgentCliInfo[] {
+    return this.clis.map(c => { const o = this.offer(c); return { id: c.id, name: c.name, command: commandName(c), models: o.models, efforts: o.efforts, ...(o.pending ? { pending: true } : {}) }; });
   }
 
   drop(s: AgentSession | AcpSession) {
@@ -616,7 +688,13 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
         res.end(terminalPage(base));
         return;
       }
-      if (method === 'GET' && p === '/agent/info') return json(res, 200, { ...group.info(), command: commandName(opts), clis: group.clis.map(c => ({ id: c.id, name: c.name, command: commandName(c) })), cli: group.clis[0].id, token: group.token, commands, approve: opts.keys !== false, hotkey, key });
+      if (method === 'GET' && p === '/agent/info') {
+        return json(res, 200, {
+          ...group.info(), command: commandName(opts), clis: group.clisInfo(), cli: group.clis[0].id, token: group.token, commands, approve: opts.keys !== false, hotkey, key,
+          // The project's settings (D62): what "Reset to project defaults" goes back to.
+          defaults: { sessions: opts.sessions === 'shared' ? 'shared' : 'fresh', ...(opts.model ? { model: opts.model } : {}), ...(opts.effort ? { effort: opts.effort } : {}) },
+        });
+      }
 
       const url = new URL(req.url ?? '', 'http://x');
       const token = method === 'GET' ? url.searchParams.get('token') : req.headers['x-redline-agent'];
@@ -641,11 +719,19 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
       // The CLI a new session runs (D59): `cli`, an id from /agent/info's `clis`. None: the default (shared: the session's own).
       const cli = typeof body.cli === 'string' && body.cli ? group.clis.find(c => c.id === body.cli) : undefined;
       if (body.cli !== undefined && body.cli !== '' && !cli) return json(res, 400, { error: `no such agent CLI: ${String(body.cli)}` });
+      // The viewer's model and effort (D62): only what the settings offered for the CLI the session runs.
+      let pick: Picked = {};
+      if (p === '/agent/start' || p === '/agent/send') {
+        const target = group.target(body.id, cli);
+        const r = checkPick(body, group.offer(target), target.name);
+        if ('error' in r) return json(res, 400, { error: r.error });
+        pick = r;
+      }
       switch (p) {
         case '/agent/start': {
           // A named session (re)starts; none named: 'shared' the one session, 'fresh' a new one.
           try {
-            const s = named ? session! : group.forPrompt(undefined, cli);
+            const s = named ? session! : group.forPrompt(undefined, cli, pick);
             await s.start(Number(body.cols), Number(body.rows));
             return json(res, 200, s.info());
           } catch (e) { return failed(e); }
@@ -653,8 +739,8 @@ export function agentRoutes(options: AgentOptions, root: string, base: string): 
         case '/agent/send': {
           if (typeof body.text !== 'string' || !body.text.trim()) return json(res, 400, { error: 'text is required' });
           try {
-            const s = group.forPrompt(body.id, cli);
-            await s.send(body.text, Array.isArray(body.notes) ? body.notes.slice(0, 200) as string[] : []);
+            const s = group.forPrompt(body.id, cli, pick);
+            await s.send(body.text, Array.isArray(body.notes) ? body.notes.slice(0, 200) as string[] : [], { title: body.title, task: body.task });
             return json(res, 200, { ok: true, id: s.id });
           } catch (e) { return failed(e); }
         }
