@@ -6,6 +6,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import css from '@xterm/xterm/css/xterm.css';
 import { API_BASE } from '../../src/shared/types.ts';
+import { pickFor, recallCli, recallSettings, type Cli } from './settings.ts';
 
 const BASE = `${API_BASE}/agent`;
 
@@ -18,17 +19,19 @@ document.head.append(Object.assign(document.createElement('style'), {
 }));
 
 async function main() {
-  type Cli = { id: string; command: string };
   const setup = await (await fetch(`${BASE}/info`)).json() as { token: string; command: string; sessions: { id: string; label: string; cli?: string }[]; clis?: Cli[] };
   const token = setup.token;
   // The session this page shows (`?id=`, set by the toolbar), or the newest; none yet: Start makes one.
   const asked = new URLSearchParams(location.search).get('id');
   const session = setup.sessions.find(x => x.id === asked) ?? setup.sessions[setup.sessions.length - 1];
   const id = session?.id;
-  // Its CLI; none yet: the one picked in the toolbar (D59, remembered in this browser), which Start runs.
-  const picked = (() => { try { return localStorage.getItem('redline.agent.cli'); } catch { return null; } })();
-  const cli = (setup.clis?.length ?? 0) > 1 ? setup.clis!.find(c => c.id === (session ? session.cli : picked)) : undefined;
+  // Its CLI; none yet: the one picked in the toolbar (D59, remembered in this browser), which Start
+  // runs with the viewer's model and effort (D62).
+  const all = setup.clis ?? [];
+  const mine = all.find(c => c.id === (session ? session.cli : recallCli())) ?? all[0];
+  const cli = all.length > 1 ? mine : undefined;
   const command = cli?.command ?? setup.command;
+  const pick = session ? {} : pickFor(mine, recallSettings());
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace',
@@ -80,7 +83,7 @@ async function main() {
     btn.onclick = async () => {
       btn.disabled = true;
       refit();
-      const r = await post('/start', { cols: term.cols, rows: term.rows, ...(!id && cli ? { cli: cli.id } : {}) });
+      const r = await post('/start', { cols: term.cols, rows: term.rows, ...(!id && cli ? { cli: cli.id } : {}), ...pick });
       if (!r.ok) return showStart(exitCode, (await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
       // A new session (none was here): this page shows it from now on, and the toolbar too.
       const started = (await r.json().catch(() => null))?.id as string | undefined;

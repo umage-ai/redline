@@ -102,9 +102,13 @@ try {
   await page.keyboard.press('a');
   await ui('.bar.ext').waitFor();
   await hold(1600);
-  await caption('03 · Fresh', 'Fresh: a new session for each batch of notes.<br>A clean context every time.');
-  await click(ui('.xbar button.ag-mode'));
-  await hold(1600);
+  await caption('03 · Fresh', 'A new session for each batch of notes (⚙).<br>A clean context every time.');
+  await click(ui('.xbar button.ag-gear'));
+  await hold(700);
+  await click(ui('.attach[data-toolbar="agent"] .ag-set label').filter({ hasText: 'New session per prompt' }));
+  await hold(900);
+  await click(ui('.xbar button.ag-gear'));
+  await hold(500);
 
   // 3 · apply, no terminal
   await caption('04 · Apply', 'Your agent CLI starts in the background.<br>No terminal needed.');
@@ -138,7 +142,7 @@ try {
   await click(qcard.locator('.ag-opt', { hasText: "don't ask again" }));
   await page.locator('h2', { hasText: 'Routes today' }).waitFor({ timeout: 20_000 });
   await page.getByTestId('new-route').filter({ hasText: 'Plan a route' }).waitFor({ timeout: 20_000 });
-  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.querySelectorAll('.ag-tab[data-state="done"]').length === 2, null, { timeout: 20_000 });
+  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.querySelectorAll('.ag-tab:is([data-state="done"], [data-state="seen"])').length === 2, null, { timeout: 20_000 });
 
   // 6 · done: both applied live, both notes ticked off
   await caption('08 · Done', 'Applied live, both notes ticked off.');
