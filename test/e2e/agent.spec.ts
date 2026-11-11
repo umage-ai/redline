@@ -20,6 +20,9 @@ test.afterEach(async ({ request }) => {
   await post('/end', {});
   await expect.poll(async () => (await get()).sessions.length, { timeout: 15_000 }).toBe(0);
   await post('/mode', { mode: 'shared' });
+  // Worktrees (D64) of this repo a test left: discarded, and the option back off.
+  for (const w of (await get()).worktrees.left) await post('/worktree', { branch: w.branch, action: 'discard', confirm: true });
+  await post('/worktrees', { on: false });
 });
 
 const NAME = 'Fake Code';
@@ -477,4 +480,47 @@ test('agent toolbar: ⚙ settings: CLI, model and effort per CLI, sessions; reme
   await expect(settings(page)).toHaveCount(0);
   await expect(gear).toBeFocused();
   await expect(agentBar(page)).toBeVisible();
+});
+
+test('agent toolbar: ⚙ worktrees: a fresh session on its own branch; when it ends, keep, merge or discard (D64)', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
+  await page.keyboard.press('a');
+  const a = await api(page);
+  await a.post('/mode', { mode: 'fresh' });
+  const gear = agentBar(page).locator('button.ag-gear');
+  await gear.click();
+  const toggle = settings(page).getByRole('checkbox', { name: 'Each new session in its own git worktree' });
+  await expect(toggle).toBeEnabled();   // the fixture lives in a git repo
+  await expect(toggle).not.toBeChecked();
+  await expect(settings(page).locator('#ag-wt-help')).toContainText('No node_modules there');
+  await toggle.check();
+  await expect.poll(async () => (await a.info()).worktrees.on).toBe(true);
+  await gear.click();
+
+  // Apply: the session runs in .redline/worktrees/<name> on redline/<name> (its tab's name), and the tab says so.
+  await apply(page).click();
+  await expect(chip(page)).toContainText('Done', { timeout: 30_000 });
+  const s1 = (await a.info()).sessions[0];
+  expect(s1.worktree.branch).toBe('redline/make-this-seconda');
+  expect(s1.worktree.path).toBe('.redline/worktrees/make-this-seconda');
+  await expect(tab(page, s1.id).locator('.ag-tab-main')).toHaveAttribute('title', /Branch: redline\/make-this-seconda/);
+  await expect(agentBar(page).locator('button.ag-branches')).toHaveCount(0);
+
+  // Ended: the branch's choice opens in the card; a branch button keeps it reachable.
+  await tab(page, s1.id).locator('.ag-x').click();
+  const card = ui(page, '.attach[data-toolbar="agent"] .ag-wts');
+  await expect(card).toBeVisible();
+  const row = card.locator('.ag-wt[data-branch="redline/make-this-seconda"]');
+  await expect(row.locator('.ag-wt-sub')).toContainText('no changes');
+  await expect(row.getByRole('button')).toHaveText(['Keep branch', /^Merge into /, 'Discard']);
+  await expect(row.getByRole('button', { name: 'Keep branch' })).toBeFocused();
+  await expect(agentBar(page).locator('button.ag-branches')).toHaveAttribute('aria-label', '1 branch to keep, merge or discard');
+  // Nothing on it: Discard goes at once (with work on it, it asks first; the unit tests cover that).
+  await row.getByRole('button', { name: 'Discard' }).click();
+  await expect(ui(page, '.toast')).toContainText('Discarded redline/make-this-seconda');
+  await expect(row).toHaveCount(0);
+  await expect(agentBar(page).locator('button.ag-branches')).toHaveCount(0);
+  expect((await a.info()).worktrees.left).toEqual([]);
 });

@@ -85,6 +85,7 @@ Set `window.redlineConfig = { … }` before the script loads, or `data-*` on its
 | `adapters` | built-in: Claude Code, OpenCode | Your own `AgentAdapter`s, tried first (D55); `models` and `efforts` on one are what ⚙ offers for it (D62). |
 | `sessions` | **0.10:** `'fresh'` (was `'shared'`) | A new session per prompt with just its notes; `'shared'` keeps one. ⚙ switches it while the dev server runs. |
 | `maxSessions` | `3` | Fresh sessions at once (1–8). |
+| `worktrees` | `false` | Each new fresh session in its own git worktree (`.redline/worktrees/<name>`, branch `redline/<name>`, D64); when it ends: keep, merge or discard. ⚙ switches it while the dev server runs; off when the root isn't a git repo. No node_modules there. |
 | `commands` | one **Apply notes** button | Prompt buttons (`{page}`, `{url}`, `{ids}`). |
 | `keys` | Enter / Esc | What Allow / Deny send to CLIs whose menus aren't read. |
 | `menus` | `'auto'` (Claude Code) | Read the CLI's menus into the toolbar's card (PTY only; ACP permission requests always show there). |

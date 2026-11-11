@@ -108,7 +108,11 @@ questions, Allow/Deny) with every option and a field for your own answer; the no
 on, waiting on you for, was sent and has done. **⚙** holds this browser's settings: the CLI (with several installed;
 holding Apply, right-click or Alt+↓ switches it too), its model and effort (Claude Code's aliases and `--effort` levels,
 an ACP agent's own list), and a new session per prompt (the default since 0.10: only its notes, several at once) or one
-kept going (`sessions: 'shared'`); they apply to new sessions, and Reset goes back to the project's options.
+kept going (`sessions: 'shared'`); they apply to new sessions, and Reset goes back to the project's options. With
+**Each new session in its own git worktree** (⚙, or `worktrees: true`) a fresh session works on its own branch,
+`redline/<its name>`, in `.redline/worktrees/`, so parallel sessions never touch the same files; when it ends you keep the
+branch, merge it (only a fast-forward or a clean merge) or discard it (asked first when that drops work). The worktree has
+no node_modules: the agent edits and commits there; to run the app or tests in it, install first.
 `instructions: { file: 'redline-agent.md' }` adds your own rules to the sessions Redline starts. Its state comes
 from the CLI's OSC 7501 status, on the toolbar's outline and as a ring around the closed launcher: a light sweeping round
 it while working, an orange glow while it waits for your approval, green when done (hover says what it is doing), which

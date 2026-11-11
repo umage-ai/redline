@@ -43,8 +43,8 @@ export interface AgentRoutes {
 
 /** What `agent(opts)` from @umage.ai/redline-agent returns. */
 export interface AgentPlugin {
-  /** Set up for a project root and the API base (`/__redline`). */
-  routes(ctx: { root: string; base: string }): AgentRoutes;
+  /** Set up for a project root, the API base (`/__redline`) and the notes folder (`.redline`: session worktrees go in its `worktrees/`, D64). */
+  routes(ctx: { root: string; base: string; dir?: string }): AgentRoutes;
 }
 
 type AgentModule = { agent(opts?: AgentOptions): AgentPlugin };
@@ -63,9 +63,9 @@ function loadModule(root: string): AgentModule | null {
 
 let warned = false;
 /** The panel's routes for the `agent` option, or null (off, or the package isn't installed: warned once). */
-export function agentFor(option: boolean | string | AgentOptions | AgentPlugin | undefined, root: string, base: string, load = loadModule): AgentRoutes | null {
+export function agentFor(option: boolean | string | AgentOptions | AgentPlugin | undefined, root: string, base: string, load = loadModule, dir = '.redline'): AgentRoutes | null {
   if (!option) return null;
-  if (isPlugin(option)) return option.routes({ root, base });
+  if (isPlugin(option)) return option.routes({ root, base, dir });
   const opts: AgentOptions = option === true ? {} : typeof option === 'string' ? { command: option } : option;
   const mod = load(root);
   if (!mod) {
@@ -73,5 +73,5 @@ export function agentFor(option: boolean | string | AgentOptions | AgentPlugin |
     warned = true;
     return null;
   }
-  return mod.agent(opts).routes({ root, base });
+  return mod.agent(opts).routes({ root, base, dir });
 }

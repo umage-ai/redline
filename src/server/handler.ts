@@ -290,7 +290,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const base = apiBaseOf(opts.apiBase);
   const corsOrigins = new Set((opts.cors ?? []).map(o => String(o).trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean));
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${base}/ext/${i}.js` : e.url);
-  const agent = agentFor(opts.agent, root, base);
+  const agent = agentFor(opts.agent, root, base, undefined, dir);
   if (agent) extensions.push(agent.panel);
   const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
   const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);

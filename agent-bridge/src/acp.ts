@@ -19,6 +19,7 @@ import type { ProgramState } from './program-status.ts';
 import type { PromptView, Span } from './screen.ts';
 import { adapterFor } from './adapters.ts';
 import { commandName, resolveCommand } from './sessions.ts';
+import type { Worktree } from './worktrees.ts';
 
 export const ACP_PROTOCOL_VERSION = 1;
 const CLIENT_INFO = { name: 'agent-bridge', title: 'Agent bridge', version: '0' };
@@ -165,7 +166,13 @@ export class AcpSession {
   private agentName: string | undefined;
 
   readonly opts: BridgeOptions;
-  readonly cwd: string;
+  /** Where the agent runs: the project's cwd, or the same folder in its worktree (D64). */
+  cwd: string;
+  /** Set up before the CLI first starts (D64: its worktree, which also moves `cwd`). */
+  prepare?: () => Promise<void>;
+  /** Its git worktree (D64), once prepared. */
+  worktree?: Worktree;
+
   readonly root: string;
   readonly id: string;
   readonly label: string;
@@ -213,6 +220,7 @@ export class AcpSession {
     if (this.child) return;
     if (this.starting) return this.starting;
     this.starting = (async () => {
+      await this.prepare?.();
       const command = this.opts.command ?? 'claude';
       const args = [...(this.adapter.acp ?? []), ...(this.opts.args ?? [])];
       const env = { ...process.env, ...this.opts.env } as NodeJS.ProcessEnv;
@@ -550,8 +558,9 @@ export class AcpSession {
 }
 
 /** A session's tab name, prompt, model and effort for its info (D62). */
-export const meta = (s: { title?: string; task?: string; opts: BridgeOptions }) => ({
+export const meta = (s: { title?: string; task?: string; opts: BridgeOptions; worktree?: Worktree }) => ({
   ...(s.title ? { title: s.title } : {}), ...(s.task ? { task: s.task } : {}),
+  ...(s.worktree ? { worktree: { branch: s.worktree.branch, path: s.worktree.path, base: s.worktree.base } } : {}),
   ...(s.opts.model ? { model: s.opts.model } : {}), ...(s.opts.effort ? { effort: s.opts.effort } : {}),
 });
 /** The first prompt that names the session sets its tab name and prompt label: no control characters, 80 characters at most. */

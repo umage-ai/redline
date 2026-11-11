@@ -25,12 +25,14 @@ const terminalPage = (base: string) => `<!doctype html><html><head><meta charset
 <body><div id="t"></div><script type="module" src="${base}/agent/terminal.js"></script></body></html>`;
 
 /** The panel's routes for one project root, under the API base (`/__redline`). */
-export function agentRoutes(opts: AgentOptions, root: string, base: string): AgentRoutes {
+export function agentRoutes(opts: AgentOptions, root: string, base: string, dir = '.redline'): AgentRoutes {
   const { commands: given, hotkey: hk, key: k, ...bridgeOpts } = opts;
   const commands = (given ?? DEFAULT_COMMANDS).filter(c => c && typeof c.label === 'string' && typeof c.prompt === 'string');
   const hotkey = hk === false ? false : typeof hk === 'string' && hk ? hk : 'alt+shift+a';
   const key = k === false ? false : typeof k === 'string' && k.length === 1 ? k.toLowerCase() : 'a';
-  const bridge = createBridge({ ...bridgeOpts, root, info: () => ({ commands, hotkey, key }) });
+  // Session worktrees (D64) in the notes folder, which the dev server's watcher ignores (Vite: `**/.redline/**`)
+  // and init gitignores; branches `redline/<session>`.
+  const bridge = createBridge({ ...bridgeOpts, root, info: () => ({ commands, hotkey, key }), worktreeDir: path.join(path.resolve(root, dir), 'worktrees'), branchPrefix: 'redline/' });
 
   return {
     panel: `${base}/agent/panel.js`,

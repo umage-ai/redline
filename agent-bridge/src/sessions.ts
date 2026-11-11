@@ -16,6 +16,7 @@ import { Screen, type PromptView } from './screen.ts';
 import { adapterFor, choices, claudeCode, commandName, type CliChoice } from './adapters.ts';
 import { AcpSession, meta, nameSession, probeAcp, usesAcp, type AcpOffer } from './acp.ts';
 import type { AgentAdapter, BridgeOptions, CliInfo, GroupInfo, SessionInfo } from './types.ts';
+import { act, addWorktree, gitTop, leftover, status, type Worktree, type WorktreeAction } from './worktrees.ts';
 export { commandName };
 
 // This file's folder: dist/ in a bundle (CommonJS), src/ when run from source (tests).
@@ -140,10 +141,15 @@ export class AgentSession {
   task?: string;
 
   readonly opts: BridgeOptions;
-  readonly cwd: string;
+  /** Where the CLI runs: the project's cwd, or the same folder in its worktree (D64). */
+  cwd: string;
   readonly root: string;
   readonly id: string;
   readonly label: string;
+  /** Set up before the CLI first starts (D64: its worktree, which also moves `cwd`). */
+  prepare?: () => Promise<void>;
+  /** Its git worktree (D64), once prepared. */
+  worktree?: Worktree;
   /** The CLI's id (D59); `opts` has its command, arguments and environment. */
   readonly cli: string;
   private onChange: () => void;
@@ -196,7 +202,8 @@ export class AgentSession {
     if (this.starting) return this.starting;
     this.starting = (async () => {
       if (cols && rows) { this.cols = clampSize(cols, 20, 400); this.rows = clampSize(rows, 5, 200); }
-      const pty = loadPty(this.cwd);
+      await this.prepare?.();
+      const pty = loadPty(this.root);
       if (!pty) throw new Error('the agent bridge needs node-pty: npm i -D node-pty (Linux without build tools: @lydell/node-pty)');
       const env = { ...process.env, ...this.opts.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as NodeJS.ProcessEnv;
       const command = this.opts.command ?? 'claude';
@@ -462,9 +469,21 @@ export class AgentGroup {
   readonly root: string;
   /** The CLIs a session can run (D59), the default first. */
   readonly clis: CliChoice[];
-  constructor(opts: BridgeOptions, cwd: string, root: string, clis: CliChoice[]) {
+  /** Worktrees (D64): on for new fresh sessions; where they go and their branches' prefix; the repo, or why there is none. */
+  private wt: { on: boolean; dir: string; prefix: string; git: { top: string } | { why: string } | null };
+  /** Worktrees of ended sessions, waiting for keep, merge or discard (D64). */
+  private left: (Worktree & { session?: string; title?: string })[] = [];
+  constructor(opts: BridgeOptions, cwd: string, root: string, clis: CliChoice[], wt: { dir?: string; prefix?: string } = {}) {
     this.opts = opts; this.cwd = cwd; this.root = root; this.clis = clis;
     this.mode = opts.sessions === 'shared' ? 'shared' : 'fresh';
+    this.wt = { on: !!opts.worktrees, dir: wt.dir ?? path.join(root, '.agent-worktrees'), prefix: wt.prefix ?? 'agent/', git: null };
+    void gitTop(root).then(async g => {
+      this.wt.git = g;
+      // Worktrees an earlier run left (its process ended before anyone decided): listed again.
+      if ('top' in g) for (const w of await leftover({ root, dir: this.wt.dir, prefix: this.wt.prefix })) if (!this.left.some(x => x.dir === w.dir)) this.left.push(w);
+      for (const w of this.left) await this.refresh(w);
+      this.push();
+    });
   }
   get max() { return clampSize(this.opts.maxSessions ?? 3, 1, 8); }
 
@@ -485,6 +504,14 @@ export class AgentGroup {
     const opts: BridgeOptions = { ...this.opts, command: cli.command, args: cli.args, label: cli.label, env: { ...this.opts.env, ...cli.env }, ...pick };
     const s = new (usesAcp(opts) ? AcpSession : AgentSession)(opts, this.cwd, this.root, ++this.n, () => this.push(), cli.id);
     if (s instanceof AcpSession) s.onOffer = o => this.offered(cli, o);   // a real session/new: the freshest list
+    // Its own worktree (D64), made when the CLI first starts (by then the first prompt has named the session).
+    if (this.mode === 'fresh' && this.wt.on && this.wt.git && 'top' in this.wt.git) {
+      s.prepare = async () => {
+        if (s.worktree) return;
+        const w = await addWorktree({ root: this.root, cwd: this.cwd, dir: this.wt.dir, prefix: this.wt.prefix, name: s.title || s.id });
+        s.worktree = w; s.cwd = w.cwd;
+      };
+    }
     this.sessions.push(s);
     this.push();
     return s;
@@ -555,12 +582,51 @@ export class AgentGroup {
     if (i < 0) return;
     this.sessions.splice(i, 1);
     s.dispose();
+    // Its worktree stays until someone decides what happens to the branch (D64).
+    if (s.worktree && !this.left.some(w => w.dir === s.worktree!.dir)) {
+      const w = { ...s.worktree, session: s.label, ...(s.title ? { title: s.title } : {}) };
+      this.left.push(w);
+      void this.refresh(w).then(() => this.push());
+    }
     this.push();
   }
 
   setMode(mode: 'shared' | 'fresh') { this.mode = mode; this.push(); }
 
-  info(): AgentGroupInfo { return { mode: this.mode, max: this.max, sessions: this.sessions.map(s => s.info()) }; }
+  /** New fresh sessions get a worktree (D64); refused when the project isn't a git repo. */
+  setWorktrees(on: boolean) {
+    const g = this.wt.git;
+    if (on && g && 'why' in g) throw Object.assign(new Error(`worktrees need a git repository: ${g.why}`), { status: 409 });
+    this.wt.on = on;
+    this.push();
+  }
+
+  /** Keep, merge or discard an ended session's worktree (D64); see worktrees.ts `act`. */
+  async worktree(branch: string, action: WorktreeAction, confirm = false) {
+    const w = this.left.find(x => x.branch === branch);
+    if (!w) throw Object.assign(new Error(`no ended session's worktree on ${branch}`), { status: 404 });
+    const r = await act(w, action, confirm);
+    if (!r.kept || action === 'keep') this.left.splice(this.left.indexOf(w), 1);
+    else await this.refresh(w);
+    this.push();
+    return r;
+  }
+
+  private async refresh(w: Worktree) {
+    try { const st = await status(w); w.dirty = st.dirty; w.ahead = st.ahead; } catch { /* unknown */ }
+  }
+
+  info(): AgentGroupInfo {
+    const g = this.wt.git;
+    return {
+      mode: this.mode, max: this.max,
+      worktrees: {
+        on: this.wt.on && !(g && 'why' in g), git: !!g && 'top' in g, ...(g && 'why' in g ? { why: g.why } : !g ? { why: 'checking…' } : {}),
+        left: this.left.map(w => ({ branch: w.branch, path: w.path, base: w.base, ...(w.dirty !== undefined ? { dirty: w.dirty } : {}), ...(w.ahead !== undefined ? { ahead: w.ahead } : {}), ...(w.session ? { session: w.session } : {}), ...(w.title ? { title: w.title } : {}) })),
+      },
+      sessions: this.sessions.map(s => s.info()),
+    };
+  }
 
   /** The toolbar's feed: every session's status, whenever one changes. */
   watch(res: ServerResponse) {
@@ -586,7 +652,7 @@ export class AgentGroup {
 // a config change; the agents should not), and killed when the dev server process exits.
 const GROUPS = Symbol.for('umage.agentBridge.groups');
 const g = globalThis as { [GROUPS]?: Map<string, AgentGroup> };
-export function groupFor(opts: BridgeOptions, cwd: string, root: string, clis: CliChoice[]): AgentGroup {
+export function groupFor(opts: BridgeOptions, cwd: string, root: string, clis: CliChoice[], wt: { dir?: string; prefix?: string } = {}): AgentGroup {
   const map = g[GROUPS] ??= (() => {
     const m = new Map<string, AgentGroup>();
     process.once('exit', () => { for (const s of m.values()) s.dispose(); });
@@ -594,7 +660,7 @@ export function groupFor(opts: BridgeOptions, cwd: string, root: string, clis: C
   })();
   const key = JSON.stringify([cwd, clis.map(c => [c.command, c.args, usesAcp({ ...opts, command: c.command })])]);
   let s = map.get(key);
-  if (!s) { s = new AgentGroup(opts, cwd, root, clis); map.set(key, s); }
+  if (!s) { s = new AgentGroup(opts, cwd, root, clis, wt); map.set(key, s); }
   return s;
 }
 

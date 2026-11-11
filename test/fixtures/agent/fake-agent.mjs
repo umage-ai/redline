@@ -7,8 +7,9 @@
 //   "form"  stepped questions: "← ☐ Color ☐ Size ✔ Submit →", options with descriptions,
 //           "Type something.", then a review step
 // Keys there: ↑/↓ move, a digit picks, Enter picks the ❯ row, ←/→ change step, Esc cancels.
-// "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent); FAKE_NO_DONE: idle, not done, after a turn.
+// "write <file> <text>" writes a file in its folder (D64). "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent); FAKE_NO_DONE: idle, not done, after a turn.
 
+import { writeFileSync } from 'node:fs';
 const ESC = '\x1b', ST = ESC + '\\';
 const out = s => process.stdout.write(s);
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
@@ -116,6 +117,9 @@ function prompt(p) {
   if (p === 'exit') { report('state=clear'); process.exit(3); }
   if (p === 'ask') { menu = { kind: 'ask', cursor: 0 }; draw(); return report(`state=blocked:kind=permission:msg=${b64('Edit src/App.tsx?')}`); }
   if (p === 'form') { menu = { kind: 'form', step: 0, cursor: 0, answers: [] }; draw(); return report(`state=blocked:kind=question:msg=${b64(`answer: ${COLOR.q}`)}`); }
+  // "write <file> <text>": writes the file in its working folder (a worktree's, D64), like an agent's edit.
+  const w = /^write (\S+) ?(.*)$/.exec(p);
+  if (w) writeFileSync(w[1], `${w[2]}\n`);
   draw();
   report('state=working');
   setTimeout(() => {

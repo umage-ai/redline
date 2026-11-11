@@ -40,14 +40,18 @@ export interface Session extends Info {
   /** Its tab's name (the first note's text, or the prompt's label) and the prompt that started it (D62). */
   title?: string; task?: string;
   model?: string; effort?: string;
+  /** Its git worktree (D64). */
+  worktree?: { branch: string; path: string; base: string };
 }
+/** An ended session's worktree, waiting for keep, merge or discard (D64). */
+export interface LeftWorktree { branch: string; path: string; base: string; dirty?: boolean; ahead?: number; session?: string; title?: string }
 /** All of the project's sessions: one that keeps its context ('shared'), or one per prompt ('fresh'). */
-interface Group { mode: 'shared' | 'fresh'; max: number; sessions: Session[] }
+interface Group { mode: 'shared' | 'fresh'; max: number; sessions: Session[]; worktrees?: { on: boolean; git: boolean; why?: string; left: LeftWorktree[] } }
 interface Command { label: string; prompt: string; title?: string }
 interface Setup extends Group {
   command: string; token: string; commands: Command[]; approve: boolean; hotkey: string | false; key?: string | false; clis?: Cli[]; cli?: string;
   /** The project's settings (D62): what Reset goes back to. */
-  defaults?: { sessions?: 'shared' | 'fresh'; model?: string; effort?: string };
+  defaults?: { sessions?: 'shared' | 'fresh'; model?: string; effort?: string; worktrees?: boolean };
 }
 
 const RANK: Record<State, number> = { blocked: 4, working: 3, error: 2, done: 1, idle: 0 };
@@ -156,6 +160,12 @@ export function visibleTabs(sessions: Pick<Session, 'id' | 'running' | 'status'>
   return { shown: order(sessions.filter(s => keep.has(s.id))), hidden: order(sessions.filter(s => !keep.has(s.id))) };
 }
 
+/** An ended session's worktree in a few words: "2 commits · uncommitted changes", or "no changes". */
+export function worktreeState(w: Pick<LeftWorktree, 'dirty' | 'ahead'>): string {
+  const parts = [w.ahead ? `${w.ahead} commit${w.ahead === 1 ? '' : 's'}` : '', w.dirty ? 'uncommitted changes' : ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : w.dirty === undefined ? 'checking…' : 'no changes';
+}
+
 /** What a note's tag says: handed to the agent and still open, or done since. */
 export function noteTag(note: Pick<Note, 'id' | 'done'>, sent: ReadonlySet<string>): 'sent' | 'done' | null {
   return !sent.has(note.id) ? null : note.done ? 'done' : 'sent';
@@ -183,6 +193,7 @@ const ICONS = {
   more: svg('<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>'),
   x: svg('<path d="M7 7l10 10M17 7L7 17"/>'),
   down: svg('<path d="M7 10l5 5 5-5"/>'),
+  branch: svg('<circle cx="6" cy="5.5" r="2.2"/><circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.7v8.6"/><path d="M18 10.2c0 4-4.5 3.8-10.4 7"/>'),
 };
 const icon = (k: keyof typeof ICONS) => { const s = document.createElement('span'); s.className = 'ag-ic'; s.innerHTML = ICONS[k]; return s; };
 
@@ -305,9 +316,23 @@ const STYLES = `
 .ag-field { display: grid; gap: 0; }
 .ag-field select { width: 100%; font: inherit; color: var(--fg); background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
 .ag-field select:disabled { opacity: .6; }
-.ag-set .ag-note { color: var(--fg-2); font-size: 12px; line-height: 1.4; }
+.ag-set :is(.ag-note, .ag-help) { color: var(--fg-2); font-size: 12px; line-height: 1.4; }
 .ag-set footer { display: flex; align-items: center; gap: 8px; color: var(--fg-2); font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .ag-set footer span { flex: 1; }
+/* ended sessions' branches (D64) */
+.ag-bc { display: flex; align-items: center; gap: 4px; }
+.bar button.ag-branches .count { background: var(--bg-3); color: var(--fg); }
+.ag-wt { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--bg-2); }
+.ag-wt-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ag-wt-head b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-wt-head span:last-child { margin-left: auto; color: var(--fg-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ag-wt-sub { color: var(--fg-2); font-size: 12px; overflow-wrap: anywhere; }
+.ag-wt-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.ag-wt-acts button { padding: 5px 10px; border-radius: 7px; background: var(--bg-3); color: var(--fg); }
+.ag-wt-acts button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 12%, var(--bg-3)); }
+.ag-wt-acts button:disabled { opacity: .5; cursor: default; }
+.ag-wt-acts button.ag-wt-discard:hover, .ag-wt-acts button.ag-wt-discard.armed { background: #ff2d55; color: #fff; }
+.ag-radio.off { opacity: .6; cursor: default; }
 /* the CLI window's header */
 .win-controls button.ag-wend { color: #ff6b85; }
 .win-controls button.ag-wend:hover { background: color-mix(in srgb, #ff2d55 20%, var(--bg-3)); color: #fff; }
@@ -350,7 +375,7 @@ function roving(box: HTMLElement, items: HTMLElement[]) {
   });
 }
 
-type View = 'list' | 'switch' | 'cmds' | 'settings' | null;
+type View = 'list' | 'switch' | 'cmds' | 'settings' | 'branches' | null;
 
 export default async function agentPanel(rl: RedlineApi) {
   if (!(rl.version >= 5) || typeof rl.addToolbar !== 'function') return;
@@ -451,7 +476,7 @@ export default async function agentPanel(rl: RedlineApi) {
     wantFocus = view ? focus : wantFocus;
     toolbar?.render();
   };
-  const OPENER: Record<Exclude<View, null>, string> = { list: 'more', switch: 'primary', cmds: 'more-cmds', settings: 'gear' };
+  const OPENER: Record<Exclude<View, null>, string> = { list: 'more', switch: 'primary', cmds: 'more-cmds', settings: 'gear', branches: 'branches' };
   const closeView = () => {
     if (!view) return false;
     const back = view === 'list' && matchMedia('(max-width: 560px)').matches ? 'sw' : OPENER[view];
@@ -473,7 +498,8 @@ export default async function agentPanel(rl: RedlineApi) {
       return;
     }
     arming = null; clearTimeout(armTimer);
-    void post('/end', { id: x.id }).catch(fail);
+    // A session in a worktree (D64): the branch's choice (keep, merge, discard) opens once it has ended.
+    void post('/end', { id: x.id }).then(() => { if (x.worktree) { view = 'branches'; wantFocus = `wt-keep:${x.worktree.branch}`; toolbar?.render(); } }).catch(fail);
   };
   const endTitle = (x: Session) => arming === x.id ? `Press again to end ${who(x)}` : x.running ? `End ${who(x)}: stop the CLI and close the session${busy(x) ? ' (asks first)' : ''}` : `Close ${who(x)} (ended)`;
   /** The × on a tab or a list row: ends that session (or closes an ended one). */
@@ -511,6 +537,7 @@ export default async function agentPanel(rl: RedlineApi) {
       x.task && `Prompt: ${x.task}`,
       notes.length ? `Notes: ${notes.slice(0, 3).map(n => shorten(noteText(n), 40)).join('; ')}${notes.length > 3 ? ` (+${notes.length - 3})` : ''}` : x.sent?.length ? `Notes: ${x.sent.length}` : '',
       [x.model && `Model: ${x.model}`, x.effort && `Effort: ${x.effort}`].filter(Boolean).join(' · '),
+      x.worktree && `Branch: ${x.worktree.branch} (${x.worktree.path})`,
       xl.msg && `Last: ${xl.msg}`,
       x.status.state === 'blocked' && x.running ? 'Click to answer' : '',
     ].filter(Boolean).join('\n');
@@ -623,7 +650,12 @@ export default async function agentPanel(rl: RedlineApi) {
     const firstSetting = multi() ? `set-cli:${pick}` : picked()?.models?.length || picked()?.pending ? 'set-model' : picked()?.efforts?.length ? 'set-effort' : `set-mode:${group.mode}`;
     const gear = btn(icon('gear'), 'Agent settings: CLI, model, effort, sessions', () => openView('settings', firstSetting), 'ag-icon ag-gear', 'gear',
       { 'aria-label': 'Agent settings', 'aria-haspopup': 'dialog', 'aria-expanded': String(view === 'settings') });
-    box.replaceChildren(style(), live, chip, sep('ag-desk'), ...(tabs ? [tabs] : []), sw, ...actions, sep('ag-desk'), term, gear);
+    // Ended sessions' branches waiting for a decision (D64): one button with their count.
+    const left = group.worktrees?.left ?? [];
+    const branches = left.length ? btn(el('span', { class: 'ag-bc' }, icon('branch'), el('span', { class: 'count' }, String(left.length))), `${left.length} ended session${left.length === 1 ? '' : 's'}' branch${left.length === 1 ? '' : 'es'}: keep, merge or discard`,
+      () => openView('branches', `wt-keep:${left[0].branch}`), 'ag-icon ag-branches', 'branches',
+      { 'aria-label': `${left.length} branch${left.length === 1 ? '' : 'es'} to keep, merge or discard`, 'aria-haspopup': 'dialog', 'aria-expanded': String(view === 'branches') }) : null;
+    box.replaceChildren(style(), live, chip, sep('ag-desk'), ...(tabs ? [tabs] : []), sw, ...actions, sep('ag-desk'), ...(branches ? [branches] : []), term, gear);
     queueMicrotask(restoreFocus);
   }
 
@@ -638,6 +670,7 @@ export default async function agentPanel(rl: RedlineApi) {
     if (view === 'switch' && multi()) return void box.append(style(), switchMenu());
     if (view === 'cmds') return void box.append(style(), cmdsMenu());
     if (view === 'list') return renderList(box);
+    if (view === 'branches') return void box.append(style(), renderBranches());
     const info = cur();
     const pv = info.running ? info.prompt : undefined;
     const st = stateLabel(info);
@@ -764,6 +797,18 @@ export default async function agentPanel(rl: RedlineApi) {
       { value: 'fresh', label: 'New session per prompt', sub: `up to ${group.max} at once`, k: 'set-mode:fresh' },
       { value: 'shared', label: 'Keep one session going', sub: 'keeps its context', k: 'set-mode:shared' },
     ], group.mode, v => void post('/mode', { mode: v }).then(g => { group = { ...group, ...g }; sync(); }).catch(fail)));
+    // Worktrees (D64): a toggle, off with the reason when the project isn't a git repo.
+    const wt = group.worktrees;
+    if (wt) {
+      const off = !wt.git;
+      const input = el('input', { type: 'checkbox', checked: wt.on, disabled: off, data: { k: 'set-wt' }, attrs: { 'aria-describedby': 'ag-wt-help' } });
+      input.addEventListener('change', () => void post('/worktrees', { on: input.checked }).then(g => { group = { ...group, ...g }; refreshSettings(); sync(); }).catch(e => { input.checked = !input.checked; fail(e); }));
+      const help = off ? `Needs a git repository (${wt.why ?? 'checking…'}).`
+        : `Its own branch (redline/…) and folder in .redline/worktrees, so sessions never edit the same files; when it ends: keep, merge or discard the branch.${group.mode === 'shared' ? ' Only with a new session per prompt.' : ''} No node_modules there: the agent can edit and use git; running the app or tests in it needs an install.`;
+      box.append(el('fieldset', {}, el('legend', {}, 'Worktrees'),
+        el('label', { class: 'ag-radio' + (off ? ' off' : '') }, input, el('span', {}, 'Each new session in its own git worktree')),
+        el('div', { class: 'ag-help', id: 'ag-wt-help' }, help)));
+    }
     box.append(el('footer', {}, el('span', {}, 'Applies to new sessions.'),
       el('button', { data: { k: 'set-reset' }, title: 'Forget this browser\'s choices: the project\'s CLI, model, effort and sessions', onclick: reset }, 'Reset to project defaults')));
     // Esc in a field (the core leaves keys in fields alone): close the settings, back on ⚙.
@@ -787,9 +832,45 @@ export default async function agentPanel(rl: RedlineApi) {
     pick = pickCli(clis(), null, setup.cli); rememberCli(null);
     const mode = setup.defaults?.sessions ?? 'fresh';
     if (group.mode !== mode) { try { group = { ...group, ...(await post('/mode', { mode })) }; } catch (e) { fail(e); } }
+    const wt = !!setup.defaults?.worktrees;
+    if (group.worktrees?.git && group.worktrees.on !== wt) { try { group = { ...group, ...(await post('/worktrees', { on: wt })) }; } catch (e) { fail(e); } }
     wantFocus = 'set-reset';
     rl.toast('Agent settings: back to the project\'s defaults');
     sync();
+  }
+
+  /**
+   * Ended sessions' branches (D64): keep, merge (only a fast-forward or a clean merge; the server
+   * checks) or discard. Discarding work asks first here ("Discard? …"), and the server asks again.
+   */
+  let armedWt: string | null = null, armWtTimer = 0;
+  function renderBranches(): HTMLElement {
+    const left = group.worktrees?.left ?? [];
+    const box = el('div', { class: 'ag-list ag-wts', attrs: { role: 'dialog', 'aria-label': 'Branches of ended sessions' } },
+      el('h4', {}, left.length ? 'Ended sessions: their branches' : 'No branches left to decide on'));
+    const act = (w: LeftWorktree, action: 'keep' | 'merge' | 'discard', confirm = false) => {
+      void client.worktree(w.branch, action, confirm).then(r => rl.toast(r.message, !r.ok)).catch(fail);
+    };
+    for (const w of left) {
+      const risky = !!(w.dirty || w.ahead), armed = armedWt === w.branch;
+      const discard = el('button', {
+        class: 'ag-wt-discard' + (armed ? ' armed' : ''), data: { k: `wt-discard:${w.branch}` },
+        title: risky ? `Delete the worktree and the branch, with its ${worktreeState(w)}` : 'Delete the worktree and the branch',
+        onclick: () => {
+          if (risky && !armed) { armedWt = w.branch; clearTimeout(armWtTimer); armWtTimer = window.setTimeout(() => { armedWt = null; toolbar?.render(); }, 4000); wantFocus = `wt-discard:${w.branch}`; toolbar?.render(); return; }
+          armedWt = null; act(w, 'discard', risky);
+        },
+      }, armed ? 'Discard? Work is lost' : 'Discard');
+      box.append(el('div', { class: 'ag-wt', data: { branch: w.branch } },
+        el('div', { class: 'ag-wt-head' }, icon('branch'), el('b', {}, w.branch), el('span', {}, [w.session, w.title].filter(Boolean).join(' · '))),
+        el('div', { class: 'ag-wt-sub' }, `${worktreeState(w)} · from ${w.base} · ${w.path}`),
+        el('div', { class: 'ag-wt-acts' },
+          el('button', { data: { k: `wt-keep:${w.branch}` }, title: 'Keep the branch (the folder too while it has uncommitted changes)', onclick: () => act(w, 'keep') }, 'Keep branch'),
+          el('button', { data: { k: `wt-merge:${w.branch}` }, disabled: !!w.dirty, title: w.dirty ? 'Commit its changes first (or ask the agent to)' : `Merge into ${w.base}: only a fast-forward or a clean merge`, onclick: () => act(w, 'merge') }, `Merge into ${w.base}`),
+          discard)));
+    }
+    box.append(el('div', { class: 'ag-foot' }, el('span', {}, ''), el('button', { data: { k: 'wt-done' }, onclick: () => closeView() }, 'Done')));
+    return box;
   }
 
   /** Every session (the "+N" list, the phone's session button), newest first: a click shows it, × ends it. */
@@ -801,7 +882,7 @@ export default async function agentPanel(rl: RedlineApi) {
         class: 'ag-row-main', title: tabTip(x), data: { k: `row:${x.id}` }, attrs: { 'aria-current': x.id === cur().id ? 'true' : undefined },
         onclick: () => { sel = x.id; view = null; wantFocus = matchMedia('(max-width: 560px)').matches ? 'sw' : `tab:${x.id}`; sync(); },
       }, el('span', { class: 'ag-dot' }), el('span', { class: 'l' }, x.label), el('b', {}, xl.label),
-      el('span', { class: 'm' }, [x.title, multi() ? nameOf(x) : '', n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')));
+      el('span', { class: 'm' }, [x.title, multi() ? nameOf(x) : '', x.worktree?.branch ?? '', n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')));
       const r = el('div', { class: 'ag-row' + (x.id === cur().id ? ' cur' : ''), data: { id: x.id, state: shownState(x) } }, main, endX(x, `rowx:${x.id}`));
       r.style.setProperty('--c', xl.color);
       return r;
@@ -831,7 +912,7 @@ export default async function agentPanel(rl: RedlineApi) {
   });
 
   /** The CLI window's name: "#1 · Claude Code · Purple button". */
-  const winTitle = () => { const x = cur(); return x.id ? [x.label, nameOf(x), x.title].filter(Boolean).join(' · ') : `${pickName()} · no session yet`; };
+  const winTitle = () => { const x = cur(); return x.id ? [x.label, nameOf(x), x.title, x.worktree?.branch].filter(Boolean).join(' · ') : `${pickName()} · no session yet`; };
   /** End session in the CLI window's header (asks first while it works); — minimizes, the session runs on. */
   function renderWinControls() {
     if (!winControls) return;

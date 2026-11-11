@@ -436,7 +436,7 @@ test('agent option: the core loads @umage.ai/redline-agent only when asked; miss
   // A plugin from the package is used as is, with the root and the API base.
   let ctx: unknown;
   assert.equal(agentFor({ routes: c => { ctx = c; return routes; } }, '/r', '/x', () => { throw new Error('not loaded'); }), routes);
-  assert.deepEqual(ctx, { root: '/r', base: '/x' });
+  assert.deepEqual(ctx, { root: '/r', base: '/x', dir: '.redline' });
   // Not installed: null and one warning, however often it is asked.
   const warn = console.warn, warnings: string[] = [];
   console.warn = (m: string) => warnings.push(m);
@@ -626,7 +626,7 @@ test('agent routes (D62): models and effort per CLI in /agent/info; only offered
   try {
     assert.deepEqual(info.clis.map((c: { id: string; name: string; models: unknown; efforts: unknown }) => [c.id, c.name, c.models, c.efforts]),
       [['one', 'Fake Code', [{ value: 'fast' }, { value: 'smart', name: 'Smart' }], [{ value: 'low' }, { value: 'high' }]], ['two', 'Fake Two', [], []]]);
-    assert.deepEqual(info.defaults, { sessions: 'fresh', model: 'fast', effort: 'low' }, 'what Reset goes back to');
+    assert.deepEqual(info.defaults, { sessions: 'fresh', worktrees: false, model: 'fast', effort: 'low' }, 'what Reset goes back to');
     // Refused: a model or effort the CLI doesn't offer (or one for a CLI that offers none), and anything not a string.
     for (const body of [{ cli: 'one', model: 'opus' }, { cli: 'one', effort: 'max' }, { cli: 'two', model: 'fast' }, { cli: 'one', model: 42 }, { model: '--help' }]) {
       const r = await call('/send', { text: 'go', ...body });

@@ -117,6 +117,13 @@ export interface BridgeOptions {
    * CLI whose adapter has an ACP mode (OpenCode), else `'pty'` (Claude Code).
    */
   protocol?: 'acp' | 'pty';
+  /**
+   * A git worktree per new session (D64): each runs on its own branch in its own folder, so parallel
+   * sessions never edit the same files; when it ends, a viewer keeps, merges or discards the branch.
+   * Default off; a viewer can switch it while the server runs. Not a git repo: off, with the reason.
+   * A shared session ignores it. The worktree has no node_modules (install there to run the app or tests).
+   */
+  worktrees?: boolean;
 }
 
 /** A run of text with its colours, as read off the screen. */
@@ -135,6 +142,18 @@ export interface PromptView {
 
 /** One OSC 7501 / ACP status, as a viewer shows it. */
 export type SessionState = 'idle' | 'working' | 'done' | 'blocked' | 'error';
+
+/** A session's git worktree (D64): its branch and folder, and how it compares with the branch it came from. */
+export interface WorktreeInfo {
+  branch: string;
+  /** Relative to the project root, forward slashes. */
+  path: string;
+  /** The branch it was made from (a merge goes back into it). */
+  base: string;
+  /** Uncommitted changes in the worktree, and commits not on `base` (checked when the session ends). */
+  dirty?: boolean;
+  ahead?: number;
+}
 
 /** What a viewer shows: the session's state and the program's status. */
 export interface SessionInfo {
@@ -166,6 +185,8 @@ export interface SessionInfo {
   /** The model and effort it was started with, when either was set (D62). */
   model?: string;
   effort?: string;
+  /** Its git worktree (D64), when it runs in one. */
+  worktree?: WorktreeInfo;
 }
 
 /** A CLI in /info (D59, D62): what the settings offer for it. `pending`: an ACP agent not asked yet. */
@@ -176,6 +197,11 @@ export interface GroupInfo {
   mode: 'shared' | 'fresh';
   /** Sessions running at once in 'fresh' mode. */
   max: number;
+  /**
+   * Worktrees (D64): `on` for new sessions (fresh ones only); `git: false` when the project isn't a git
+   * repo (why); `left`: worktrees of sessions that have ended, waiting for keep, merge or discard.
+   */
+  worktrees: { on: boolean; git: boolean; why?: string; left: (WorktreeInfo & { session?: string; title?: string })[] };
   /** Oldest first. */
   sessions: SessionInfo[];
 }

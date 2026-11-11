@@ -17,5 +17,5 @@ export { claudeCode, openCode, adapterFor } from '../../agent-bridge/src/adapter
 
 /** The agent panel for the `agent` option: `true` is `agent()`, `'codex'` is `agent({ command: 'codex' })`. */
 export function agent(opts: AgentOptions = {}): AgentPlugin {
-  return { routes: ({ root, base }) => agentRoutes(opts, root, base) };
+  return { routes: ({ root, base, dir }) => agentRoutes(opts, root, base, dir) };
 }

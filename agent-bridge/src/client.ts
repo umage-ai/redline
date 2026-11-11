@@ -70,6 +70,10 @@ export async function bridgeClient(base: string) {
     resize: (id: string, cols: number, rows: number) => post('/resize', { id, cols, rows }),
     ack: (id: string) => post('/ack', { id }),
     mode: (mode: 'shared' | 'fresh') => post<GroupInfo>('/mode', { mode }),
+    /** New fresh sessions in their own git worktree (D64), or not. */
+    worktrees: (on: boolean) => post<GroupInfo>('/worktrees', { on }),
+    /** An ended session's worktree: keep the branch, merge it, or discard it (`confirm` when that drops work). */
+    worktree: (branch: string, action: 'keep' | 'merge' | 'discard', confirm = false) => post<{ ok: boolean; message: string; confirm?: boolean }>('/worktree', { branch, action, confirm }),
     /** Stops and closes a session; no id: every one. */
     end: (id?: string) => post('/end', id ? { id } : {}),
   };

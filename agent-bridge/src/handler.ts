@@ -38,6 +38,12 @@ export interface BridgeSetup extends BridgeOptions {
   root: string;
   /** Extra fields for /info, for the host's own viewer (Redline: its prompt buttons and keys). */
   info?: () => Record<string, unknown>;
+  /**
+   * Where session worktrees go (D64), absolute or relative to `root`; somewhere the host's file watcher
+   * ignores. Default `<root>/.agent-worktrees`. Their branches: `<branchPrefix><session>`, default `agent/`.
+   */
+  worktreeDir?: string;
+  branchPrefix?: string;
 }
 
 /**
@@ -45,18 +51,18 @@ export interface BridgeSetup extends BridgeOptions {
  * so a host that re-creates its handler (a dev server's config restart) gets the same ones back.
  */
 export function createBridge(setup: BridgeSetup): Bridge {
-  const { root, info: extra, ...options } = setup;
+  const { root, info: extra, worktreeDir, branchPrefix, ...options } = setup;
   // The CLIs to pick from (D59): `clis`, else `command`, else every adapter's installed one; the default first.
   const clis = cliChoices(options);
   const opts: BridgeOptions = { ...options, command: clis[0].command, args: clis[0].args, label: clis[0].label ?? options.label };
   const cwd = opts.cwd ? path.resolve(root, opts.cwd) : root;
-  const group = groupFor(opts, cwd, root, clis);
+  const group = groupFor(opts, cwd, root, clis, { dir: worktreeDir ? path.resolve(root, worktreeDir) : undefined, prefix: branchPrefix });
   // Allow and Deny: the keys of the session's CLI (its adapter's), the option's over them.
   const keysFor = (s: { adapter: AgentAdapter }) => opts.keys === false ? false : { ...DEFAULT_KEYS, ...s.adapter.keys, ...opts.keys };
   const info = () => ({
     ...group.info(), command: commandName(opts), clis: group.clisInfo(), cli: group.clis[0].id, token: group.token, approve: opts.keys !== false,
     // The project's settings (D62): what a viewer's "reset" goes back to.
-    defaults: { sessions: opts.sessions === 'shared' ? 'shared' : 'fresh', ...(opts.model ? { model: opts.model } : {}), ...(opts.effort ? { effort: opts.effort } : {}) },
+    defaults: { sessions: opts.sessions === 'shared' ? 'shared' : 'fresh', worktrees: !!opts.worktrees, ...(opts.model ? { model: opts.model } : {}), ...(opts.effort ? { effort: opts.effort } : {}) },
     ...extra?.(),
   });
 
@@ -132,6 +138,18 @@ export function createBridge(setup: BridgeSetup): Bridge {
           // One session, or (no id) all of them; it stays listed as ended (a terminal's Restart).
           if (named) session!.stop(); else for (const s of group.sessions) s.stop();
           return json(res, 200, { ok: true });
+        case '/worktrees':
+          // New fresh sessions in their own worktree (D64), or not.
+          if (typeof body.on !== 'boolean') return json(res, 400, { error: 'on must be true or false' });
+          try { group.setWorktrees(body.on); return json(res, 200, group.info()); } catch (e) { return failed(e); }
+        case '/worktree': {
+          // An ended session's worktree: keep, merge or discard (D64); discarding work needs confirm.
+          if (typeof body.branch !== 'string' || !['keep', 'merge', 'discard'].includes(body.action as string)) return json(res, 400, { error: 'branch and action (keep, merge or discard) are required' });
+          try {
+            const r = await group.worktree(body.branch, body.action as 'keep' | 'merge' | 'discard', body.confirm === true);
+            return json(res, r.ok ? 200 : 409, r);
+          } catch (e) { return failed(e); }
+        }
         case '/dismiss':
           if (!named) return json(res, 400, { error: 'id is required' });
           if (session!.running) return json(res, 409, { error: 'stop the session first' });
