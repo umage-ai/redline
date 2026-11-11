@@ -1,8 +1,10 @@
 # @umage.ai/redline-agent
 
 The agent panel for [Redline](https://github.com/umage-ai/redline)'s dev server. It runs your agent CLI
-(Claude Code by default; Codex, Gemini CLI, aider… any terminal program) in a pseudo-terminal on the dev
+(Claude Code, OpenCode, or any terminal program; any [ACP](https://agentclientprotocol.com) agent without a terminal) on the dev
 server and drives it from the overlay, so reviewers never need to open a terminal:
+
+![The agent toolbar: the CLI asks to edit src/App.tsx; the card shows the diff and its three options](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent.png)
 
 - **The agent toolbar**: **Agent** (A) in Redline's toolbar, or `Alt+Shift+A` from anywhere. It shows the
   agent's state and its own message, **Apply 3 notes** and your own prompt buttons, **CLI** for its
@@ -11,8 +13,10 @@ server and drives it from the overlay, so reviewers never need to open a termina
   stepped questions, a trust dialog), the card shows the context, the question and every option, with a field for
   "Type something". It is read off the CLI's screen, so it is exactly what the terminal shows; a click moves the
   CLI's cursor and presses Enter. This is for Claude Code (detected from its OSC 7501 reports or the command
-  `claude`); other CLIs get **Allow**/**Deny** and the terminal (`menus: true` tries it anyway).
-- **Live status** from the CLI's OSC 7501 reports (Claude Code sends them): a light sweeping round the toolbar
+  `claude`). ACP agents (OpenCode by default) send their permission requests as data, so the card shows their own
+  options too; other CLIs get **Allow**/**Deny** and the terminal (`menus: true` tries it anyway).
+- **Several CLIs**: every installed one is offered; a ▾ next to the prompt buttons picks one, remembered in this browser.
+- **Live status** from the CLI's OSC 7501 reports (Claude Code sends them) or the ACP session: a light sweeping round the toolbar
   and a turning ring on the closed launcher while it works, an orange glow while it waits for you, green when done.
 - **Fresh sessions** (the default since 0.10; the toolbar's **Fresh** switches): every prompt starts its own session with
   only its notes (none that a running session already has), several at once, a tab each (3 shown, the rest

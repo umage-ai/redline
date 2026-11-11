@@ -8,9 +8,14 @@ import path from 'node:path';
 
 const demo = path.resolve('examples/demo');
 const out = path.resolve('docs/images');
-const notesFile = path.join(demo, '.redline/pages/index.md');
+// Own notes folder (inside the gitignored .redline), so a demo running by hand keeps its notes; the agent toolbar
+// runs the tests' stand-in CLI (test/fixtures/agent), so the shot doesn't depend on an installed agent.
+process.env.REDLINE_DIR = '.redline/screens';
+process.env.REDLINE_AGENT = 'fake';
+const notesDir = path.join(demo, process.env.REDLINE_DIR);
+const notesFile = path.join(notesDir, 'pages/index.md');
 
-await fs.rm(path.join(demo, '.redline'), { recursive: true, force: true });
+await fs.rm(notesDir, { recursive: true, force: true });
 await fs.mkdir(out, { recursive: true });
 
 const server = await createServer({ configFile: path.join(demo, 'vite.config.mjs'), server: { port: 5210, strictPort: true }, logLevel: 'warn' });
@@ -83,7 +88,20 @@ try {
   await ui('.filters label').filter({ hasText: 'Show done' }).click();
   await ui('.card .reply').waitFor();
   await shot('panel');
-  console.log(`Wrote ${['comment', 'text', 'sketch', 'panel'].map(n => `docs/images/${n}.png`).join(', ')}`);
+
+  // 5. The agent toolbar (D53): the CLI asks to edit a file; the card shows its diff and options.
+  await page.keyboard.press('n');   // close the panel
+  await page.keyboard.press('Alt+Shift+KeyA');
+  const bar = ui('.xbar[data-toolbar="agent"]');
+  await bar.waitFor();
+  const info = await (await page.request.get('http://localhost:5210/__redline/agent/info')).json();
+  await page.request.post('http://localhost:5210/__redline/agent/send', {
+    headers: { 'x-redline': '1', 'x-redline-agent': info.token }, data: { text: 'ask' } });   // the stand-in's edit permission
+  await ui('.attach[data-toolbar="agent"] button').first().waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(600);   // the status light settles
+  await shot('agent');
+  await page.request.post('http://localhost:5210/__redline/agent/end', { headers: { 'x-redline': '1', 'x-redline-agent': info.token }, data: {} });
+  console.log(`Wrote ${['comment', 'text', 'sketch', 'panel', 'agent'].map(n => `docs/images/${n}.png`).join(', ')}`);
 } finally {
   await browser.close();
   await server.close();

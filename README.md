@@ -3,7 +3,7 @@
 <p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline?label=npm&color=e5484d"></a> <a href="https://github.com/umage-ai/redline/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline?color=555"></a></p>
 <p align="center"><a href="https://umage.ai/products/redline"><b>Product page</b></a> · <a href="#packages">Packages</a> · <a href="#quick-start">Setup</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md">Setups</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/USAGE.md">Guide</a> · <a href="https://github.com/umage-ai/redline/releases">Releases</a></p>
 
-![Commenting on a button: the popover shows the element and its React source, App.tsx:32](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/comment.png)
+![Commenting on a button: the popover shows the element and its React source, App.tsx:35](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/comment.png)
 
 Redline is a dev-only overlay for any web app. Press **Alt+Shift+R** in the browser, then pin comments on elements,
 rewrite text in place, or sketch on the page. Any coding agent (Claude Code, Codex, Cursor, Copilot, Gemini CLI, …)
@@ -50,6 +50,8 @@ Run `vite dev` and press **Alt+Shift+R**. Other stacks ([full setup per framewor
 | Other Node servers | `redlineMiddleware()` → `{ api, inject }` from `@umage.ai/redline/server` |
 | ASP.NET Core, Blazor, Optimizely (upcoming) | `AddRedline()` ([dotnet/README.md](https://github.com/umage-ai/redline/blob/main/dotnet/README.md)) |
 
+The API under another path (`apiBase`, a .NET `PathBase`), on another origin (`cors`, credentials or a header hook) or the overlay
+inside iframes (`allowInIframe`): [docs/SETUPS.md](https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md).
 Local dev, shared notes, a deployed review site or your own backend: [docs/SETUPS.md](https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md) says which fits.
 Every option and its default: [docs/OPTIONS.md](https://github.com/umage-ai/redline/blob/main/docs/OPTIONS.md).
 
@@ -69,9 +71,12 @@ Labels, phones, the launcher and your own open buttons, screenshots, direct edit
 
 ## Agent panel
 
-With `@umage.ai/redline-agent` and `agent: true`, your agent CLI (Claude Code or OpenCode) runs from the overlay: **Apply 3 notes**,
-its questions and diffs in a card on the toolbar, a session per prompt, and its state as a ring on the launcher. Local dev only.
-See [agent/README.md](https://github.com/umage-ai/redline/blob/main/agent/README.md).
+With `@umage.ai/redline-agent` and `agent: true`, your agent CLI runs from the overlay: **Apply 2 notes**, its questions and
+diffs in a card on the toolbar, a session per prompt, and its state as a ring on the launcher. Every installed CLI is offered
+(Claude Code, OpenCode; ▾ picks one); OpenCode and any other [ACP](https://agentclientprotocol.com) agent run over the Agent Client
+Protocol, so their permission prompts arrive with their real options. Local dev only. See [agent/README.md](https://github.com/umage-ai/redline/blob/main/agent/README.md).
+
+![The agent toolbar: the CLI asks to edit src/App.tsx; the card shows the diff and its three options](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent.png)
 
 ## Packages
 
