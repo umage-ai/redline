@@ -24,7 +24,9 @@ export const windowsPart: Part<'addWindow' | 'setStatus' | 'statusDots' | 'toolb
 
     const title = h('span', { class: 'win-title' }, def.title);
     const controls = h('div', { class: 'win-controls' });
-    const close = h('button', { class: 'win-close', title: ctx.t('closeWindow'), onclick: () => api.hide() }, '✕');
+    // `hideAs: 'minimize'` (D62): the same hide, drawn as —, for a window whose work goes on hidden (an agent's terminal).
+    const minimize = def.hideAs === 'minimize';
+    const close = h('button', { class: minimize ? 'win-close win-min' : 'win-close', title: ctx.t(minimize ? 'minimizeWindow' : 'closeWindow'), 'aria-label': ctx.t(minimize ? 'minimizeWindow' : 'closeWindow'), onclick: () => api.hide() }, minimize ? '—' : '✕');
     const head = h('div', { class: 'win-head' }, title, controls, close);
     const body = h('div', { class: 'win-body' });
     const grip = h('div', { class: 'win-grip' });

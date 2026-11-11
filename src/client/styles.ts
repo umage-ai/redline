@@ -91,6 +91,10 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 }
 .bar .brand { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 8px; font-weight: 650; letter-spacing: .01em; }
 .bar .brand svg { width: 15px; height: 15px; }
+/* an extension toolbar with a title (D62): the icon alone, then "← Agent" */
+.bar .brand.icon { padding: 0 4px 0 8px; }
+.bar button.back.named { color: var(--fg); font-weight: 650; padding-left: 8px; }
+.bar button.back.named .arrow { color: var(--fg-2); }
 .bar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
 .bar button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; color: var(--fg-2); }
 .bar button:hover { background: var(--bg-3); color: var(--fg); }
@@ -286,6 +290,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar .brand span, .bar .brand + .sep { display: none; }
   .bar .brand { padding: 0 6px; }
   .bar .xbar { flex: none; }   /* an extension toolbar scrolls with the row, never under ✕ */
+  .bar button.back.named { padding: 6px 8px; }
+  .bar button.back.named span:not(.arrow) { display: none; }   /* "← Agent" is ← on a phone; its label says where */
   .bar button { padding: 6px 9px; }
   .toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; overflow-wrap: anywhere; }
   .tools { top: max(8px, env(safe-area-inset-top)); }

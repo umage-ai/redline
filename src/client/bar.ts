@@ -10,6 +10,13 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
   const card = h('div', { class: 'attach', style: 'display:none' });
   ui.append(card);
   ctx.life.on(window, 'resize', () => placeAttached());
+  // The toolbar changes size without a render too (it wraps when the notes panel opens beside it): the
+  // card follows, or it would cover the toolbar's top row (L59).
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => placeAttached());
+    ro.observe(el.bar);
+    ctx.life.add(() => ro.disconnect());
+  }
 
   function renderLauncher() {
     el.launcher.style.display = !state.open && config.launcher ? '' : 'none';
@@ -84,13 +91,18 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     el.bar.classList.toggle('ext', !!tb);
     if (tb) {
       // An extension's toolbar in place of the main one: icon, back, its element, close (D53). ✕ closes
-      // the overlay as on the main toolbar; ← (or Esc) goes back to the main one.
+      // the overlay as on the main toolbar; ← (or Esc) goes back to the main one. With a `title` (D62)
+      // the icon stands alone and the back button names the toolbar: "← Agent".
       const box = h('div', { class: 'xbar', 'data-toolbar': tb.id });
       safely(() => tb.render(box), undefined);
-      el.bar.replaceChildren(brand, ...dots,
-        h('button', { class: 'back', title: tb.backTitle ?? t('backToToolbar'), onclick: () => setToolbar(null) }, '←'),
+      const title = typeof tb.title === 'string' && tb.title ? tb.title : '';
+      if (title) { brand.querySelector('span')?.remove(); brand.classList.add('icon'); }
+      const back = h('button', { class: title ? 'back named' : 'back', title: tb.backTitle ?? t('backToToolbar'), onclick: () => setToolbar(null) },
+        h('span', { class: 'arrow', 'aria-hidden': 'true' }, '←'), title ? h('span', {}, title) : null);
+      back.setAttribute('aria-label', title ? `${title}: ${tb.backTitle ?? t('backToToolbar')}` : tb.backTitle ?? t('backToToolbar'));
+      el.bar.replaceChildren(brand, ...dots, back,
         h('div', { class: 'sep' }), box, h('div', { class: 'sep' }),
-        h('button', { class: 'close', title: t('close', { hotkey: config.hotkey }), onclick: () => ctx.setOpen(false) }, '✕'));
+        h('button', { class: 'close', title: t('close', { hotkey: config.hotkey }), 'aria-label': t('close', { hotkey: config.hotkey }), onclick: () => ctx.setOpen(false) }, '✕'));
       renderAttached(tb);
     } else { card.style.display = 'none'; renderMain(brand, dots, locked); }
     // An extension status as the toolbar's outline (v5): a light sweeping round it (busy), a glow, or steady.
@@ -111,7 +123,8 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
   function renderAttached(tb: NonNullable<ReturnType<typeof extToolbar>>) {
     // Not while a field in it has focus (an answer being typed): the toolbar re-renders on every poll.
     const a = ctx.shadow.activeElement;
-    const typing = !!a && card.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName);
+    // A select too: redrawn, its open list would close under the pointer.
+    const typing = !!a && card.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
     if (!typing) {
       card.replaceChildren();
       if (tb.attached) safely(() => tb.attached!(card), undefined);

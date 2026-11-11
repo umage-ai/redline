@@ -510,4 +510,26 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   await w(x => x.tb.remove());
   await page.keyboard.press('Alt+Shift+KeyD');
   await expect(ui('.bar')).toBeHidden();   // removed: its hotkey is gone
+
+  // D62: a `title` makes the back button "← Deck" (the icon alone, no "Redline"); `onEscape` handles Esc
+  // first (true: kept, its own popover closed); `hideAs: 'minimize'` draws the window's hide as —.
+  await w(x => {
+    x.escapes = 0;
+    x.tb = x.rl.addToolbar({ id: 'deck', title: 'Deck', render: (el: HTMLElement) => { el.textContent = 'slides'; }, onEscape: () => ++x.escapes === 1 });
+    x.tb.show();
+    x.rl.addWindow({ id: 'run', title: 'Run', hideAs: 'minimize', render: (body: HTMLElement) => { body.textContent = 'running'; } }).show();
+  });
+  await expect(ui('.bar.ext button.back')).toHaveText(/^←\s*Deck$/);
+  await expect(ui('.bar.ext button.back')).toHaveAttribute('aria-label', /^Deck: Back/);
+  await expect(ui('.bar.ext .brand')).toHaveText('');
+  await page.keyboard.press('Escape');   // onEscape said it handled it
+  await expect(ui('.bar.ext')).toBeVisible();
+  await page.keyboard.press('Escape');   // now it didn't: back to the main toolbar
+  await expect(ui('.bar.ext')).toHaveCount(0);
+  await expect(ui('.bar .brand')).toHaveText('Redline');
+  const min = ui('.win[data-win="run"] .win-close');
+  await expect(min).toHaveText('—');
+  await expect(min).toHaveAttribute('title', 'Minimize');
+  await min.click();
+  await expect(ui('.win[data-win="run"]')).toBeHidden();
 });

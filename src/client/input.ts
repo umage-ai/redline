@@ -132,11 +132,12 @@ function onKey(ctx: Ctx, e: KeyboardEvent) {
   e.preventDefault(); e.stopImmediatePropagation();
 }
 
-/** Esc steps back one level: draft, mode, extension toolbar, panel, overlay. */
+/** Esc steps back one level: draft, mode, extension toolbar (its own popover first), panel, overlay. */
 function escape(ctx: Ctx) {
+  const tb = ctx.extToolbar();
   if (ctx.draft) ctx.cancelDraft();
   else if (ctx.state.mode !== 'idle') ctx.setMode('idle');
-  else if (ctx.extToolbar()) ctx.setToolbar(null);
+  else if (tb) { if (!safely(() => tb.onEscape?.() === true, false)) ctx.setToolbar(null); }
   else if (ctx.state.panel) ctx.togglePanel(false);
   else ctx.setOpen(false);
 }

@@ -16,6 +16,7 @@ export const STRINGS = {
   notesTitle: 'Notes (N)',
   close: 'Close ({hotkey})',
   closeWindow: 'Close',
+  minimizeWindow: 'Minimize',
   backToToolbar: 'Back to the toolbar (Esc)',
   dragLauncher: 'drag to move',
   dragBar: 'Drag to move · double-click to put back',

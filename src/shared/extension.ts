@@ -115,6 +115,11 @@ export interface RedlineWindowDef {
   title: string;
   /** Called once, when first shown: `body` is yours (inside the overlay's shadow root), `controls` sits in the header before ✕. */
   render(body: HTMLElement, controls: HTMLElement): void;
+  /**
+   * The header's hide button (D62): ✕ "Close" (default), or — "Minimize" for a window whose work goes on
+   * while it is hidden (an agent's terminal). Either way it hides the window; `remove()` drops it.
+   */
+  hideAs?: 'close' | 'minimize';
   /** Initial size in px (default 560 × 380); clamped to the viewport. */
   width?: number;
   height?: number;
@@ -152,6 +157,16 @@ export interface RedlineToolbarDef {
   hotkey?: string;
   /** Hover text for the ← that goes back (default "Back to the toolbar (Esc)"). */
   backTitle?: string;
+  /**
+   * The toolbar's name (D62): the back button reads "← Agent" and the icon stands alone, in place of
+   * the "Redline" brand and a bare ←. Older cores ignore it.
+   */
+  title?: string;
+  /**
+   * Esc on this toolbar (D62): return true when you handled it (closed your own popover or menu);
+   * otherwise Esc goes back to the main toolbar as before.
+   */
+  onEscape?(): boolean;
   onShow?(): void;
   onHide?(): void;
 }
