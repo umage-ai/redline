@@ -564,3 +564,24 @@ test('agent toolbar: attachments (D56): a 📎 count on the tab; the card lists 
   await clip.click();
   await expect(files).toHaveCount(0);
 });
+
+test('agent toolbar: the note an agent says it is on (MCP working_on, D66) is tagged as worked on, its other notes wait; the tab says which', async ({ page, request }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  const first = await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
+  await page.keyboard.press('c');
+  const second = await comment(page, page.getByTestId('agent-delete'), 'Explain why it is off');
+  await page.keyboard.press('a');
+  const a = await api(page);
+  const { id } = await (await a.post('/send', { text: 'slower work', notes: [first.id, second.id], title: 'Two' })).json();
+  // Typed (its round has begun) and working.
+  await expect.poll(async () => (await a.info()).sessions[0]?.rounds, { timeout: 20_000 }).toBe(1);
+  await expect(chip(page)).toContainText('Working', { timeout: 20_000 });
+  // An agent Redline didn't start names its session; one it started is known by its connection.
+  const r = await request.post(`${f.url}/__redline/mcp`, { data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'working_on', arguments: { id: second.id, session: id } } } });
+  expect((await r.json()).result.content[0].text).toContain(`is on note ${second.id}`);
+  await expect(tab(page, id).locator('.ag-tab-main')).toHaveAttribute('title', /On: Explain why it is off/);
+  await page.keyboard.press('n');
+  await expect(ui(page, `.card[data-id="${second.id}"] .ag-tag`)).toHaveText(`${NAME} is working on it`);
+  await expect(ui(page, `.card[data-id="${first.id}"] .ag-tag`)).toHaveText(`⤳ sent to ${NAME}, next`);
+});

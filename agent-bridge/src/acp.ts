@@ -14,13 +14,13 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:chil
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ServerResponse } from 'node:http';
-import type { BridgeOptions, SessionInfo } from './types.ts';
+import type { BridgeOptions, McpServer, SessionInfo } from './types.ts';
 import type { ProgramState } from './program-status.ts';
 import type { PromptView, Span } from './screen.ts';
 import { adapterFor } from './adapters.ts';
 import { commandName, resolveCommand } from './sessions.ts';
 import type { Worktree } from './worktrees.ts';
-import { Rounds } from './attachments.ts';
+import { Rounds, stripAnsi } from './attachments.ts';
 
 export const ACP_PROTOCOL_VERSION = 1;
 const CLIENT_INFO = { name: 'agent-bridge', title: 'Agent bridge', version: '0' };
@@ -173,6 +173,10 @@ export class AcpSession {
   prepare?: () => Promise<void>;
   /** Its git worktree (D64), once prepared. */
   worktree?: Worktree;
+  /** The host's MCP servers for this session (D66), asked for at start. */
+  mcp?: () => McpServer[];
+  /** What it says it is on now (D66: MCP `working_on`); cleared when its turn is done. */
+  focus?: string;
   /** Its rounds and what it pointed at in each (D56). */
   readonly rounds: Rounds;
   /** The label of the next round (the prompt's `task`). */
@@ -260,7 +264,9 @@ export class AcpSession {
         }, HANDSHAKE_MS);
         const ai = init?.agentInfo;
         this.agentName = typeof ai?.name === 'string' ? ai.name : undefined;
-        const s = await rpc.request('session/new', { cwd: this.cwd, mcpServers: [] }, HANDSHAKE_MS);
+        // The host's MCP servers (D66), over HTTP when the agent takes that (its mcpCapabilities); else none.
+        const servers = init?.agentCapabilities?.mcpCapabilities?.http ? (this.mcp?.() ?? []).map(m => ({ type: 'http', name: m.name, url: m.url, headers: Object.entries(m.headers ?? {}).map(([name, value]) => ({ name, value })) })) : [];
+        const s = await rpc.request('session/new', { cwd: this.cwd, mcpServers: servers }, HANDSHAKE_MS);
         if (typeof s?.sessionId !== 'string') throw new Error('session/new returned no sessionId');
         this.sessionId = s.sessionId;
         this.onOffer?.(offerOf(s));
@@ -444,6 +450,7 @@ export class AcpSession {
         this.print(`${C.red}${(e as Error).message}${C.reset}\r\n`);
       } finally {
         await this.rounds.finish().catch(() => {});
+        this.focus = undefined;   // the turn is done: on nothing now
         if (this.rpc === rpc) { this.turn = null; this.permission?.resolve({ outcome: 'cancelled' }); this.pushStatus(); this.pump(); }
       }
     })();
@@ -531,6 +538,11 @@ export class AcpSession {
     res.on('close', () => { clearInterval(beat); this.viewers.delete(res); });
   }
 
+  /** The end of its transcript (D66), as plain text. */
+  tail(lines: number): string {
+    return stripAnsi(this.scrollback).split(/\r?\n/).map(l => l.trimEnd()).filter(Boolean).slice(-lines).join('\n');
+  }
+
   dispose() { this.stop(); for (const r of this.viewers) r.end(); this.viewers.clear(); }
 
   private remember(notes: string[]) {
@@ -589,10 +601,11 @@ export class AcpSession {
 }
 
 /** A session's tab name, prompt, model and effort for its info (D62). */
-export const meta = (s: { title?: string; task?: string; opts: BridgeOptions; worktree?: Worktree; rounds?: Rounds }) => ({
+export const meta = (s: { title?: string; task?: string; opts: BridgeOptions; worktree?: Worktree; rounds?: Rounds; focus?: string }) => ({
   ...(s.rounds?.list.length ? { rounds: s.rounds.list.length, attachments: s.rounds.count } : {}),
   ...(s.title ? { title: s.title } : {}), ...(s.task ? { task: s.task } : {}),
   ...(s.worktree ? { worktree: { branch: s.worktree.branch, path: s.worktree.path, base: s.worktree.base } } : {}),
+  ...(s.focus ? { focus: s.focus } : {}),
   ...(s.opts.model ? { model: s.opts.model } : {}), ...(s.opts.effort ? { effort: s.opts.effort } : {}),
 });
 /** A prompt's first line, cut: a round's label when the prompt has none. */

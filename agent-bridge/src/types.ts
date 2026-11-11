@@ -4,6 +4,9 @@
 /** A model or effort level a CLI offers (D62): `value` as passed to the CLI, `name` for people (default: the value). */
 export interface AgentChoice { value: string; name?: string }
 
+/** An MCP server a host hands to the sessions it starts (D66): Claude Code gets it in `--mcp-config`, an ACP agent in `session/new`. */
+export interface McpServer { name: string; url: string; headers?: Record<string, string> }
+
 /** What an adapter's `start` returns: the arguments, text to type ahead of the first prompt, and a warning to log once. */
 export interface AgentStart { args: string[]; preamble?: string; warning?: string }
 
@@ -21,8 +24,11 @@ export interface AgentAdapter {
   command: string;
   /** This adapter drives `command` (its base name, without .exe/.cmd) with `args`, or the program that reported `app`. */
   matches(command: string, app?: string, args?: string[]): boolean;
-  /** A start's arguments: the model, the effort and the instructions as flags, or the instructions as a preamble. */
-  start?(o: { args: string[]; model?: string; effort?: string; instructions: { text: string; file?: string } }): AgentStart | Promise<AgentStart>;
+  /**
+   * A start's arguments: the model, the effort and the instructions as flags, or the instructions as a
+   * preamble; `mcp` (D66): the host's MCP servers, where the CLI takes them as a flag (Claude Code `--mcp-config`).
+   */
+  start?(o: { args: string[]; model?: string; effort?: string; instructions: { text: string; file?: string }; mcp?: McpServer[] }): AgentStart | Promise<AgentStart>;
   /**
    * The models the toolbar's settings offer for it (D62), passed to `start` as `model`: Claude Code's
    * aliases. A viewer can pick only these (or the default); ACP agents list their own.
@@ -206,6 +212,8 @@ export interface SessionInfo {
   effort?: string;
   /** Its git worktree (D64), when it runs in one. */
   worktree?: WorktreeInfo;
+  /** The item it says it is on now (D66: MCP `working_on`; Redline: a note id). */
+  focus?: string;
   /** Rounds so far and attachments worth counting in them (D56: all but mentions); the list is GET /attachments. */
   rounds?: number;
   attachments?: number;

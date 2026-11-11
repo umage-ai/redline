@@ -157,7 +157,7 @@ test('mcp over HTTP: POST /__redline/mcp serves the same tools on the handler\'s
     assert.equal(note.status, 202);
     assert.equal(await note.text(), '');
     const tools = await (await s.post({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json();
-    assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name), ['list_notes', 'get_note', 'update_note']);
+    assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name), ['list_notes', 'get_note', 'update_note', 'check_page', 'page_console', 'note_dom'], 'the note tools, then the dev server’s own (D65)');
 
     const call = async (name: string, args: object) => (await (await s.post({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: args } })).json()).result;
     assert.match((await call('list_notes', {})).content[0].text, /^1 open note from dev server http:\/\/127\.0\.0\.1:\d+:/);

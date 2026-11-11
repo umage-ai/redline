@@ -19,6 +19,9 @@ import { cleanLabel, normalizeLabels, type LabelDef, type LabelsSource } from '.
 import { GUIDE_PATHS } from '../init.ts';
 import { handleMcpMessage, type Backend, type JsonRpcMessage } from '../mcp.ts';
 import { json, readBody } from './http.ts';
+import { liveHub } from './live.ts';
+import { devServerTools } from './mcp-tools.ts';
+import type { ExtraTools } from '../mcp.ts';
 import { agentFor, type AgentOptions, type AgentPlugin } from './agent-hook.ts';
 
 export type Next = (err?: unknown) => void;
@@ -238,18 +241,23 @@ export function mcpAllowed(req: IncomingMessage, tokens: string[] | undefined): 
 }
 
 /** MCP over Streamable HTTP (D37): stateless JSON-RPC, the same tools as `redline mcp`, on this server's store. */
-async function serveMcp(req: IncomingMessage, res: ServerResponse, backend: Backend, tokens: string[] | undefined, version: string) {
+async function serveMcp(req: IncomingMessage, res: ServerResponse, backend: Backend, tokens: string[] | undefined, version: string, extra?: (session?: string) => ExtraTools, agentToken?: string) {
   // A browser page on another origin (DNS rebinding included) must not reach the tools.
   const origin = req.headers.origin;
   if (origin && origin !== 'null' && (() => { try { return new URL(origin).host !== req.headers.host; } catch { return true; } })()) return json(res, 403, { error: 'cross-origin MCP request' });
-  if (!mcpAllowed(req, tokens)) {
+  // A session Redline's agent toolbar started (D66): its own bearer, from this machine; then its id header is trusted.
+  const bearer = /^Bearer\s+(\S+)\s*$/i.exec(String(req.headers.authorization ?? ''))?.[1];
+  const agentCall = !!agentToken && !!bearer && bearer.length === agentToken.length && timingSafeEqual(Buffer.from(bearer), Buffer.from(agentToken)) && LOOPBACK.test(peerOf(req));
+  const session = agentCall && typeof req.headers['x-redline-agent-session'] === 'string' ? req.headers['x-redline-agent-session'].slice(0, 32) : undefined;
+  if (!agentCall && !mcpAllowed(req, tokens)) {
     res.setHeader('www-authenticate', 'Bearer realm="redline"');
     return json(res, 401, { error: tokens?.length ? 'a valid bearer token is required' : 'MCP answers local calls only; set mcpTokens to allow remote agents' });
   }
   if (req.method !== 'POST') { res.statusCode = 405; res.setHeader('allow', 'POST'); res.end(); return; }   // no SSE stream: tools are request/response
   let msg: JsonRpcMessage | JsonRpcMessage[];
   try { msg = JSON.parse(await readBody(req)); } catch { return json(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
-  const handle = (m: JsonRpcMessage) => handleMcpMessage(m, { backend: async () => backend, version });
+  const tools = extra?.(session);
+  const handle = (m: JsonRpcMessage) => handleMcpMessage(m, { backend: async () => backend, version, extra: tools });
   const replies = Array.isArray(msg)
     ? (await Promise.all(msg.filter(m => m && typeof m === 'object').map(handle))).filter(r => r !== null)
     : msg && typeof msg === 'object' ? await handle(msg) : undefined;
@@ -291,6 +299,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const corsOrigins = new Set((opts.cors ?? []).map(o => String(o).trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean));
   const extensions = (opts.extensions ?? []).map((e, i) => typeof e === 'string' ? `${base}/ext/${i}.js` : e.url);
   const agent = agentFor(opts.agent, root, base, undefined, dir);
+  const live = liveHub();
   if (agent) extensions.push(agent.panel);
   const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
   const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);
@@ -428,11 +437,29 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       // The agent panel (D53) checks its own callers: this machine only, whatever `network` says.
       if (agent && p.startsWith('/agent/')) return agent.handle(req, res, p, localCall(req));
 
-      if (p === '/mcp') return serveMcp(req, res, mcpBackend(req), opts.mcpTokens, versionOf(opts.clientFile));
+      // Live pages (D65): open tabs keep a stream here so MCP tools can ask them; this machine only.
+      if (read && p === '/live') {
+        if (!localCall(req)) return json(res, 404, { error: 'live pages are for this machine only' });
+        live.open(req, res, new URL(url, 'http://x').searchParams);
+        return;
+      }
+
+      if (p === '/mcp') {
+        const extra = (session?: string) => devServerTools({ req, live, agent, notes: () => store.list({ req }), session });
+        return serveMcp(req, res, mcpBackend(req), opts.mcpTokens, versionOf(opts.clientFile), extra, agent?.mcp?.token);
+      }
 
       // Mutations need the custom header: a cross-site page can't send it without a
       // CORS preflight, which only `cors` origins get answered.
       if (req.headers['x-redline'] !== '1') return json(res, 403, { error: 'missing x-redline header' });
+
+      if (method === 'POST' && (p === '/live/reply' || p === '/live/moved')) {
+        if (!localCall(req)) return json(res, 404, { error: 'live pages are for this machine only' });
+        let body: Record<string, unknown> = {};
+        try { body = JSON.parse(await readBody(req, 2 * 1024 * 1024)); } catch { return json(res, 400, { error: 'bad JSON' }); }
+        const ok = p === '/live/reply' ? live.reply(body?.req, body?.data) : live.moved(String(body?.conn ?? ''), body?.page, body?.path, body?.title);
+        return json(res, ok ? 200 : 404, { ok });
+      }
 
       if (method === 'POST' && p === '/notes') {
         const body = JSON.parse(await readBody(req)) as NewNoteRequest;

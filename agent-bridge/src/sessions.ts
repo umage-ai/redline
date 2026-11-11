@@ -15,7 +15,8 @@ import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState }
 import { Screen, type PromptView } from './screen.ts';
 import { adapterFor, choices, claudeCode, commandName, type CliChoice } from './adapters.ts';
 import { AcpSession, firstLine, meta, nameSession, probeAcp, usesAcp, type AcpOffer } from './acp.ts';
-import type { AgentAdapter, BridgeOptions, CliInfo, GroupInfo, SessionInfo } from './types.ts';
+import type { AgentAdapter, BridgeOptions, CliInfo, GroupInfo, McpServer, SessionInfo } from './types.ts';
+import { stripAnsi } from './attachments.ts';
 import { Rounds } from './attachments.ts';
 import { act, addWorktree, gitTop, leftover, status, type Worktree, type WorktreeAction } from './worktrees.ts';
 export { commandName };
@@ -105,9 +106,9 @@ export function resolveCommand(command: string, args: string[], env: NodeJS.Proc
  * where the CLI has them (Claude Code: `--append-system-prompt-file`, `--model`, `--effort`), else the
  * instructions typed ahead of the session's first prompt (`preamble`) and a warning for the model and effort.
  */
-export async function withInstructions(command: string, args: string[], extra: { text: string; file?: string }, model?: string, adapters?: AgentAdapter[], effort?: string): Promise<{ args: string[]; preamble: string; warning?: string }> {
+export async function withInstructions(command: string, args: string[], extra: { text: string; file?: string }, model?: string, adapters?: AgentAdapter[], effort?: string, mcp?: McpServer[]): Promise<{ args: string[]; preamble: string; warning?: string }> {
   const a = adapterFor(command, undefined, adapters, args);
-  const r = a.start ? await a.start({ args, model, ...(effort ? { effort } : {}), instructions: extra }) : { args, preamble: extra.text };
+  const r = a.start ? await a.start({ args, model, ...(effort ? { effort } : {}), instructions: extra, ...(mcp?.length ? { mcp } : {}) }) : { args, preamble: extra.text };
   return { args: r.args, preamble: r.preamble ?? '', ...(r.warning ? { warning: r.warning } : {}) };
 }
 const WARNED = new Set<string>();
@@ -155,6 +156,10 @@ export class AgentSession {
   readonly rounds: Rounds;
   /** The label of the next round (the prompt's `task`). */
   private nextTask?: string;
+  /** The host's MCP servers for this session (D66), asked for at start. */
+  mcp?: () => McpServer[];
+  /** What it says it is on now (D66: MCP `working_on`); cleared when its turn is done. */
+  focus?: string;
   private roundWorked = false;   // the round's turn has been seen working: resting again ends it
   private roundLive = false;   // its prompt has been typed: only then does working count (not a CLI still starting up)
   /** The CLI's id (D59); `opts` has its command, arguments and environment. */
@@ -215,7 +220,7 @@ export class AgentSession {
       if (!pty) throw new Error('the agent bridge needs node-pty: npm i -D node-pty (Linux without build tools: @lydell/node-pty)');
       const env = { ...process.env, ...this.opts.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as NodeJS.ProcessEnv;
       const command = this.opts.command ?? 'claude';
-      const { args, preamble, warning } = await withInstructions(command, this.opts.args ?? [], await this.instructions(), this.opts.model, this.opts.adapters, this.opts.effort);
+      const { args, preamble, warning } = await withInstructions(command, this.opts.args ?? [], await this.instructions(), this.opts.model, this.opts.adapters, this.opts.effort, this.mcp?.());
       if (warning && !WARNED.has(warning)) { WARNED.add(warning); console.warn(`[agent-bridge]: ${warning}`); }
       this.preamble = preamble;
       const spawn = resolveCommand(command, args, env);
@@ -433,7 +438,7 @@ export class AgentSession {
     if (r && !r.done) {
       if (!this.roundLive) { /* the prompt isn't typed yet */ }
       else if (st === 'working' || st === 'blocked') this.roundWorked = true;
-      else if (this.roundWorked && !this.queued.length) { this.roundWorked = false; void this.rounds.finish(); }
+      else if (this.roundWorked && !this.queued.length) { this.roundWorked = false; this.focus = undefined; void this.rounds.finish(); }
     } else if (st === 'working' && this.pty && this.reported) { this.roundWorked = true; this.roundLive = true; void this.rounds.begin('typed in the CLI window'); }
     const key = JSON.stringify(info);
     if (key === this.lastStatus) return;
@@ -441,6 +446,13 @@ export class AgentSession {
     this.broadcast('status', info);
     this.onChange();
     if (!this.pty && this.timer) { clearInterval(this.timer); this.timer = null; this.queued = []; }
+  }
+
+  /** The end of what it shows (D66): the screen now (a TUI redraws in place), else the output's last lines. */
+  tail(lines: number): string {
+    const screen = this.screen?.lines().map(l => l.text.trimEnd());
+    if (screen?.some(l => l)) return screen.join('\n').trim();
+    return stripAnsi(this.scrollback).split(/\r?\n/).map(l => l.trimEnd()).filter(Boolean).slice(-lines).join('\n');
   }
 
   dispose() { this.stop(); for (const r of this.viewers) r.end(); this.viewers.clear(); }
@@ -500,6 +512,11 @@ export class AgentGroup {
   private wt: { on: boolean; dir: string; prefix: string; git: { top: string } | { why: string } | null };
   /** Worktrees of ended sessions, waiting for keep, merge or discard (D64). */
   private left: (Worktree & { session?: string; title?: string })[] = [];
+  /** Per session (D66): the environment variable that names it, and the host's MCP servers. */
+  private sessionEnv?: string;
+  private mcpFor?: (id: string) => McpServer[];
+  /** Hooks a host sets once (createBridge): see BridgeSetup `sessionEnv` and `mcp`. */
+  configure(o: { sessionEnv?: string; mcp?: (id: string) => McpServer[] }) { this.sessionEnv = o.sessionEnv; this.mcpFor = o.mcp; }
   constructor(opts: BridgeOptions, cwd: string, root: string, clis: CliChoice[], wt: { dir?: string; prefix?: string } = {}) {
     this.opts = opts; this.cwd = cwd; this.root = root; this.clis = clis;
     this.mode = opts.sessions === 'shared' ? 'shared' : 'fresh';
@@ -528,8 +545,12 @@ export class AgentGroup {
     const ended = this.sessions.filter(s => !s.running);
     for (const s of ended.slice(0, Math.max(0, ended.length - KEEP_ENDED + 1))) this.drop(s);
     if (!this.sessions.length) this.n = 0;   // all closed: numbering starts over at #1
-    const opts: BridgeOptions = { ...this.opts, command: cli.command, args: cli.args, label: cli.label, env: { ...this.opts.env, ...cli.env }, ...pick };
-    const s = new (usesAcp(opts) ? AcpSession : AgentSession)(opts, this.cwd, this.root, ++this.n, () => this.push(), cli.id);
+    const n = ++this.n;
+    // Its id in its environment (D66), so a tool it runs can say which session it belongs to.
+    const env = { ...this.opts.env, ...cli.env, ...(this.sessionEnv ? { [this.sessionEnv]: `s${n}` } : {}) };
+    const opts: BridgeOptions = { ...this.opts, command: cli.command, args: cli.args, label: cli.label, env, ...pick };
+    const s = new (usesAcp(opts) ? AcpSession : AgentSession)(opts, this.cwd, this.root, n, () => this.push(), cli.id);
+    if (this.mcpFor) { const mcpFor = this.mcpFor; s.mcp = () => mcpFor(s.id); }
     if (s instanceof AcpSession) s.onOffer = o => this.offered(cli, o);   // a real session/new: the freshest list
     // Its own worktree (D64), made when the CLI first starts (by then the first prompt has named the session).
     if (this.mode === 'fresh' && this.wt.on && this.wt.git && 'top' in this.wt.git) {
@@ -643,6 +664,15 @@ export class AgentGroup {
     if (typeof a.path !== 'string' || !a.path) return { error: 'give path (a file in the project) or url' };
     const item = s.rounds.addFile(a.path, 'explicit', title);
     return item ? { ok: true, attachment: item } : { error: `${a.path} is not a file inside the project${s.worktree ? ` (this session works in ${s.worktree.path})` : ''}` };
+  }
+
+  /** The note (or other item) a session says it is on (D66); null clears it. False: no such session. */
+  focusOn(id: string, item: string | null): boolean {
+    const s = this.sessions.find(x => x.id === id);
+    if (!s) return false;
+    s.focus = item ? item.slice(0, 64) : undefined;
+    this.push();
+    return true;
   }
 
   /** Keep, merge or discard an ended session's worktree (D64); see worktrees.ts `act`. */

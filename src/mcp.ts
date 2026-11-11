@@ -96,7 +96,10 @@ const INSTRUCTIONS = 'Redline holds UI feedback a reviewer pinned on the running
   + '(look at the screenshot), make the change in the code following the repo\'s conventions, then update_note with done=true and a '
   + 'one-line reply. Keep to what the note asks; apply notes on the same element oldest first. Text notes show the current and wanted text.';
 
-type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+export type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+
+/** Tools a host adds (the dev server's live-page and agent-session tools, D65, D66): listed after the note tools. */
+export interface ExtraTools { tools: object[]; instructions?: string; call(name: string, args: Record<string, unknown>): Promise<Content[] | undefined> }
 
 function summary(n: StoredNote): string {
   const where = [n.page, n.app ? `app ${n.app}` : ''].filter(Boolean).join(' · ');
@@ -140,7 +143,7 @@ async function callTool(backend: Backend, name: string, args: Record<string, unk
   throw new ToolError(`unknown tool ${name}`);
 }
 
-class ToolError extends Error {}
+export class ToolError extends Error {}
 
 /* ---------- JSON-RPC ---------- */
 
@@ -152,7 +155,7 @@ export type JsonRpcMessage = { jsonrpc?: string; id?: number | string | null; me
  * One JSON-RPC message in, its response out (null for notifications). Shared by the stdio
  * server below and the dev server's HTTP endpoint (POST /__redline/mcp, handler.ts).
  */
-export async function handleMcpMessage(msg: JsonRpcMessage, opts: { backend: () => Promise<Backend>; version?: string }): Promise<object | null> {
+export async function handleMcpMessage(msg: JsonRpcMessage, opts: { backend: () => Promise<Backend>; version?: string; extra?: ExtraTools }): Promise<object | null> {
   const isCall = msg.id !== undefined;
   const reply = (result: unknown) => isCall ? { jsonrpc: '2.0', id: msg.id, result } : null;
   const fail = (code: number, message: string) => isCall ? { jsonrpc: '2.0', id: msg.id, error: { code, message } } : null;
@@ -163,15 +166,17 @@ export async function handleMcpMessage(msg: JsonRpcMessage, opts: { backend: () 
         protocolVersion: VERSIONS.includes(asked) ? asked : VERSIONS[0],
         capabilities: { tools: {} },
         serverInfo: { name: 'redline', version: opts.version ?? '0' },
-        instructions: INSTRUCTIONS,
+        instructions: opts.extra?.instructions ? `${INSTRUCTIONS} ${opts.extra.instructions}` : INSTRUCTIONS,
       });
     }
     case 'ping': return reply({});
-    case 'tools/list': return reply({ tools: TOOLS });
+    case 'tools/list': return reply({ tools: [...TOOLS, ...(opts.extra?.tools ?? [])] });
     case 'tools/call': {
       const name = String(msg.params?.name ?? '');
       try {
-        return reply({ content: await callTool(await opts.backend(), name, (msg.params?.arguments as Record<string, unknown>) ?? {}) });
+        const args = (msg.params?.arguments as Record<string, unknown>) ?? {};
+        const extra = TOOLS.some(t => t.name === name) ? undefined : await opts.extra?.call(name, args);
+        return reply({ content: extra ?? await callTool(await opts.backend(), name, args) });
       } catch (err) {
         // Tool failures go back as results, so the agent can read and recover.
         return reply({ content: [{ type: 'text', text: `Error: ${(err as Error).message}` }], isError: true });

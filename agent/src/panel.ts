@@ -42,6 +42,8 @@ export interface Session extends Info {
   model?: string; effort?: string;
   /** Its git worktree (D64). */
   worktree?: { branch: string; path: string; base: string };
+  /** The note it says it is on (D66: MCP working_on). */
+  focus?: string;
   /** Rounds so far and attachments in them worth a count (D56). */
   rounds?: number; attachments?: number;
 }
@@ -206,7 +208,8 @@ export function tagFor(note: Pick<Note, 'id' | 'done'>, sessions: Session[], who
   if (!by) return null;
   if (note.done) return { cls: 'done', text: `✓ done by ${who(by)}` };
   const st = by.running ? by.status.state : 'stopped';
-  if (st === 'working') return { cls: 'sent working', text: `${who(by)} is working on it` };
+  // The note it said it is on (D66: working_on) is worked on; its other notes wait their turn.
+  if (st === 'working') return by.focus && by.focus !== note.id ? { cls: 'sent', text: `⤳ sent to ${who(by)}, next` } : { cls: 'sent working', text: `${who(by)} is working on it` };
   if (st === 'blocked') return { cls: 'sent asking', text: `${who(by)} needs your answer` };
   return { cls: 'sent', text: `⤳ sent to ${who(by)}` };
 }
@@ -590,6 +593,7 @@ export default async function agentPanel(rl: RedlineApi) {
       x.task && `Prompt: ${x.task}`,
       notes.length ? `Notes: ${notes.slice(0, 3).map(n => shorten(noteText(n), 40)).join('; ')}${notes.length > 3 ? ` (+${notes.length - 3})` : ''}` : x.sent?.length ? `Notes: ${x.sent.length}` : '',
       [x.model && `Model: ${x.model}`, x.effort && `Effort: ${x.effort}`].filter(Boolean).join(' · '),
+      x.focus && x.running && `On: ${(n => n ? shorten(noteText(n), 50) : x.focus)(notesOf([x.focus])[0])}`,
       x.worktree && `Branch: ${x.worktree.branch} (${x.worktree.path})`,
       xl.msg && `Last: ${xl.msg}`,
       x.status.state === 'blocked' && x.running ? 'Click to answer' : '',

@@ -94,6 +94,11 @@ of reading and editing the files: they work with any note store, and `get_note` 
 screenshot. Dev servers and deployed .NET sites also serve them over HTTP at `/__redline/mcp` (bearer token when remote). Same workflow: `list_notes` → `get_note` per open note → change the code →
 `update_note` with `done: true` and the one-line reply (or only a `reply` with your question).
 
+A Node dev server's HTTP endpoint adds tools that need the running app: `note_dom` (the DOM around a
+note's element, from an open tab: check your fix landed), `page_console` (console errors there),
+`check_page`. If Redline's agent toolbar started you, call `working_on` with each note id as you start
+it, and `attach` to show the reviewer a screenshot, file or link; `list_agent_sessions` shows the others.
+
 ## Rules
 
 - Never edit or delete the `<!-- redline {…} -->` line — the overlay uses it to place pins.

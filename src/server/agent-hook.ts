@@ -37,6 +37,17 @@ export interface AgentOptions extends BridgeOptions {
 export interface AgentRoutes {
   /** Answers `/agent/*` (the path after the API base). `allowed`: the caller is on this machine. */
   handle(req: IncomingMessage, res: ServerResponse, p: string, allowed: boolean): Promise<void>;
+  /**
+   * For the dev server's MCP tools (D66): the agent's own bearer token (sessions Redline starts present it,
+   * with their id in `x-redline-agent-session`), the sessions, one's transcript tail, attach, the note being worked on.
+   */
+  mcp?: {
+    token: string;
+    sessions(): SessionInfo[];
+    tail(id: string, lines: number): string | null;
+    attach(id: string, a: { path?: unknown; url?: unknown; title?: unknown }): { ok: true; attachment: object } | { error: string };
+    focus(id: string, note: string | null): boolean;
+  };
   /** The overlay extension's URL, listed in `/config` for local callers. */
   panel: string;
 }

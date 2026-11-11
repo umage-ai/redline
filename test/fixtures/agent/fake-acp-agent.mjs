@@ -19,6 +19,7 @@ const cancelled = new Set();
 let model = 'fake/one', effort = 'default';
 
 process.stderr.write('fake acp agent starting\n');
+let mcp = '';   // the MCP servers session/new gave it (D66), echoed in its replies
 let buf = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', d => {
@@ -47,8 +48,9 @@ async function handle(m) {
   switch (m.method) {
     case 'initialize':
       if (process.env.FAKE_ACP_FAIL_INIT) return send({ jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'Authentication required' } });
-      return reply({ protocolVersion: 1, agentCapabilities: { loadSession: false }, authMethods: [], agentInfo: { name: 'FakeACP', version: '1.0.0' }, _seen: p.clientCapabilities });
+      return reply({ protocolVersion: 1, agentCapabilities: { loadSession: false, mcpCapabilities: { http: true } }, authMethods: [], agentInfo: { name: 'FakeACP', version: '1.0.0' }, _seen: p.clientCapabilities });
     case 'session/new':
+      mcp = (p.mcpServers ?? []).map(x => `${x.name} ${x.type} ${x.url} ${(x.headers ?? []).map(h => h.name).join(',')}`).join('; ');
       return reply({ sessionId: 'sess_1', ...(process.env.FAKE_ACP_NO_MODELS ? {} : { configOptions: config() }) });
     case 'session/set_config_option':
       if (p.configId === 'model') model = p.value;
@@ -86,7 +88,7 @@ async function handle(m) {
       }
       if (text.includes('slow')) for (let t = 0; t < 80 && !cancelled.has(sid); t++) await sleep(100);
       if (cancelled.has(sid)) return reply({ stopReason: 'cancelled' });
-      update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Working on it.\nmodel ${model} effort ${effort}\n` } });
+      update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Working on it.\nmodel ${model} effort ${effort}\n${mcp ? `mcp ${mcp}\n` : ''}` } });
       update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `did ${text.trim()}${answer}` } });
       return reply({ stopReason: 'end_turn' });
     }

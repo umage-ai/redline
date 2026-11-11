@@ -129,7 +129,7 @@ function prompt(p) {
     draw();
     // FAKE_NO_DONE: like OpenCode 2.2, back to idle instead of done.
     report(process.env.FAKE_NO_DONE ? 'state=idle' : `state=done:msg=${b64(`did ${p.slice(0, 40)}`)}`);
-  }, p.includes('slow') ? 8000 : 1500);   // long enough for a test to see "working"; "slow": a while
+  }, p.includes('slower') ? 20000 : p.includes('slow') ? 8000 : 1500);   // long enough for a test to see "working"; "slow": a while
 }
 
 const KEYS = [['\x1b[A', 'up'], ['\x1b[B', 'down'], ['\x1b[C', 'right'], ['\x1b[D', 'left'], ['\x1b[200~', ''], ['\x1b[201~', ''], ['\r', 'enter'], ['\t', 'tab'], ['\x7f', 'back'], ['\x1b', 'esc']];

@@ -9,7 +9,21 @@ import { existsSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentAdapter, AgentChoice, AgentCli, BridgeOptions, AgentStart } from './types.ts';
+import { unlinkSync } from 'node:fs';
+import type { AgentAdapter, AgentChoice, AgentCli, BridgeOptions, AgentStart, McpServer } from './types.ts';
+
+// MCP config files written for sessions (they hold a bearer token): owner-only, removed when the process exits.
+const MCP_FILES = new Set<string>();
+let cleanup = false;
+/** A Claude Code `--mcp-config` file for `servers` (D66): HTTP servers with their headers. */
+export async function mcpConfigFile(servers: McpServer[], name: string): Promise<string> {
+  const file = path.join(os.tmpdir(), `agent-bridge-mcp-${process.pid}-${name.replace(/[^\w-]/g, '')}.json`);
+  const mcpServers = Object.fromEntries(servers.map(s => [s.name, { type: 'http', url: s.url, ...(s.headers ? { headers: s.headers } : {}) }]));
+  await writeFile(file, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
+  MCP_FILES.add(file);
+  if (!cleanup) { cleanup = true; process.once('exit', () => { for (const f of MCP_FILES) { try { unlinkSync(f); } catch { /* gone */ } } }); }
+  return file;
+}
 
 /** A command's base name, either slash, without a Windows extension: `C:\tools\claude.exe` → `claude`. */
 export const baseName = (command: string) => (command.split(/[\\/]/).pop() ?? '').replace(/\.(exe|cmd|bat|com)$/i, '').toLowerCase();
@@ -45,10 +59,12 @@ export const claudeCode: AgentAdapter = {
   // name (the `model` option); --effort low, medium, high, xhigh or max.
   models: [{ value: 'fable', name: 'Fable' }, { value: 'opus', name: 'Opus' }, { value: 'sonnet', name: 'Sonnet' }],
   efforts: [{ value: 'low', name: 'Low' }, { value: 'medium', name: 'Medium' }, { value: 'high', name: 'High' }, { value: 'xhigh', name: 'Extra high' }, { value: 'max', name: 'Max' }],
-  async start({ args, model, effort, instructions }) {
+  async start({ args, model, effort, instructions, mcp }) {
     const out = [...args];
     if (model && !args.includes('--model')) out.push('--model', model);
     if (effort && !args.includes('--effort')) out.push('--effort', effort);
+    // The host's MCP servers (D66), next to the project's own .mcp.json.
+    if (mcp?.length) out.push('--mcp-config', await mcpConfigFile(mcp, createHash('sha1').update(JSON.stringify(mcp)).digest('hex').slice(0, 12)));
     if (!instructions.text) return { args: out };
     // A file, not an argument: no quoting through cmd.exe. Text is written to a temp file.
     let file = instructions.file;

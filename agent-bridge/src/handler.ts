@@ -16,7 +16,7 @@ import { foreignOrigin, isLocal, json, readBody } from './http.ts';
 import { fileType, inside, MAX_FILE } from './attachments.ts';
 import { cliChoices, commandName } from './adapters.ts';
 import { checkPick, DEFAULT_KEYS, groupFor, type AgentGroup, type Picked } from './sessions.ts';
-import type { AgentAdapter, BridgeOptions } from './types.ts';
+import type { AgentAdapter, BridgeOptions, McpServer } from './types.ts';
 
 /** The header a POST carries the token in. */
 export const TOKEN_HEADER = 'x-agent-token';
@@ -46,6 +46,10 @@ export interface BridgeSetup extends BridgeOptions {
    */
   worktreeDir?: string;
   branchPrefix?: string;
+  /** The environment variable that carries a session's id into its CLI (D66), e.g. `REDLINE_AGENT_SESSION`. */
+  sessionEnv?: string;
+  /** MCP servers for a session the bridge starts (D66), asked at its start: Claude Code `--mcp-config`, ACP `session/new`. */
+  mcp?: (sessionId: string) => McpServer[];
 }
 
 /**
@@ -53,12 +57,13 @@ export interface BridgeSetup extends BridgeOptions {
  * so a host that re-creates its handler (a dev server's config restart) gets the same ones back.
  */
 export function createBridge(setup: BridgeSetup): Bridge {
-  const { root, info: extra, worktreeDir, branchPrefix, ...options } = setup;
+  const { root, info: extra, worktreeDir, branchPrefix, sessionEnv, mcp, ...options } = setup;
   // The CLIs to pick from (D59): `clis`, else `command`, else every adapter's installed one; the default first.
   const clis = cliChoices(options);
   const opts: BridgeOptions = { ...options, command: clis[0].command, args: clis[0].args, label: clis[0].label ?? options.label };
   const cwd = opts.cwd ? path.resolve(root, opts.cwd) : root;
   const group = groupFor(opts, cwd, root, clis, { dir: worktreeDir ? path.resolve(root, worktreeDir) : undefined, prefix: branchPrefix });
+  group.configure({ sessionEnv, mcp });
   // Allow and Deny: the keys of the session's CLI (its adapter's), the option's over them.
   const keysFor = (s: { adapter: AgentAdapter }) => opts.keys === false ? false : { ...DEFAULT_KEYS, ...s.adapter.keys, ...opts.keys };
   const info = () => ({

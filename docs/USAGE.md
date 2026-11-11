@@ -93,7 +93,13 @@ Optional: `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS
 `get_note` (with the screenshot) and `update_note`. It goes through the running dev server, so a custom `store` works;
 without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server also
 serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from
-elsewhere; through `next dev` too).
+elsewhere; through `next dev` too). That endpoint (Node only) adds tools that need the running app, answered by the
+tabs that have it open: `note_dom` (the DOM around a note's element now), `page_console` (their console errors),
+`check_page` (a page's status, plus those errors). With the agent panel it adds `working_on` (the note a session is on:
+its tag and tab say so), `attach` (a file or link on the session's 📎), `list_agent_sessions` and `get_agent_session`
+(state, notes, branch, transcript tail). Sessions the toolbar starts get it wired in: Claude Code through `--mcp-config`,
+an ACP agent through `session/new` (when it takes HTTP servers), with a bearer only they hold and their id
+(`REDLINE_AGENT_SESSION` in their environment too). The stdio `redline mcp` and .NET serve the three note tools.
 
 ### Agent panel
 

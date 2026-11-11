@@ -12,6 +12,7 @@ import { inFrame } from './dom.ts';
 import { captureErrors } from './errors.ts';
 import { mount } from './mount.ts';
 import { httpTransport } from './transport.ts';
+import { startLive } from './live.ts';
 
 declare global {
   interface Window { __redline?: boolean; redlineConfig?: RedlineBootConfig; redlineExtensions?: { push(...fns: RedlineExtension[]): unknown } }
@@ -25,7 +26,12 @@ if (!window.__redline) {
   // From the script's first moment, so errors during the app's start-up are attached too.
   const errors = !framed || allowInIframe ? captureErrors() : null;
   const start = () => void mount({ captureErrors: errors?.list ?? true, transport, ...(launcher === undefined ? {} : { config: { launcher } }) })
-    .then(rl => { if (framed) listenToParent(rl.api); });
+    .then(rl => {
+      if (framed) { listenToParent(rl.api); return; }
+      // Live pages (D65): MCP tools can ask this page for its console errors and a note's DOM. Same-origin API without extra headers only.
+      const same = (() => { try { return new URL(apiBase, location.href).origin === location.origin; } catch { return false; } })();
+      if (same && !auth.headers) startLive(apiBase, () => rl.api.page(), () => errors?.list() ?? []);
+    });
   const ready = (fn: () => void) => { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); };
   if (!framed || allowInIframe) ready(start);
   // A frame without the page's opt-in asks the server's (allowInIframe in /config); otherwise nothing runs here.
