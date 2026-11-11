@@ -1,24 +1,15 @@
-# @umage.ai/redline-hub
+<h1 align="center">Redline hub</h1>
+<p align="center"><b>One shared place for a team's Redline notes: live, per project, with an MCP endpoint for agents.</b></p>
+<p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline-hub"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline-hub?label=npm&color=e5484d"></a> <a href="https://github.com/umage-ai/redline/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline-hub?color=555"></a></p>
+<p align="center"><a href="#quick-start"><b>Quick start</b></a> · <a href="#features">Features</a> · <a href="#sharing-it-with-a-team">Sharing it</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md">Where to run it</a> · <a href="https://github.com/umage-ai/redline#packages">All packages</a></p>
 
-One shared place for a team's [Redline](https://github.com/umage-ai/redline) notes. By default every
-dev server keeps notes as markdown in its own checkout. Point several at a hub and everyone reviewing
-the app sees the same notes, live: who filed what, replies, and a green pin when a note is resolved.
+![The hub's web UI: a project's notes with their screenshots, replies and resolve buttons](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/hub.png)
 
-- **Projects**, each its own set of notes, with optional **allowed sites** (notes filed from any other
-  page are refused, so nobody files from production by mistake).
-- **Personal tokens** per project: a token acts as one person, whose name goes on their notes.
-  Agent tokens are for MCP only.
-- **MCP per project** at `/p/<project>/mcp`: the same `list_notes` / `get_note` / `update_note`
-  tools as `redline mcp`. An agent closing a note resolves it, and the reviewer's pin turns green.
-- **A web UI** to manage projects and tokens, read notes with their screenshots, reply, resolve,
-  reopen, archive.
-- **One SQLite file**, on Node's built-in `node:sqlite`. No dependencies. Node 22.13 or later.
+By default every [Redline](https://github.com/umage-ai/redline) dev server keeps notes as markdown in its own checkout.
+Point several at a hub and everyone reviewing the app sees the same notes, live: who filed what, replies, and a green
+pin when a note is resolved. One file, no dependencies, Node 22.13 or later.
 
-Where it fits among the ways to run Redline: [SETUPS.md](https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md) (setups 2 and 4).
-It implements the [remote store protocol](https://github.com/umage-ai/redline/blob/main/docs/PROTOCOL.md),
-so nothing about it is special to the overlay: any server that speaks the protocol works the same way.
-
-## Start it
+## Quick start
 
 ```bash
 npx @umage.ai/redline-hub
@@ -47,6 +38,22 @@ claude mcp add --transport http redline http://127.0.0.1:4780/p/customer-portal/
 
 The browser never sees the token: the dev server makes the calls, and the overlay keeps talking to
 its own `/__redline`. ASP.NET Core apps use `o.UseRemoteStore(url, token)`.
+
+## Features
+
+| | |
+|---|---|
+| **Projects** | Each its own set of notes, with optional **allowed sites**: notes filed from any other page are refused, so nobody files from production by mistake |
+| **Personal tokens** | Per project: a token acts as one person, whose name goes on their notes. Agent tokens are for MCP only |
+| **MCP per project** | `/p/<project>/mcp`: `list_notes`, `get_note`, `update_note`. An agent closing a note resolves it, and the reviewer's pin turns green |
+| **A web UI** | Manage projects and tokens, read notes with their screenshots, reply, resolve, reopen, archive |
+| **One SQLite file** | On Node's built-in `node:sqlite`; tokens and keys stored as SHA-256 hashes only |
+
+It implements the [remote store protocol](https://github.com/umage-ai/redline/blob/main/docs/PROTOCOL.md), so nothing about it
+is special to the overlay: any server that speaks the protocol works the same way. Where it fits among the ways to run
+Redline: [SETUPS.md](https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md) (setups 2 and 4).
+
+## Options
 
 | Option | Default | |
 |---|---|---|
@@ -83,7 +90,7 @@ It is a reference implementation for teams, not a hardened product. For editors 
 - **Signing in** takes the admin key (everything) or a member token (that project's notes only).
 - Tokens, the admin key and sessions are stored as SHA-256 hashes only.
 
-MIT licensed. Decision D44.
+MIT licensed. Decision [D44](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md).
 
 ---
 

@@ -1,7 +1,7 @@
 <h1 align="center">Redline</h1>
 <p align="center"><b>Mark up a running web UI, and let an AI agent apply the changes.</b></p>
 <p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline?label=npm&color=e5484d"></a> <a href="https://github.com/umage-ai/redline/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline?color=555"></a></p>
-<p align="center"><a href="https://umage.ai/products/redline"><b>Product page</b></a> · <a href="#packages">Packages</a> · <a href="#quick-start">Setup</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md">Setups</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/USAGE.md">Guide</a> · <a href="https://github.com/umage-ai/redline/releases">Releases</a></p>
+<p align="center"><a href="#quick-start"><b>Quick start</b></a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/USAGE.md">Guide</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/SETUPS.md">Where to run it</a> · <a href="#packages">Packages</a> · <a href="https://umage.ai/products/redline">Product page</a> · <a href="https://github.com/umage-ai/redline/releases">Releases</a></p>
 
 ![Commenting on a button: the popover shows the element and its React source, App.tsx:35](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/comment.png)
 
@@ -72,9 +72,11 @@ Labels, phones, the launcher and your own open buttons, screenshots, direct edit
 ## Agent panel
 
 With `@umage.ai/redline-agent` and `agent: true`, your agent CLI runs from the overlay: **Apply 2 notes**, its questions and
-diffs in a card on the toolbar, a session per prompt, and its state as a ring on the launcher. Every installed CLI is offered
-(Claude Code, OpenCode; ⚙ picks one, with its model and effort); OpenCode and any other [ACP](https://agentclientprotocol.com) agent run over the Agent Client
-Protocol, so their permission prompts arrive with their real options. Local dev only. See [agent/README.md](https://github.com/umage-ai/redline/blob/main/agent/README.md).
+diffs in a card on the toolbar, a session per prompt (optionally each in its own git worktree), a 📎 on each session with the
+files it changed, and its state as a ring on the launcher. Every installed CLI is offered (Claude Code, OpenCode; ⚙ picks
+one, with its model and effort); OpenCode and any other [ACP](https://agentclientprotocol.com) agent run over the Agent Client
+Protocol, so their permission prompts arrive with their real options. Sessions get Redline's MCP, so the agent can say which
+note it is on and read the open page. Local dev only. See [agent/README.md](https://github.com/umage-ai/redline/blob/main/agent/README.md).
 
 ![The agent toolbar: the CLI asks to edit src/App.tsx; the card shows the diff and its three options](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent.png)
 
@@ -88,6 +90,9 @@ Start with the core; add the others only when you need them. Each has its own RE
 | [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](https://github.com/umage-ai/redline/blob/main/agent/README.md)) | You want notes applied without opening a terminal (local dev) |
 | [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](https://github.com/umage-ai/redline/blob/main/hub/README.md)) | Several people review the same app |
 | [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](https://github.com/umage-ai/redline/blob/main/overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
+
+The agent panel's Redline-free core, driving agent CLIs from a browser, is [`agent-bridge/`](https://github.com/umage-ai/redline/blob/main/agent-bridge/README.md)
+(bundled into the agent package; not published on its own yet).
 
 ## Learn more
 

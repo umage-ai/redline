@@ -1,132 +1,119 @@
-# @umage.ai/redline-agent
-
-The agent panel for [Redline](https://github.com/umage-ai/redline)'s dev server. It runs your agent CLI
-(Claude Code, OpenCode, or any terminal program; any [ACP](https://agentclientprotocol.com) agent without a terminal) on the dev
-server and drives it from the overlay, so reviewers never need to open a terminal:
+<h1 align="center">Redline agent</h1>
+<p align="center"><b>Your agent CLI, run from the Redline overlay: apply notes, answer its questions, see what it changed.</b></p>
+<p align="center"><a href="https://www.npmjs.com/package/@umage.ai/redline-agent"><img alt="npm" src="https://img.shields.io/npm/v/@umage.ai/redline-agent?label=npm&color=e5484d"></a> <a href="https://github.com/umage-ai/redline/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@umage.ai/redline-agent?color=555"></a></p>
+<p align="center"><a href="#quick-start"><b>Quick start</b></a> · <a href="#features">Features</a> · <a href="#options">Options</a> · <a href="https://github.com/umage-ai/redline/blob/main/docs/USAGE.md#agent-panel">Guide</a> · <a href="https://github.com/umage-ai/redline#packages">All packages</a></p>
 
 ![The agent toolbar: the CLI asks to edit src/App.tsx; the card shows the diff and its three options](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent.png)
 
-- **The agent toolbar**: **Agent** (A) in Redline's toolbar, or `Alt+Shift+A` from anywhere. Left to right:
-  **← Agent** (back to Redline's toolbar; Esc too), the state with the CLI's name ("Claude Code · Working…") and its
-  own message, a tab per session, **Apply 3 notes** (your other prompt buttons behind ⋯), **>_** for the CLI window
-  (xterm.js), **⚙** for your settings, and ✕ (closes the overlay).
-- **Its questions in a card** on the toolbar: when the CLI shows a menu (a permission prompt with its diff, Claude Code's
-  stepped questions, a trust dialog), the card shows the context, the question and every option, with a field for
-  "Type something". It is read off the CLI's screen, so it is exactly what the terminal shows; a click moves the
-  CLI's cursor and presses Enter. This is for Claude Code (detected from its OSC 7501 reports or the command
-  `claude`). ACP agents (OpenCode by default) send their permission requests as data, so the card shows their own
-  options too; other CLIs get **Allow**/**Deny** and the terminal (`menus: true` tries it anyway).
-- **Settings (⚙)**, kept in this browser: the CLI (with several installed), its model and effort (Claude Code's
-  aliases `fable`, `opus`, `sonnet` and `--effort low…max`; an ACP agent's own lists, asked once in the background),
-  and a new session per prompt or one kept going. They apply to new sessions; **Reset to project defaults** forgets
-  them. The server passes on only values from the lists it offered.
-- **Several CLIs**: every installed one is offered. Hold **Apply** (or right-click it, or Alt+↓ / Shift+F10 on it) to
-  switch the CLI for the next prompt; nothing runs until you press it.
-- **Live status** from the CLI's OSC 7501 reports (Claude Code sends them) or the ACP session: a light sweeping round the toolbar
-  and a turning ring on the closed launcher while it works, an orange glow while it waits for you, green when done.
-- **Fresh sessions** (the default since 0.10; ⚙ switches): every prompt starts its own session with only its notes
-  (none that a running session already has), several at once, a tab each, named by its first note: a dot for its
-  state (working, waiting for you, done and not yet seen in bold; seen and ended ones fade to the right), the CLI's
-  initials while two CLIs are in use, the prompt, notes, model and last message on hover, × to end it (it asks first
-  while the agent works). 3 tabs show, the rest behind **+N** (a list of every session); on phones one session button
-  opens it. `sessions: 'shared'` keeps one session that keeps its context; either way a note goes to one running session at a time.
-- **The CLI window** (>_): the session's terminal, or its transcript over ACP; its header names the session, — minimizes
-  it (the session runs on), **End session** stops the CLI and closes the session.
-- **The notes panel** tags each note it was sent: being worked on, waiting for your answer, sent, or done.
+Reviewers pin notes with [Redline](https://github.com/umage-ai/redline); this package runs your agent CLI (Claude Code,
+OpenCode, any terminal program, any [ACP](https://agentclientprotocol.com) agent) on the dev server and drives it from
+the overlay. **Apply 3 notes**, answer its permission prompts in a card, and see the files it changed, without opening a terminal.
 
-Local dev only: it answers this machine only (whatever Redline's `network` option says), and every call needs a
-per-process token. The CLI keeps its own permission prompts.
-
-## Install
+## Quick start
 
 ```bash
 npm i -D @umage.ai/redline @umage.ai/redline-agent
 ```
 
-node-pty comes with it (an optional dependency: prebuilt on Windows and macOS, compiled on Linux). Linux without
-build tools: `npm i -D @lydell/node-pty` instead.
+```js
+redline({ agent: true })   // in vite.config (or Astro, Next, Angular, the Node server): every installed CLI is offered
+```
 
-## Use
+Open the app, press **Alt+Shift+A** (or **A** in Redline's toolbar), pin a note, press **Apply 1 note**. node-pty comes with
+it (prebuilt on Windows and macOS, compiled on Linux; without build tools: `npm i -D @lydell/node-pty`).
 
-Turn it on with Redline's `agent` option, in any setup (Vite, Astro, Next, Angular, the Node server):
+## Features
+
+| | |
+|---|---|
+| **The agent toolbar** | **← Agent**, the state ("Claude Code · Working…"), a tab per session (named by its notes), **Apply N notes**, **>_** the CLI window, **⚙** settings |
+| **Questions in a card** | Permission prompts with their diff, Claude Code's stepped questions, trust dialogs: every option, and a field for your own answer. ACP agents send theirs as data |
+| **Several CLIs** | Every installed one is offered; ⚙ or holding **Apply** switches; model and effort per CLI (only values the CLI offers reach it) |
+| **Fresh sessions** | A new session per prompt with only its notes, several at once; or one shared session that keeps its context |
+| **Worktrees** | ⚙ **Each new session in its own git worktree**: its own branch, `redline/<name>`; when it ends, keep, merge (clean only) or discard it |
+| **Attachments** | A 📎 count on each tab: per prompt, the files it changed (with the diff), images, files and links it pointed at |
+| **MCP wired in** | Sessions it starts get Redline's MCP: `working_on` tags the note being worked on, `attach` shows a file on the tab, `note_dom` and `page_console` read the open page |
+| **Live status** | From the CLI's OSC 7501 reports or the ACP session: a sweeping light while it works, orange while it waits for you, green when done; a ring on the closed launcher too |
+
+![The agent toolbar's settings: the CLI, its model and effort, sessions, worktrees](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent-settings.png)
+
+Local dev only: it answers this machine only (whatever Redline's `network` option says), every call needs a per-process
+token, and the CLI keeps its own permission prompts.
+
+## Options
 
 ```js
-redline({ agent: true })                 // every installed one of claude, opencode: ⚙ picks (below)
-redline({ agent: 'opencode' })           // one CLI by name, no picker (any CLI runs; see Adapters below)
+redline({ agent: 'opencode' })           // one CLI by name, no picker
 redline({ agent: { clis: ['claude', 'opencode', { command: 'codex', label: 'Codex' }] } })   // the CLIs offered
 redline({
   agent: {
     command: 'claude', args: ['--permission-mode', 'acceptEdits'],
-    model: 'opus',                        // the default model (Claude Code --model; ACP: the agent's model option)
-    effort: 'high',                       // the default effort (Claude Code --effort; ACP: its thought_level option)
+    model: 'opus', effort: 'high',        // defaults for ⚙ (Claude Code --model/--effort; ACP: the agent's options)
     commands: [{ label: 'Review page', prompt: 'Review page {page} against the open Redline notes {ids}' }],
-    keys: { allow: '\r', deny: '\x1b' },  // what Allow / Deny send (Claude Code's prompt)
-    hotkey: 'alt+shift+a',
-    key: 'a',                             // the Agent button's key in the toolbar; false when an extension uses A
     sessions: 'fresh', maxSessions: 3,    // a new session per prompt (the default; 'shared': one session)
-    instructions: { file: 'redline-agent.md' },  // or a string; see below
+    worktrees: true,                      // each new session in its own git worktree (default off; ⚙ switches)
+    instructions: { file: 'redline-agent.md' },  // your rules for the sessions Redline starts
+    hotkey: 'alt+shift+a', key: 'a',      // false for none
   },
 })
 ```
 
-Redline finds this package in your project. Or hand it over yourself (typed, and bundler-friendly):
+Or hand it over yourself, typed: `import { agent } from '@umage.ai/redline-agent'; redline({ agent: agent({ command: 'codex' }) })`.
+Every option and its default: [docs/OPTIONS.md](https://github.com/umage-ai/redline/blob/main/docs/OPTIONS.md#agent-umageairedline-agent-d53).
 
-```js
-import { agent } from '@umage.ai/redline-agent';
-redline({ agent: agent({ command: 'codex' }) })
-```
+Prompts fill in `{page}`, `{url}` and `{ids}` (the open notes on the page no running session has); a prompt with `{ids}`
+shows their count and tags those notes in the notes panel (sent, being worked on, waiting for you, done).
+`instructions` (text, or `{ file }` read at every start) reach Claude Code as `--append-system-prompt-file`, any other CLI
+ahead of its first prompt.
 
-### Several CLIs
+### Worktrees
 
-With more than one CLI (`agent: true` with Claude Code and OpenCode both installed, or a `clis` list), ⚙ lists them,
-and holding **Apply** (500 ms; or right-click, Alt+↓, Shift+F10) opens a quick switch (arrow keys and Enter work too).
-Your pick is remembered in this browser and named on Apply's tooltip; each session runs the CLI it was started with (OpenCode over ACP) and its tab says which. With Fresh,
-sessions of different CLIs run side by side; with one shared session, a prompt for another CLI stops the shared
-one (between turns, not while it works or asks; its tab stays, ended) and starts the new one. `clis` takes adapter ids or commands
-(`'claude'`, `'opencode'`, with the option's `args`), any other command, or `{ command, args, label, id, env }`;
-the installed ones are offered, the first is the default. A `command` alone means just that CLI.
+With **Each new session in its own git worktree** on (⚙, or `worktrees: true`), a fresh session works in
+`.redline/worktrees/<name>` on the branch `redline/<name>`, so parallel sessions never edit the same files. The tab's
+hover names the branch. When the session ends, the card offers **Keep branch**, **Merge into <your branch>** (a
+fast-forward or a clean merge, never forced; uncommitted work must be committed first) or **Discard** (asks first when
+that would drop work). The worktree has no node_modules: the agent edits and commits there; to run the app or tests in
+it, install first. Not a git repo: the switch is off and says why.
 
-### Adapters
+### Attachments
 
-What is particular to a CLI sits in an adapter (`AgentAdapter`): Claude Code (menus read into the card,
-`--model` and `--effort` with the `models` and `efforts` ⚙ offers, instructions as `--append-system-prompt-file`) and OpenCode (over ACP by default, below; in a
-terminal with `protocol: 'pty'`: status from its OSC 7501 reports, Allow/Deny for its prompts). Any other CLI
-runs as is: Allow/Deny, the terminal, and 7501 status if it sends it. Add or tune your own, tried before the built-in ones:
+![A session's attachments: the files it changed with their diff, an image, a link](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent-files.png)
+
+A 📎 count on a tab opens what that session pointed at, per prompt, most reliable first: what the agent attached (MCP
+`attach`, an ACP agent's resource links and tool-call files), the files that changed in the turn (git, with +/− and the
+diff), links the CLI marked (OSC 8), and, folded, files and URLs its output merely mentioned. Images open zoomed; links
+on this machine open in a new tab; nothing is fetched by the server, and files are served only from inside the project.
+
+### MCP
+
+Sessions the toolbar starts get Redline's MCP (`/__redline/mcp`) wired in: Claude Code through `--mcp-config`, an ACP agent
+through `session/new`, with their own token and session id (`REDLINE_AGENT_SESSION`). Besides the note tools they get
+`working_on` (the note it is on: its tag and the tab say so), `attach`, `note_dom` and `page_console` (from the open page),
+`check_page`, and `list_agent_sessions` / `get_agent_session` to see what other sessions are doing.
+
+### Several CLIs, adapters, ACP
+
+Hold **Apply** (500 ms; or right-click, Alt+↓, Shift+F10) to switch the CLI for the next prompt; the pick is remembered in
+this browser. With one shared session, a prompt for another CLI stops it between turns and starts the new one.
+What is particular to a CLI sits in an adapter: Claude Code (menus read off its screen, `--model`, `--effort`, instructions as
+a file) and OpenCode (over ACP by default). Add your own, tried first:
 
 ```js
 import { agent, openCode } from '@umage.ai/redline-agent';
 redline({ agent: agent({ command: 'opencode', adapters: [{ ...openCode, settleMs: 2000 }] }) })
-// ⚙'s lists for a CLI of yours, passed to `start` (only these values ever reach it):
-const mine = { id: 'mine', name: 'My CLI', command: 'my-cli', matches: c => c === 'my-cli',
-  models: ['small', { value: 'large', name: 'Large' }], efforts: ['low', 'high'],
-  start: o => ({ args: [...o.args, ...(o.model ? ['--model', o.model] : []), ...(o.effort ? ['--effort', o.effort] : [])] }) };
 ```
 
-### ACP mode
+ACP agents run without a terminal: status and permission requests arrive as data (the card shows "Allow once", "Always
+allow", "Reject"), the CLI window shows a transcript and takes typed prompts. Any other ACP agent:
+`{ command: 'my-acp-agent', protocol: 'acp' }`. OpenCode asks before nothing by default; to approve from the card, set
+`"permission": { "bash": "ask", "edit": "ask" }` in its config (or `env: { OPENCODE_CONFIG_CONTENT: '…' }` for Redline's sessions only).
 
-Agents that speak the [Agent Client Protocol](https://agentclientprotocol.com) run without a terminal
-(`protocol: 'acp'`; OpenCode does by default, as `opencode acp`). Redline talks JSON-RPC to them over stdio:
-working while a prompt runs, done when it returns, and a permission request shows in the card with the agent's
-own options ("Allow once", "Always allow", "Reject"); Cancel ends the turn. The CLI window shows a transcript
-(the agent's text, tool calls, its plan) and a line typed there is sent as a prompt. `model` and `effort` are set
-through the agent's config options (`model`, `thought_level`; OpenCode: `provider/model`, as in `opencode models`); ⚙
-lists what the agent offers, asked once in the background when the toolbar loads (OpenCode answers in about a
-second); `instructions` go ahead of the first prompt. Any other ACP agent: `{ command: 'my-acp-agent', args: [...], protocol: 'acp' }`. Claude Code stays in
-the terminal (its ACP mode is a separate adapter package).
+## How it is built
 
-OpenCode asks before nothing by default. To approve its shell commands and edits from the card, set
-`"permission": { "bash": "ask", "edit": "ask" }` in OpenCode's config, or for Redline's sessions only:
-`env: { OPENCODE_CONFIG_CONTENT: '{"permission":{"bash":"ask","edit":"ask"}}' }`.
-
-Prompts fill in `{page}`, `{url}` and `{ids}` (the open notes on the page); a prompt with `{ids}` shows their count
-and tags those notes "sent". Prompts wait until the CLI is ready for input.
-
-`instructions` adds your own rules to the sessions Redline starts, on top of the project's CLAUDE.md / AGENTS.md
-(say "don't commit", "run the tests for the files you touch"). Text, or `{ file }` relative to the project root,
-read at every start. Claude Code gets it as `--append-system-prompt-file`; any other CLI ahead of the session's
-first prompt. The agent starts in the project root (where `.redline/` is), or `cwd`.
-
-How it works and why: [D53, D55, D58, D59, D62](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md). MIT licensed.
+The generic part, driving agent CLIs from a browser (sessions, adapters, OSC 7501, menu reading, worktrees, attachments,
+one guarded HTTP handler), is [`agent-bridge/`](https://github.com/umage-ai/redline/blob/main/agent-bridge/README.md),
+bundled into this package; this package adds the toolbar and Redline's notes. Decisions:
+[D53, D55, D56, D58, D59, D62–D66](https://github.com/umage-ai/redline/blob/main/docs/DECISIONS.md). MIT licensed.
 
 ---
 

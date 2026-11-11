@@ -1,7 +1,13 @@
 # Redline for .NET
 
+**Mark up a running ASP.NET Core, Blazor or Optimizely site, and let an AI agent apply the changes.**
+
 > **Upcoming.** These packages are not published to NuGet yet; they are still being tested. Build them from this
 > repo with `dotnet pack dotnet/Redline.slnx -o <folder>` and add that folder as a local package source to try them.
+
+[Setup](#setup) · [What a note knows](#what-a-note-knows) · [Optimizely](#optimizely-cms) · [Online mode](#online-mode-staging-production) · [Agents (MCP)](#agents-mcp) · [Redline on GitHub](https://github.com/umage-ai/redline)
+
+![Commenting on a button: the popover shows the element and its source](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/comment.png)
 
 Redline is a review overlay for web UIs: a reviewer pins comments, text changes and sketches on the
 running app (Alt+Shift+R), and an AI agent applies them. These packages bring it to ASP.NET Core:
@@ -116,7 +122,8 @@ Server or SQLite) and record the author. File writers are off; Optimizely conten
   `update_note`) over MCP's Streamable HTTP transport. It needs a bearer token: a site token
   (configure its SHA-256 in `o.Mcp.TokenHashes`; make one with `RedlineTokens.Create()`) or, online,
   a personal token a reviewer creates in the overlay's panel ("Agent access"). In development,
-  loopback requests need no token unless site tokens are configured.
+  loopback requests need no token unless site tokens are configured. The Node dev server's extra tools
+  (`note_dom`, `page_console`, `check_page`, and the agent panel's session tools) are Node only.
 
 ```json
 { "mcpServers": { "redline": { "type": "http", "url": "https://site.example/__redline/mcp",
@@ -131,3 +138,7 @@ under `"servers"`) take the same entry.
 - Responses compressed by the app (gzip/br before Redline's middleware) get no overlay.
 - Hot reload compiles the original files: elements of an edited component lose their stamp until the
   next build.
+
+---
+
+Part of **Redline** ([umage.ai/products/redline](https://umage.ai/products/redline)): [all packages](https://github.com/umage-ai/redline#packages), [source](https://github.com/umage-ai/redline). MIT licensed.
