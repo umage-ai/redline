@@ -14,7 +14,8 @@
 import type { Note } from '../../src/shared/types.ts';
 import type { RedlineApi, RedlineStatus, RedlineWindow } from '../../src/shared/extension.ts';
 import { API_BASE } from '../../src/shared/types.ts';
-import type { PromptView, Span } from './screen.ts';
+import type { PromptView, Span } from '../../agent-bridge/src/screen.ts';
+import { bridgeClient, type BridgeClient } from '../../agent-bridge/src/client.ts';
 import { pickCli, pickFor, recallCli, recallSettings, rememberCli, rememberSettings, type Cli, type PerCli } from './settings.ts';
 
 export { pickCli };
@@ -353,11 +354,10 @@ type View = 'list' | 'switch' | 'cmds' | 'settings' | null;
 
 export default async function agentPanel(rl: RedlineApi) {
   if (!(rl.version >= 5) || typeof rl.addToolbar !== 'function') return;
-  let setup: Setup;
+  let client: BridgeClient, setup: Setup;
   try {
-    const r = await fetch(`${BASE}/info`);
-    if (!r.ok) return;
-    setup = await r.json();
+    client = await bridgeClient(BASE);   // the agent bridge's browser client (D63)
+    setup = client.info as unknown as Setup;
   } catch { return; }
   let group: Group = setup;
   const name = () => setup.command;
@@ -389,11 +389,7 @@ export default async function agentPanel(rl: RedlineApi) {
   const hotkeyText = () => setup.hotkey ? setup.hotkey.split('+').map(k => k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1)).join('+') : '';
   const notesOf = (ids: string[]) => { const all = rl.notes('all'); return ids.map(id => all.find(n => n.id === id)).filter((n): n is Note => !!n); };
 
-  const post = async (p: string, body: Record<string, unknown> = {}) => {
-    const r = await fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': setup.token }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
-    return r.json();
-  };
+  const post = (p: string, body: Record<string, unknown> = {}) => client.post<any>(p, body);
   /** A call for the selected session. */
   const here = (p: string, body: Record<string, unknown> = {}) => post(p, { ...body, ...(cur().id ? { id: cur().id } : {}) });
   const fail = (e: unknown) => rl.toast(`Agent: ${(e as Error).message}`, true);
@@ -914,20 +910,13 @@ export default async function agentPanel(rl: RedlineApi) {
   }
 
   // The status feed: every session, with the toolbar and window closed; `clis` when an ACP agent's
-  // models and effort levels arrive (D62). EventSource reconnects by itself (a dev-server restart); a
+  // models and effort levels arrive (D62). The client reconnects by itself (a dev-server restart); a
   // stale token (another server process) re-reads /info.
-  let es: EventSource | null = null;
-  const connect = () => {
-    es?.close();
-    es = new EventSource(`${BASE}/stream?status=1&token=${encodeURIComponent(setup.token)}`);
-    for (const ev of ['hello', 'status']) es.addEventListener(ev, e => { group = JSON.parse((e as MessageEvent).data); sync(); });
-    es.addEventListener('clis', e => { setup.clis = JSON.parse((e as MessageEvent).data); if (view === 'settings') refreshSettings(); sync(); });
-    es.onerror = async () => {
-      if (es?.readyState !== EventSource.CLOSED) return;
-      try { const r = await fetch(`${BASE}/info`); if (r.ok) { setup = await r.json(); group = setup; pick = pickCli(clis(), pick, setup.cli); sync(); setTimeout(connect, 1000); } } catch { /* down: retried on the next open */ }
-    };
-  };
-  connect();
+  client.watch(
+    g => { group = g as Group; sync(); },
+    c => { setup.clis = c as Cli[]; if (view === 'settings') refreshSettings(); sync(); },
+    i => { setup = i as unknown as Setup; group = setup; pick = pickCli(clis(), pick, setup.cli); sync(); },
+  );
   // The CLI window: keys there acknowledge a finished turn; a session it started is the one shown.
   window.addEventListener('message', e => {
     if (e.origin !== location.origin || e.source !== frame?.contentWindow) return;

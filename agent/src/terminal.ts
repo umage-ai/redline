@@ -49,7 +49,7 @@ async function main() {
 
   // Keys go out in order: one request at a time, with whatever was typed meanwhile batched.
   let pending = '', sending = false;
-  const post = (p: string, body: Record<string, unknown>) => fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(id ? { ...body, id } : body) });
+  const post = (p: string, body: Record<string, unknown>) => fetch(`${BASE}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': token }, body: JSON.stringify(id ? { ...body, id } : body) });
   async function pump() {
     if (sending || !pending) return;
     sending = true;

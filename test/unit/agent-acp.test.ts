@@ -8,7 +8,7 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { JsonRpc, permissionView, usesAcp } from '../../agent/src/acp.ts';
+import { JsonRpc, permissionView, usesAcp } from '../../agent-bridge/src/acp.ts';
 import { agent } from '../../agent/src/index.ts';
 import { createHandler } from '../../src/server/handler.ts';
 import type { AgentOptions } from '../../src/server/agent-hook.ts';
@@ -104,7 +104,7 @@ async function serve(opts: AgentOptions) {
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
   const { token } = await (await fetch(`${base}/info`)).json();
   const call = async (p: string, body: unknown = {}) => {
-    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': token }, body: JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };
   };
   const feed = sse(`${base}/stream?status=1&token=${token}`);

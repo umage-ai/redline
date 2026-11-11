@@ -1,7 +1,7 @@
 // OSC 7501, the Program Status Protocol (https://www.superlogical.com/rex/docs/build/program-status):
 // a program in a terminal reports what it is doing, `ESC ] 7501 ; state=working:app=claude-code ST`.
 // Claude Code reports through it once its startup query `ESC ] 7501 ; ? ST` is answered (D53).
-// Used by the agent panel's server (agent.ts) on the program's output.
+// Used by the bridge (sessions.ts) on the program's output; emit.ts is the other end, for a CLI.
 // Everything here is untrusted terminal output: a report that breaks a rule is dropped whole.
 // The rules are the spec's, as CodeShellManager implements them.
 

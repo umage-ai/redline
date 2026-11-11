@@ -96,11 +96,11 @@ try {
   await bar.waitFor();
   const info = await (await page.request.get('http://localhost:5210/__redline/agent/info')).json();
   await page.request.post('http://localhost:5210/__redline/agent/send', {
-    headers: { 'x-redline': '1', 'x-redline-agent': info.token }, data: { text: 'ask' } });   // the stand-in's edit permission
+    headers: { 'x-agent-token': info.token }, data: { text: 'ask' } });   // the stand-in's edit permission
   await ui('.attach[data-toolbar="agent"] button').first().waitFor({ timeout: 20_000 });
   await page.waitForTimeout(600);   // the status light settles
   await shot('agent');
-  await page.request.post('http://localhost:5210/__redline/agent/end', { headers: { 'x-redline': '1', 'x-redline-agent': info.token }, data: {} });
+  await page.request.post('http://localhost:5210/__redline/agent/end', { headers: { 'x-agent-token': info.token }, data: {} });
   console.log(`Wrote ${['comment', 'text', 'sketch', 'panel', 'agent'].map(n => `docs/images/${n}.png`).join(', ')}`);
 } finally {
   await browser.close();

@@ -1,7 +1,8 @@
 // Pre-publish check for @umage.ai/redline-agent (D53): the packed tarball has the server part, the
 // panel's browser files, the types, README and LICENSE; node-pty is its only (optional) dependency;
 // installed into a fresh folder (without optional deps, so no native build), `agent()` sets up the
-// routes and serves the panel and /info without the core installed. Behaviour: agent.test.ts, agent.spec.ts.
+// routes and serves the panel and /info without the core installed; the agent bridge (D63) is bundled in, not a
+// dependency. Behaviour: agent.test.ts, agent-bridge.test.ts, agent.spec.ts.
 //   node scripts/test-agent-package.mjs        (part of npm run test:package)
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -41,7 +42,7 @@ try {
   assert(panel.ok && /javascript/.test(panel.headers.get('content-type')), `panel.js: ${panel.status}`);
   assert((await fetch(`${base}/terminal.js`)).ok, 'terminal.js');
   const info = await (await fetch(`${base}/info`)).json();
-  assert(Array.isArray(info.sessions) && info.sessions.length === 0 && info.mode === 'shared' && typeof info.token === 'string' && info.commands.length === 1, `info: ${JSON.stringify(info)}`);
+  assert(Array.isArray(info.sessions) && info.sessions.length === 0 && info.mode === 'fresh' && typeof info.token === 'string' && info.commands.length === 1, `info: ${JSON.stringify(info)}`);
   console.log(`\n✓ redline-agent package OK`);
 } finally {
   server?.close();

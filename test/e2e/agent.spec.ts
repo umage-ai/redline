@@ -16,7 +16,7 @@ test.afterEach(async ({ request }) => {
   // One set of sessions per dev server: stop them all, close them, back to one shared session.
   const get = async () => (await request.get(`${f.url}/__redline/agent/info`)).json();
   const { token } = await get();
-  const post = (p: string, data: object) => request.post(`${f.url}/__redline/agent${p}`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data });
+  const post = (p: string, data: object) => request.post(`${f.url}/__redline/agent${p}`, { headers: { 'x-agent-token': token }, data });
   await post('/end', {});
   await expect.poll(async () => (await get()).sessions.length, { timeout: 15_000 }).toBe(0);
   await post('/mode', { mode: 'shared' });
@@ -37,7 +37,7 @@ const win = (page: Page) => ui(page, '.win[data-win="agent"]');
 const api = async (page: Page) => {
   const { token } = await (await page.request.get(`${f.url}/__redline/agent/info`)).json();
   return {
-    post: (p: string, data: object) => page.request.post(`${f.url}/__redline/agent${p}`, { headers: { 'x-redline': '1', 'x-redline-agent': token }, data }),
+    post: (p: string, data: object) => page.request.post(`${f.url}/__redline/agent${p}`, { headers: { 'x-agent-token': token }, data }),
     info: async () => (await page.request.get(`${f.url}/__redline/agent/info`)).json(),
   };
 };

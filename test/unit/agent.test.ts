@@ -7,10 +7,10 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent/src/program-status.ts';
-import { checkPick, resolveCommand, withInstructions } from '../../agent/src/server.ts';
+import { decodeText, OscScanner, parseReport, ProgramRecords } from '../../agent-bridge/src/program-status.ts';
+import { checkPick, resolveCommand, withInstructions } from '../../agent-bridge/src/sessions.ts';
 import { agent } from '../../agent/src/index.ts';
-import { adapterFor, choices, claudeCode, cliChoices, defaultCommand, openCode } from '../../agent/src/adapters.ts';
+import { adapterFor, choices, claudeCode, cliChoices, defaultCommand, openCode } from '../../agent-bridge/src/adapters.ts';
 import { agentFor, type AgentAdapter } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
 import { freeIds, initials, noteTag, overall, pickCli, shorten, stateLabel, tabRank, tabTitle, tagFor, visibleTabs } from '../../agent/src/panel.ts';
@@ -148,7 +148,7 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
   const call = async (p: string, body?: unknown, headers: Record<string, string> = {}) => {
-    const r = await fetch(`${base}${p}`, body === undefined ? { headers } : { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', ...headers }, body: JSON.stringify(body) });
+    const r = await fetch(`${base}${p}`, body === undefined ? { headers } : { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };
   };
   let stream: ReturnType<typeof sse> | undefined;
@@ -160,12 +160,12 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     assert.deepEqual(info.body.commands, [{ label: 'Go', prompt: 'go {page}' }]);
     assert.equal(info.body.key, 'a', 'the Agent button is A by default');
     const token: string = info.body.token;
-    const auth = { 'x-redline-agent': token };
+    const auth = { 'x-agent-token': token };
 
-    // The guards: token, header, origin.
+    // The guards (the bridge's, D63): token, header, origin.
     assert.equal((await call('/start', {})).status, 403, 'no token');
-    assert.equal((await call('/start', {}, { 'x-redline-agent': 'nope' })).status, 403, 'wrong token');
-    assert.equal((await fetch(`${base}/start`, { method: 'POST', headers: auth, body: '{}' })).status, 403, 'no x-redline header');
+    assert.equal((await call('/start', {}, { 'x-agent-token': 'nope' })).status, 403, 'wrong token');
+    assert.equal((await fetch(`${base}/start?token=${token}`, { method: 'POST', body: '{}' })).status, 403, 'a POST carries the token in its header (D63), never the URL');
     assert.equal((await call('/start', {}, { ...auth, origin: 'http://evil.example' })).status, 403, 'another origin');
     assert.equal((await call('/stream?token=nope')).status, 403);
 
@@ -254,7 +254,7 @@ test('agent routes: the fake agent reports through OSC 7501 once the server answ
     assert.equal(after.sessions[0].running, false, 'still answering after the stop');
   } finally {
     stream?.close();
-    await call('/stop', {}, { 'x-redline-agent': (await call('/info')).body?.token ?? '' }).catch(() => {});
+    await call('/stop', {}, { 'x-agent-token': (await call('/info')).body?.token ?? '' }).catch(() => {});
     server.closeAllConnections();
     server.close();
   }
@@ -270,7 +270,7 @@ test('agent routes: stopping a running agent leaves the dev server up (node-pty 
   try {
     const { token, mode } = await (await fetch(`${base}/info`)).json();
     assert.equal(mode, 'fresh', 'fresh sessions by default (since 0.10)');
-    const h = { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token };
+    const h = { 'content-type': 'application/json', 'x-agent-token': token };
     assert.equal((await fetch(`${base}/start`, { method: 'POST', headers: h, body: '{}' })).status, 200);
     await new Promise(r => setTimeout(r, 1500));
     assert.equal((await fetch(`${base}/stop`, { method: 'POST', headers: h, body: '{}' })).status, 200);
@@ -291,7 +291,7 @@ test('agent routes: fresh sessions (one per prompt, the cap, a finished one make
   assert.deepEqual([mode, max], ['fresh', 2]);
   assert.equal(key, false, 'key: false leaves A to an extension');
   const call = async (p: string, body: unknown) => {
-    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': token }, body: JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };
   };
   const feed = sse(`${base}/stream?status=1&token=${token}`);
@@ -475,7 +475,7 @@ test('agent adapters: a CLI that reports idle instead of done (OpenCode) shows d
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
   const { token } = await (await fetch(`${base}/info`)).json();
-  const call = (p: string, body: unknown) => fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: JSON.stringify(body) });
+  const call = (p: string, body: unknown) => fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': token }, body: JSON.stringify(body) });
   const feed = sse(`${base}/stream?status=1&token=${token}`);
   type S = { app?: string; status: { state: string } };
   const when = (pred: (ss: S[]) => boolean) => feed.until(e => (e.event === 'status' || e.event === 'hello') && pred(e.data.sessions));
@@ -537,7 +537,7 @@ test('agent CLIs (D59): sessions of two CLIs side by side (fresh); shared switch
   assert.deepEqual(info.clis, [{ id: 'one', name: 'Fake One', command: 'Fake One', models: [], efforts: [] }, { id: 'two', name: 'Fake Two', command: 'Fake Two', models: [], efforts: [] }]);
   assert.equal(info.cli, 'one', 'the first is the default');
   const call = async (p: string, body: unknown) => {
-    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': info.token }, body: JSON.stringify(body) });
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': info.token }, body: JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };
   };
   const feed = sse(`${base}/stream?status=1&token=${info.token}`);
@@ -619,7 +619,7 @@ test('agent routes (D62): models and effort per CLI in /agent/info; only offered
   const base = `http://localhost:${(server.address() as { port: number }).port}/__redline/agent`;
   const info = await (await fetch(`${base}/info`)).json();
   const call = async (p: string, body: unknown) => {
-    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': info.token }, body: JSON.stringify(body) });
+    const r = await fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': info.token }, body: JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };
   };
   const streams: ReturnType<typeof sse>[] = [];

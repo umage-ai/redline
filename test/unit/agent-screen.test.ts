@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parsePrompt, Screen, type Line } from '../../agent/src/screen.ts';
+import { parsePrompt, Screen, type Line } from '../../agent-bridge/src/screen.ts';
 
 const screen = (name: string): Line[] => readFileSync(`test/fixtures/agent/screens/${name}.txt`, 'utf8').split('\n').map(text => ({ text }));
 const labels = (v: ReturnType<typeof parsePrompt>) => v?.options.map(o => `${o.selected ? '>' : ' '}${o.n ?? '-'} ${o.label}`);

@@ -1,0 +1,43 @@
+{
+  "name": "@umage.ai/agent-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Drive agent CLIs (Claude Code, OpenCode, any other) from a browser: sessions in a pseudo-terminal or over ACP, live status from OSC 7501, menus as data, one guarded HTTP handler and a small browser client.",
+  "type": "module",
+  "license": "MIT",
+  "author": "umage.ai <morten@umage.ai>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umage-ai/redline.git",
+    "directory": "agent-bridge"
+  },
+  "homepage": "https://github.com/umage-ai/redline/tree/main/agent-bridge#readme",
+  "keywords": [
+    "ai-agent",
+    "claude-code",
+    "opencode",
+    "agent-client-protocol",
+    "pseudo-terminal",
+    "osc-7501"
+  ],
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./dist/index.js" },
+    "./client": { "types": "./src/client.ts", "default": "./dist/client.js" },
+    "./emit": { "types": "./src/emit.ts", "default": "./dist/emit.js" },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "PROTOCOL-7501.md"
+  ],
+  "dependencies": {
+    "@xterm/headless": "^6.0.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

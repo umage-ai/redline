@@ -25,6 +25,7 @@
     "src",
     "hub/src",
     "agent/src",
+    "agent-bridge/src",
     "examples/review-frontend",
     "test/unit",
     "test/e2e",

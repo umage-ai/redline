@@ -8,19 +8,9 @@
 import headless from '@xterm/headless';   // CommonJS: no named exports under Node's ESM loader
 const { Terminal } = headless;
 type Terminal = InstanceType<typeof headless.Terminal>;
+import type { Line, PromptOption, PromptStep, PromptView, Span } from './types.ts';
+export type { Line, PromptOption, PromptStep, PromptView, Span } from './types.ts';
 
-export interface Span { t: string; fg?: string; bg?: string; b?: true; dim?: true }
-export interface Line { text: string; spans?: Span[] }
-export interface PromptOption { label: string; description?: string; selected: boolean; n?: number; input?: true }
-export interface PromptStep { label: string; state: 'todo' | 'done' | 'submit'; current: boolean }
-export interface PromptView {
-  /** Context above the question (a diff, a command), with colours. */
-  lines: Span[][];
-  question?: string;
-  options: PromptOption[];
-  steps?: PromptStep[];
-  hint?: string;
-}
 
 const OPTION = /^(\s*)([❯›▶>]\s*)?(\d{1,2})[.)]\s+(.*\S)\s*$/;
 const RULE = /^\s*[─━═╌┄-]{12,}\s*$/;

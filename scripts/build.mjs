@@ -3,7 +3,8 @@
 // side-effect-free ESM modules for embedding (dist/overlay, D49), and type declarations in dist/types.
 // Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44), and
 // overlay/dist: @umage.ai/redline-overlay, the same overlay modules and their types on their own (D50),
-// and agent/dist: @umage.ai/redline-agent, the agent panel (D53).
+// agent/dist: @umage.ai/redline-agent, the agent panel (D53), and agent-bridge/dist: @umage.ai/agent-bridge,
+// the Redline-free core it bundles (D63; unpublished for now).
 import * as esbuild from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ rmSync('dist', { recursive: true, force: true });
 rmSync('hub/dist', { recursive: true, force: true });
 rmSync('overlay/dist', { recursive: true, force: true });
 rmSync('agent/dist', { recursive: true, force: true });
+rmSync('agent-bridge/dist', { recursive: true, force: true });
 
 const node = {
   entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts', next: 'src/next.ts', 'next-script': 'src/next-script.ts' },
@@ -53,6 +55,18 @@ const agentServer = {
   define: { 'import.meta.url': 'undefined' },   // the CommonJS build finds its folder through __dirname
 };
 
+// @umage.ai/agent-bridge (agent-bridge/, D63): its server half and its CLI emitter as ESM for Node (node-pty
+// and @xterm/headless stay dependencies), its browser client as ESM. agent/ bundles it from source instead.
+const bridgeNode = {
+  entryPoints: { index: 'agent-bridge/src/index.ts', emit: 'agent-bridge/src/emit.ts' },
+  outdir: 'agent-bridge/dist', bundle: true, platform: 'node', format: 'esm', target: 'node20',
+  packages: 'external', logLevel: 'info',
+};
+const bridgeClient = {
+  entryPoints: { client: 'agent-bridge/src/client.ts' },
+  outdir: 'agent-bridge/dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022', logLevel: 'info',
+};
+
 const hub = {
   entryPoints: { cli: 'hub/src/cli.ts' },
   outdir: 'hub/dist', bundle: true, platform: 'node', format: 'esm', target: 'node22',
@@ -60,9 +74,9 @@ const hub = {
 };
 
 if (watch) {
-  for (const o of [node, nextLoader, client, agent, agentServer, overlay, hub]) await (await esbuild.context(o)).watch();
+  for (const o of [node, nextLoader, client, agent, agentServer, bridgeNode, bridgeClient, overlay, hub]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(agentServer), esbuild.build(overlay), esbuild.build(hub)]);
+  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(agentServer), esbuild.build(bridgeNode), esbuild.build(bridgeClient), esbuild.build(overlay), esbuild.build(hub)]);
   emitTypes();
   overlayPackage();
 }
@@ -88,12 +102,27 @@ function overlayPackage() {
 }
 
 // Declarations for the package exports (dist/types). tsc keeps the `.ts` import specifiers,
-// so rewrite them to `.js`, which consumer TypeScript resolves to the sibling `.d.ts`.
+// so rewrite them to `.js`, which consumer TypeScript resolves to the sibling `.d.ts`. The root is the
+// repo (agent-hook.ts re-exports the agent bridge's types, D63): src/ lands in dist/types, the bridge's
+// types in dist/types/agent-bridge, and imports between them are rewritten to match.
 function emitTypes() {
+  rmSync('dist/types-raw', { recursive: true, force: true });
   execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.build.json'], { stdio: 'inherit' });
+  cpSync('dist/types-raw/src', 'dist/types', { recursive: true });
+  cpSync('dist/types-raw/agent-bridge/src', 'dist/types/agent-bridge', { recursive: true });
+  rmSync('dist/types-raw', { recursive: true, force: true });
   const walk = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e =>
     e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.d.ts') ? [path.join(dir, e.name)] : []);
   for (const f of walk('dist/types')) {
-    writeFileSync(f, readFileSync(f, 'utf8').replace(/(from\s+|import\()(['"])(\.{1,2}\/[^'"]+)\.ts\2/g, '$1$2$3.js$2'));
+    const rel = path.relative('dist/types', path.dirname(f)).split(path.sep).join('/');
+    // Where the file came from: src/<rel> or agent-bridge/src/<rest>.
+    const from = rel === 'agent-bridge' || rel.startsWith('agent-bridge/') ? 'agent-bridge/src' + rel.slice('agent-bridge'.length) : 'src' + (rel ? '/' + rel : '');
+    const moved = spec => {
+      const target = path.posix.normalize(path.posix.join(from, spec));
+      const out = target.startsWith('agent-bridge/src/') ? 'agent-bridge/' + target.slice('agent-bridge/src/'.length) : target.startsWith('src/') ? target.slice(4) : target;
+      const r = path.posix.relative(rel || '.', out);
+      return r.startsWith('.') ? r : './' + r;
+    };
+    writeFileSync(f, readFileSync(f, 'utf8').replace(/(from\s+|import\()(['"])(\.{1,2}\/[^'"]+)\.ts\2/g, (_, a, q, spec) => `${a}${q}${moved(spec)}.js${q}`));
   }
 }

@@ -8,20 +8,20 @@
 // A small hand-written client, not @agentclientprotocol/sdk (9 MB unpacked, with zod): the panel uses
 // six methods. The client advertises no fs or terminal capabilities: the agent uses its own tools.
 //
-// `AcpSession` has the surface `AgentGroup` and the routes use on a PTY `AgentSession` (server.ts).
+// `AcpSession` has the surface `AgentGroup` and the routes use on a PTY `AgentSession` (sessions.ts).
 
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ServerResponse } from 'node:http';
-import type { AgentOptions } from '../../src/server/agent-hook.ts';
+import type { BridgeOptions, SessionInfo } from './types.ts';
 import type { ProgramState } from './program-status.ts';
 import type { PromptView, Span } from './screen.ts';
-import type { AgentInfo } from './server.ts';
 import { adapterFor } from './adapters.ts';
-import { commandName, resolveCommand } from './server.ts';
+import { commandName, resolveCommand } from './sessions.ts';
 
 export const ACP_PROTOCOL_VERSION = 1;
+const CLIENT_INFO = { name: 'agent-bridge', title: 'Agent bridge', version: '0' };
 const MAX_SCROLLBACK = 512 * 1024;
 const MAX_SENT = 500;
 const HANDSHAKE_MS = 60_000;
@@ -109,7 +109,7 @@ const CONTROL = /[\x00-\x08\x0b-\x1f\x7f]/g;
  * ACP or a pseudo-terminal: `protocol` when set; else ACP for a CLI whose adapter says how to start
  * its ACP mode (`acp`: OpenCode's `opencode acp`), a pseudo-terminal for the rest (Claude Code).
  */
-export function usesAcp(opts: AgentOptions): boolean {
+export function usesAcp(opts: BridgeOptions): boolean {
   if (opts.protocol) return opts.protocol === 'acp';
   return !!adapterFor(opts.command ?? 'claude', undefined, opts.adapters, opts.args).acp;
 }
@@ -164,7 +164,7 @@ export class AcpSession {
   private preamble = '';
   private agentName: string | undefined;
 
-  readonly opts: AgentOptions;
+  readonly opts: BridgeOptions;
   readonly cwd: string;
   readonly root: string;
   readonly id: string;
@@ -177,7 +177,7 @@ export class AcpSession {
   title?: string;
   task?: string;
   private onChange: () => void;
-  constructor(opts: AgentOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
+  constructor(opts: BridgeOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
     this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange; this.cli = cli;
   }
 
@@ -186,8 +186,8 @@ export class AcpSession {
   get command() { return commandName(this.opts); }
   get adapter() { return adapterFor(this.opts.command ?? 'claude', undefined, this.opts.adapters, this.opts.args); }
 
-  info(): AgentInfo {
-    const status: AgentInfo['status'] = {
+  info(): SessionInfo {
+    const status: SessionInfo['status'] = {
       state: this.state, ...(this.state === 'blocked' ? { kind: 'permission' as const } : {}), ...(this.msg ? { msg: this.msg } : {}),
       records: this.child ? 1 : 0, source: this.child ? 'acp' : 'none',
     };
@@ -205,7 +205,7 @@ export class AcpSession {
     if (typeof o === 'string') return o.trim();
     const file = path.resolve(this.root, o.file);
     try { return (await readFile(file, 'utf8')).trim(); }
-    catch { console.warn(`[redline] agent instructions: can't read ${file}`); return ''; }
+    catch { console.warn(`[agent-bridge] instructions: can't read ${file}`); return ''; }
   }
 
   /** Spawn the agent, `initialize`, `session/new`, and the model when asked for. */
@@ -242,7 +242,7 @@ export class AcpSession {
         const init = await rpc.request('initialize', {
           protocolVersion: ACP_PROTOCOL_VERSION,
           clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
-          clientInfo: { name: 'redline', title: 'Redline', version: '0' },
+          clientInfo: CLIENT_INFO,
         }, HANDSHAKE_MS);
         const ai = init?.agentInfo;
         this.agentName = typeof ai?.name === 'string' ? ai.name : undefined;
@@ -269,7 +269,7 @@ export class AcpSession {
    * value it doesn't offer, or an agent with neither: a warning.
    */
   private async setModel(s: Json) {
-    const warn = (w: string) => { console.warn(`[redline] agent: ${w}`); this.print(`${C.yellow}${w}${C.reset}\r\n`); };
+    const warn = (w: string) => { console.warn(`[agent-bridge] ${w}`); this.print(`${C.yellow}${w}${C.reset}\r\n`); };
     for (const [what, value] of [['model', this.opts.model], ['effort', this.opts.effort]] as const) {
       if (!value || !this.rpc) continue;
       const cfg = configOption(s.configOptions, what);
@@ -550,7 +550,7 @@ export class AcpSession {
 }
 
 /** A session's tab name, prompt, model and effort for its info (D62). */
-export const meta = (s: { title?: string; task?: string; opts: AgentOptions }) => ({
+export const meta = (s: { title?: string; task?: string; opts: BridgeOptions }) => ({
   ...(s.title ? { title: s.title } : {}), ...(s.task ? { task: s.task } : {}),
   ...(s.opts.model ? { model: s.opts.model } : {}), ...(s.opts.effort ? { effort: s.opts.effort } : {}),
 });
@@ -586,7 +586,7 @@ export function offerOf(s: Json): AcpOffer {
  * What an ACP agent offers (D62), asked once for the toolbar's settings: spawn it, `initialize`,
  * `session/new`, read its config options, stop it. Empty lists when it fails or takes over `ms`.
  */
-export async function probeAcp(opts: AgentOptions, cwd: string, ms = 30_000): Promise<AcpOffer> {
+export async function probeAcp(opts: BridgeOptions, cwd: string, ms = 30_000): Promise<AcpOffer> {
   const command = opts.command ?? 'claude';
   const args = [...(adapterFor(command, undefined, opts.adapters, opts.args).acp ?? []), ...(opts.args ?? [])];
   const env = { ...process.env, ...opts.env } as NodeJS.ProcessEnv;
@@ -604,7 +604,7 @@ export async function probeAcp(opts: AgentOptions, cwd: string, ms = 30_000): Pr
   child.on('error', () => rpc.close('failed'));
   child.once('exit', () => rpc.close('exited'));
   try {
-    await rpc.request('initialize', { protocolVersion: ACP_PROTOCOL_VERSION, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'redline', title: 'Redline', version: '0' } }, ms);
+    await rpc.request('initialize', { protocolVersion: ACP_PROTOCOL_VERSION, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: CLIENT_INFO }, ms);
     return offerOf(await rpc.request('session/new', { cwd, mcpServers: [] }, ms));
   } catch { return none; }
   finally { rpc.close('done'); try { child.stdin.end(); } catch { /* closed */ } kill(child); }

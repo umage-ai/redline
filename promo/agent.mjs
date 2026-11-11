@@ -167,7 +167,7 @@ try {
   await hold(3600);
   await cdp.send('Page.stopScreencast');
   end = Date.now() / 1000 - t0;
-  await fetch(`http://localhost:${PORT}/__redline/agent/stop`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1', 'x-redline-agent': token }, body: '{}' }).catch(() => {});
+  await fetch(`http://localhost:${PORT}/__redline/agent/stop`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': token }, body: '{}' }).catch(() => {});
 } finally {
   await fs.writeFile(appFile, appSource);
   await browser.close();

@@ -1,5 +1,5 @@
 // The agent CLIs the panel knows (D55): what is particular to each, behind one interface
-// (`AgentAdapter`, src/server/agent-hook.ts). Claude Code: menus read off its screen, instructions,
+// (`AgentAdapter`, types.ts). Claude Code: menus read off its screen, instructions,
 // the model and the effort as flags (the toolbar's settings offer its aliases and levels, D62). OpenCode: 7501 status without `done`, an input box that needs a moment
 // after it reports idle, its model from its own config. Anything else: generic (Allow/Deny, the
 // terminal, 7501 status when the CLI sends it). Adapters from the `adapters` option are tried first.
@@ -9,7 +9,7 @@ import { existsSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentAdapter, AgentChoice, AgentCli, AgentOptions, AgentStart } from '../../src/server/agent-hook.ts';
+import type { AgentAdapter, AgentChoice, AgentCli, BridgeOptions, AgentStart } from './types.ts';
 
 /** A command's base name, either slash, without a Windows extension: `C:\tools\claude.exe` → `claude`. */
 export const baseName = (command: string) => (command.split(/[\\/]/).pop() ?? '').replace(/\.(exe|cmd|bat|com)$/i, '').toLowerCase();
@@ -53,7 +53,7 @@ export const claudeCode: AgentAdapter = {
     // A file, not an argument: no quoting through cmd.exe. Text is written to a temp file.
     let file = instructions.file;
     if (!file) {
-      file = path.join(os.tmpdir(), `redline-agent-${createHash('sha1').update(instructions.text).digest('hex').slice(0, 12)}.md`);
+      file = path.join(os.tmpdir(), `agent-bridge-${createHash('sha1').update(instructions.text).digest('hex').slice(0, 12)}.md`);
       await writeFile(file, instructions.text);
     }
     return { args: [...out, '--append-system-prompt-file', file] };
@@ -119,7 +119,7 @@ const MISSING = new Set<string>();
  * whose command is installed; `claude` when none is. The option's `args` go with `command`, the
  * detected CLIs and the `clis` given as strings; an object in `clis` has its own.
  */
-export function cliChoices(opts: AgentOptions, has: (command: string) => boolean = installed): CliChoice[] {
+export function cliChoices(opts: BridgeOptions, has: (command: string) => boolean = installed): CliChoice[] {
   const known = [...(opts.adapters ?? []), ...BUILT_IN];
   const args = opts.args ?? [];
   let list: AgentCli[];
@@ -128,7 +128,7 @@ export function cliChoices(opts: AgentOptions, has: (command: string) => boolean
       .map(c => typeof c === 'string' ? { command: known.find(a => a.id === c || a.command === c)?.command ?? c, args } : c);
     list = given.filter(c => has(c.command));
     const missing = given.filter(c => !list.includes(c)).map(c => c.command).join(', ');
-    if (missing && !MISSING.has(missing)) { MISSING.add(missing); console.warn(`[redline] agent clis: not installed, left out of the picker: ${missing}`); }
+    if (missing && !MISSING.has(missing)) { MISSING.add(missing); console.warn(`[agent-bridge] clis: not installed, left out of the picker: ${missing}`); }
     if (!list.length) list = given.slice(0, 1);
   } else if (opts.command) list = [{ command: opts.command, args, label: opts.label }];
   else list = known.filter(a => has(a.command)).map(a => ({ command: a.command, args }));
