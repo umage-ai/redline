@@ -101,6 +101,8 @@ const ago = ms => { const s = (Date.now() - ms) / 1000; return s < 60 ? 'just no
 const errBox = () => h('div', { class: 'error', role: 'alert' });
 const fail = (box, e) => { box.textContent = e.message; };
 let me = null, live = null;
+// Each route() is a new view: an async renderer from an earlier one (a quick hash change) drops its output.
+let gen = 0;
 
 async function boot() {
   // #key=… (the link the CLI prints) signs in once, then leaves the address bar.
@@ -119,6 +121,7 @@ function header() {
 }
 
 function route() {
+  gen++;
   if (live) { live.close(); live = null; }
   header();
   main.textContent = '';
@@ -141,7 +144,9 @@ function login() {
 }
 
 async function projects() {
+  const g = gen;
   const { projects } = await call('GET', '/projects');
+  if (g !== gen) return;
   main.append(h('h1', {}, 'Projects'), h('p', { class: 'sub' }, 'Each project is one shared set of notes: point a dev server at its store URL with a member token.'));
   main.append(projects.length
     ? h('div', { class: 'grid' }, projects.map(p => h('a', { class: 'card', href: '#/p/' + p.slug },
@@ -161,7 +166,9 @@ async function projects() {
 
 async function project(slug, tab, focus) {
   let p;
-  try { p = await call('GET', '/projects/' + slug); } catch (e) { main.append(h('div', { class: 'empty' }, e.message)); return; }
+  const g = gen;
+  try { p = await call('GET', '/projects/' + slug); } catch (e) { if (g === gen) main.append(h('div', { class: 'empty' }, e.message)); return; }
+  if (g !== gen) return;
   const tabs = [['notes', 'Notes', ''], ...(me.admin ? [['people', 'People & tokens', '/people'], ['settings', 'Settings', '/settings']] : [])];
   main.append(h('div', { class: 'muted' }, me.admin ? h('a', { href: '#/' }, 'Projects') : null, me.admin ? ' / ' : '', p.slug),
     h('h1', {}, p.name),

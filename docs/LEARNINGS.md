@@ -168,3 +168,6 @@ Prune entries whose cause is gone from the code.
 
 ## L60 — A session's attachments came up empty: its round ended before the prompt was even typed
 - **Cause / fix:** a round (D56) ends when the turn rests after working, and a CLI that hasn't reported OSC 7501 yet counts as working while it prints its start-up screen (the activity fallback), so the round ended while its prompt still waited for the CLI. A round now counts working only once its prompt is typed; and `done` is set after the changed files and links are in, so a viewer polling never sees a done round half-filled. **Guard:** `agent-attachments.test.ts` "the stand-in CLIs".
+
+## L61 — The hub's UI showed the projects list above a project after a quick navigation
+- **Cause / fix:** `route()` clears the view and starts an async renderer; the list's renderer, still awaiting `/api/projects`, appended its output after the project view had rendered. Each route now bumps a generation and an earlier renderer drops its output. Seen while scripting the README shot (`#key=…`, then `#/p/…`). **Guard:** `hub.spec.ts` "a quick hash change shows one view".

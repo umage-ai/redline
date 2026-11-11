@@ -111,3 +111,17 @@ test('a member token signs in to its own project only; an agent token does not s
   await expect(page.getByRole('link', { name: 'People & tokens' })).toHaveCount(0);
   await expect(page.locator('#who')).toContainText('bob@example.com');
 });
+
+test('a quick hash change shows one view: the projects list loading late is dropped', async ({ browser }) => {
+  db.createProject('quick', 'Quick', [], Date.now());
+  const page = await (await browser.newContext()).newPage();
+  // The projects list answers slowly: the project view is asked for meanwhile (the list used to land below it).
+  await page.route(/\/api\/projects$/, async r => { await new Promise(res => setTimeout(res, 800)); await r.continue(); });
+  const listing = page.waitForRequest(/\/api\/projects$/);
+  await page.goto(`${hubUrl}/#key=${key}`);
+  await listing;
+  await page.evaluate(() => { location.hash = '#/p/quick'; });
+  await expect(page.getByRole('heading', { name: 'Quick' })).toBeVisible();
+  await page.waitForTimeout(1500);   // past the slow answer
+  await expect(page.getByRole('heading', { name: 'Projects' })).toHaveCount(0);
+});
