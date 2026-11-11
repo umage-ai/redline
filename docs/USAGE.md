@@ -1,6 +1,6 @@
 # Using Redline
 
-Last updated: 2026-11-10 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
+Last updated: 2026-11-11 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
 
 Setup per framework: [FRAMEWORKS.md](FRAMEWORKS.md). Every option and its default: [OPTIONS.md](OPTIONS.md).
 
@@ -98,15 +98,18 @@ elsewhere; through `next dev` too).
 ### Agent panel
 
 Local dev: `agent: true` (Claude Code or OpenCode, whichever is installed; or a command such as `'opencode'`, or
-`{ command, args, model, commands: [{ label, prompt }], keys, hotkey, sessions, instructions, adapters }`) runs your agent
-CLI from the overlay without opening a terminal: **Agent** (A), or `Alt+Shift+A` from anywhere, opens the agent toolbar
-with its state, **Apply 3 notes** and your own prompt buttons (`{page}`, `{ids}`), **CLI** for its terminal, and **End**
-(stops the CLI and closes the session in one; × on a session's tab; it asks first while the agent works or waits on you),
-plus a card on the toolbar whenever it asks (an edit with its diff, Claude's stepped questions) with every option and a
-field for your own answer; the notes panel tags the notes it is working on, waiting on you for, was sent and has done.
-In the agent toolbar ← goes back to the main toolbar and ✕ closes. Every prompt starts a new session, with only its notes,
-several at once, a tab each (the default since 0.10; **Fresh** in the toolbar, or `sessions: 'shared'`, keeps one session
-instead); `instructions: { file: 'redline-agent.md' }` adds your own rules to the sessions Redline starts. Its state comes
+`{ command, args, model, effort, commands: [{ label, prompt }], keys, hotkey, sessions, instructions, adapters }`) runs your
+agent CLI from the overlay without opening a terminal: **Agent** (A), or `Alt+Shift+A` from anywhere, opens the agent
+toolbar: **← Agent** (back to the main toolbar; Esc too), the state ("Claude Code · Working…"), a tab per session named
+by its notes (× ends it, asking first while the agent works or waits on you), **Apply 3 notes** (your other prompt buttons
+behind ⋯; `{page}`, `{ids}`), **>_** for the CLI window (**End session** in its header, — minimizes it while the session
+runs on), **⚙** and ✕. A card on the toolbar shows whatever the agent asks (an edit with its diff, Claude's stepped
+questions, Allow/Deny) with every option and a field for your own answer; the notes panel tags the notes it is working
+on, waiting on you for, was sent and has done. **⚙** holds this browser's settings: the CLI (with several installed;
+holding Apply, right-click or Alt+↓ switches it too), its model and effort (Claude Code's aliases and `--effort` levels,
+an ACP agent's own list), and a new session per prompt (the default since 0.10: only its notes, several at once) or one
+kept going (`sessions: 'shared'`); they apply to new sessions, and Reset goes back to the project's options.
+`instructions: { file: 'redline-agent.md' }` adds your own rules to the sessions Redline starts. Its state comes
 from the CLI's OSC 7501 status, on the toolbar's outline and as a ring around the closed launcher: a light sweeping round
 it while working, an orange glow while it waits for your approval, green when done (hover says what it is doing), which
 Claude Code reports. It is its own package: `npm i -D @umage.ai/redline-agent` ([agent/README.md](../agent/README.md);

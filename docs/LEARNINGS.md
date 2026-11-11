@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-10 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-11 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -72,8 +72,7 @@ Prune entries whose cause is gone from the code.
 - **Guard:** none automated (layout); `mobile.spec.ts` checks the tools fit 360 px. Re-check by eye after adding toolbar items.
 
 ## L20 — First tag release: `npm publish` 403 "OIDC permission denied for this action"
-- **Cause:** npm trusted publishers allow only `npm stage publish` by default (since Sept 2026); a direct `npm publish` needs "Allow npm publish" ticked in the package's Trusted Publisher settings. Dry runs never authenticate, so they didn't show it.
-- **Fix:** ticked (and saved) "Allow npm publish" (D13: fully automatic releases; the alternative is `npm stage publish` + a 2FA approval per release) and re-ran the failed job; the version shows up ~2 min after a green publish. **Guard:** the note at the top of `publish.yml`.
+- **Cause:** npm trusted publishers allow only `npm stage publish` by default (since Sept 2026); a direct `npm publish` needs "Allow npm publish" ticked in the package's Trusted Publisher settings. Dry runs never authenticate, so they didn't show it. **Fix:** ticked (and saved) "Allow npm publish" (D13: fully automatic releases; the alternative is `npm stage publish` + a 2FA approval per release) and re-ran the failed job; the version shows up ~2 min after a green publish. **Guard:** the note at the top of `publish.yml`.
 
 ## L21 — Astro 404s a page file created just before the test navigates to it
 - **Cause:** Astro's dev server registers new routes from a file watcher; a page written moments before `page.goto` can be requested before the route exists (it passed once, then 404'd).
@@ -195,3 +194,6 @@ Prune entries whose cause is gone from the code.
 
 ## L58 — OpenCode's first ACP permission request went unanswered
 - **Cause / fix:** agent→client requests carry the agent's own ids, and OpenCode's start at `0`: a truthiness check (`if (m.id)`) reads that as a notification, no reply goes and the turn hangs blocked. `JsonRpc` tests `id !== undefined && id !== null`. Also: OpenCode asks no permission by default (shell and edits are allowed); `permission: { bash: 'ask', edit: 'ask' }` in its config (or `OPENCODE_CONFIG_CONTENT`) makes it ask. **Guard:** `agent-acp.test.ts` "JsonRpc … id 0", and the fake ACP agent (`test/fixtures/agent/fake-acp-agent.mjs`) numbers its requests from 0.
+
+## L59 — An agent toolbar button couldn't be clicked: the attached card covered the toolbar's top row
+- **Cause / fix:** the card is placed when the toolbar renders, but opening the notes panel renders the toolbar first and only then narrows the room beside the panel (`--panel-w`), so a wide toolbar wrapped into two rows under a card placed for one (Playwright waited on the covered >_ until the timeout). The core now watches the toolbar with a `ResizeObserver` and places the card again (`bar.ts`). **Guard:** `agent.spec.ts` "fresh sessions…" (the notes panel opens at 1100 px: the toolbar wraps, the card stays above it; fails without the observer).

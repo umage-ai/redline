@@ -73,7 +73,7 @@ Labels, phones, the launcher and your own open buttons, screenshots, direct edit
 
 With `@umage.ai/redline-agent` and `agent: true`, your agent CLI runs from the overlay: **Apply 2 notes**, its questions and
 diffs in a card on the toolbar, a session per prompt, and its state as a ring on the launcher. Every installed CLI is offered
-(Claude Code, OpenCode; ▾ picks one); OpenCode and any other [ACP](https://agentclientprotocol.com) agent run over the Agent Client
+(Claude Code, OpenCode; ⚙ picks one, with its model and effort); OpenCode and any other [ACP](https://agentclientprotocol.com) agent run over the Agent Client
 Protocol, so their permission prompts arrive with their real options. Local dev only. See [agent/README.md](https://github.com/umage-ai/redline/blob/main/agent/README.md).
 
 ![The agent toolbar: the CLI asks to edit src/App.tsx; the card shows the diff and its three options](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent.png)

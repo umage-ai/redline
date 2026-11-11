@@ -1,6 +1,6 @@
 # Options
 
-Last updated: 2026-11-10 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
+Last updated: 2026-11-11 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
 
 The same option is spelled `camelCase` in Node (`redline({ … })`, `withRedline(cfg, { … })`, `redlineMiddleware({ … })`,
 the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o => …)`). "—" means the server doesn't have it.
@@ -77,16 +77,19 @@ Set `window.redlineConfig = { … }` before the script loads, or `data-*` on its
 
 | Option | Default | What it does |
 |---|---|---|
-| `command`, `args`, `env`, `cwd`, `label` | every installed one of `claude`, `opencode` (picked with ▾, D59); none, none, `root`, the command | The CLI to run; a `command` means that one alone. `args` go with it or with each detected CLI. |
-| `clis` | none (the installed adapters) | The CLIs the toolbar's ▾ offers, the installed ones, the first the default: `'claude'`, `'opencode'`, any command, or `{ command, args, label, id, env }`. Wins over `command`. |
-| `model` | the CLI's own | Passed as the CLI's flag (Claude Code `--model`); over ACP the agent's `model` config option (OpenCode: `provider/model`); else a warning. |
+| `command`, `args`, `env`, `cwd`, `label` | every installed one of `claude`, `opencode` (picked in ⚙ or by holding Apply, D59, D62); none, none, `root`, the command | The CLI to run; a `command` means that one alone. `args` go with it or with each detected CLI. |
+| `clis` | none (the installed adapters) | The CLIs the toolbar offers (⚙, or hold Apply), the installed ones, the first the default: `'claude'`, `'opencode'`, any command, or `{ command, args, label, id, env }`. Wins over `command`. |
+| `model` | the CLI's own | Passed as the CLI's flag (Claude Code `--model`); over ACP the agent's `model` config option (OpenCode: `provider/model`); else a warning. The default for ⚙'s Model (D62). |
+| `effort` | the CLI's own | Claude Code `--effort` (`low`…`max`); over ACP the agent's `thought_level` option; else a warning. The default for ⚙'s Effort (D62). |
 | `protocol` | `'acp'` when the adapter has an ACP mode (OpenCode), else `'pty'` | `'acp'`: Agent Client Protocol over stdio, no terminal (D58); `'pty'`: the CLI in a pseudo-terminal. Per CLI picked: by its adapter, unless set. |
-| `adapters` | built-in: Claude Code, OpenCode | Your own `AgentAdapter`s, tried first (D55). |
-| `sessions` | **0.10:** `'fresh'` (was `'shared'`) | A new session per prompt with just its notes; `'shared'` keeps one. |
+| `adapters` | built-in: Claude Code, OpenCode | Your own `AgentAdapter`s, tried first (D55); `models` and `efforts` on one are what ⚙ offers for it (D62). |
+| `sessions` | **0.10:** `'fresh'` (was `'shared'`) | A new session per prompt with just its notes; `'shared'` keeps one. ⚙ switches it while the dev server runs. |
 | `maxSessions` | `3` | Fresh sessions at once (1–8). |
 | `commands` | one **Apply notes** button | Prompt buttons (`{page}`, `{url}`, `{ids}`). |
 | `keys` | Enter / Esc | What Allow / Deny send to CLIs whose menus aren't read. |
 | `menus` | `'auto'` (Claude Code) | Read the CLI's menus into the toolbar's card (PTY only; ACP permission requests always show there). |
 | `hotkey`, `key` | `alt+shift+a`, `a` | Open the agent toolbar. |
 | `instructions` | none | Extra rules for sessions Redline starts. |
+
+Per viewer, in the browser (⚙, D62): the CLI, and per CLI a model and effort from the lists the server offers (Claude Code's aliases and levels; an ACP agent's own, asked once); none picked: the options above. They apply to new sessions; "Reset to project defaults" forgets them.
 
