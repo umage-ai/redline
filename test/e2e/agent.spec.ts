@@ -524,3 +524,43 @@ test('agent toolbar: ⚙ worktrees: a fresh session on its own branch; when it e
   await expect(agentBar(page).locator('button.ag-branches')).toHaveCount(0);
   expect((await a.info()).worktrees.left).toEqual([]);
 });
+
+test('agent toolbar: attachments (D56): a 📎 count on the tab; the card lists the prompt\'s changed files (with a diff), links, mentions', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('a');
+  const a = await api(page);
+  // In a worktree, so the stand-in's file lands on a throwaway branch (discarded after the test).
+  await a.post('/mode', { mode: 'fresh' });
+  await a.post('/worktrees', { on: true });
+  const sent = await (await a.post('/send', { text: 'write out.txt hello link', title: 'Files', task: 'Try files' })).json();
+  await expect(chip(page)).toContainText('Done', { timeout: 30_000 });
+  const clip = tab(page, sent.id).locator('button.ag-att');
+  await expect(clip).toHaveText('2');   // the changed file and the link; mentions aren't counted
+  await expect(clip).toHaveAttribute('aria-label', '2 attachments of Files');
+  await clip.click();
+  const files = ui(page, '.attach[data-toolbar="agent"] .ag-files');
+  await expect(files).toBeVisible();
+  await expect(clip).toHaveAttribute('aria-expanded', 'true');
+  await expect(files.locator('.ag-round-h')).toHaveText(/Prompt 1\s*Try files/);
+  const row = files.locator('button.ag-frow', { hasText: 'out.txt' });
+  await expect(row).toContainText('A');
+  await expect(row).toContainText('+1 −0');
+  await expect(row).toBeFocused();
+  await row.click();
+  await expect(files.locator('pre.ag-diff')).toContainText('+hello link');
+  await expect(row).toHaveAttribute('aria-expanded', 'true');
+  // A link on this machine opens in a new tab; the mention (a file that exists) sits folded below.
+  const link = files.locator('a.ag-frow', { hasText: 'the preview' });
+  await expect(link).toHaveAttribute('href', 'http://localhost:5199/preview');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(files.locator('details.ag-ment summary')).toHaveText(/Mentioned \(\d+\)/);
+  await files.locator('details.ag-ment summary').click();
+  const mention = files.locator('details.ag-ment a.ag-frow', { hasText: 'index.html' });
+  await expect(mention).toHaveAttribute('href', /\/__redline\/agent\/file\?id=.*path=index\.html/);
+  // Served from the session's folder (its worktree), text as text.
+  const served = await page.request.get(f.url + (await mention.getAttribute('href'))!);
+  expect(served.headers()['content-type']).toContain('text/plain');
+  expect(await served.text()).toContain('<');
+  await clip.click();
+  await expect(files).toHaveCount(0);
+});

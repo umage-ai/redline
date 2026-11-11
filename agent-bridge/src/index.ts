@@ -10,5 +10,6 @@ export { adapterFor, baseName, choices, claudeCode, cliChoices, commandName, def
 export { decodeText, DA1_REPLY, OscScanner, parseReport, PROBE_REPLY, ProgramRecords, type ProgramReport, type ProgramState, type ProgramStatus, type ScanEvent } from './program-status.ts';
 export { parsePrompt, Screen, type Line, type PromptOption, type PromptStep, type PromptView, type Span } from './screen.ts';
 export { isLocal } from './http.ts';
+export { changedFiles, fileDiff, fileType, inside, localUrl, mentions, osc8Links, Rounds, snapshot, stripAnsi, type Round } from './attachments.ts';
 export { act as worktreeAction, addWorktree, gitTop, leftover, slug, status as worktreeStatus, type Worktree, type WorktreeAction } from './worktrees.ts';
 export type * from './types.ts';

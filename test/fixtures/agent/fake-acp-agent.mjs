@@ -5,8 +5,11 @@
 //   "slow"   works for 8 s (session/cancel ends it with stopReason cancelled)
 //   "crash"  exits with code 7 mid-turn
 //   "plan"   sends a plan update
+//   "attach" writes acp-notes.md (a tool call with its location) and sends a resource link (D56)
 // FAKE_ACP_NO_MODELS: no config options. FAKE_ACP_FAIL_INIT: initialize answers an error.
 
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
 const send = m => process.stdout.write(JSON.stringify(m) + '\n');
 const update = (sessionId, u) => send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update: u } });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -74,6 +77,12 @@ async function handle(m) {
         if (r?.outcome?.outcome === 'cancelled' || cancelled.has(sid)) return reply({ stopReason: 'cancelled' });
         answer = `: ${r.outcome.optionId}`;
         update(sid, { sessionUpdate: 'tool_call_update', toolCallId: 't2', status: r.outcome.optionId === 'reject' ? 'failed' : 'completed' });
+      }
+      if (text.includes('attach')) {
+        // An edit with its file location, and a link (D56): what the session's attachments pick up.
+        writeFileSync('acp-notes.md', '# notes\n');
+        update(sid, { sessionUpdate: 'tool_call', toolCallId: 't3', title: 'Write acp-notes.md', kind: 'edit', status: 'completed', locations: [{ path: path.resolve('acp-notes.md') }] });
+        update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'resource_link', uri: 'https://example.com/spec', name: 'The spec' } });
       }
       if (text.includes('slow')) for (let t = 0; t < 80 && !cancelled.has(sid); t++) await sleep(100);
       if (cancelled.has(sid)) return reply({ stopReason: 'cancelled' });

@@ -112,7 +112,9 @@ kept going (`sessions: 'shared'`); they apply to new sessions, and Reset goes ba
 **Each new session in its own git worktree** (⚙, or `worktrees: true`) a fresh session works on its own branch,
 `redline/<its name>`, in `.redline/worktrees/`, so parallel sessions never touch the same files; when it ends you keep the
 branch, merge it (only a fast-forward or a clean merge) or discard it (asked first when that drops work). The worktree has
-no node_modules: the agent edits and commits there; to run the app or tests in it, install first.
+no node_modules: the agent edits and commits there; to run the app or tests in it, install first. A 📎 count on a tab
+opens what that session pointed at, per prompt: the files it changed (with +/− and the diff), images (click to zoom), files
+and links it named (links on this machine open in a new tab), and, folded, what its output merely mentioned.
 `instructions: { file: 'redline-agent.md' }` adds your own rules to the sessions Redline starts. Its state comes
 from the CLI's OSC 7501 status, on the toolbar's outline and as a ring around the closed launcher: a light sweeping round
 it while working, an orange glow while it waits for your approval, green when done (hover says what it is doing), which

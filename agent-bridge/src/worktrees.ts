@@ -38,6 +38,8 @@ export interface Worktree extends WorktreeInfo {
   dir: string;
   /** Where the session runs: the same subfolder of the worktree as the project's cwd in the repo. */
   cwd: string;
+  /** The project root's counterpart in the worktree: what its attachments are relative to (D56). */
+  home: string;
   /** The repo's main working tree (absolute): where merges happen. */
   top: string;
 }
@@ -61,9 +63,8 @@ export async function addWorktree(o: { root: string; cwd: string; dir: string; p
   if (!existsSync(ignore)) writeFileSync(ignore, '# Agent session worktrees (D64): never part of the main tree.\n*\n');
   const dir = path.join(o.dir, branch.split('/').pop()!);
   await git(t.top, ['worktree', 'add', '-b', branch, dir, 'HEAD']);
-  const sub = path.relative(t.top, o.cwd);
-  const cwd = sub && !sub.startsWith('..') && !path.isAbsolute(sub) ? path.join(dir, sub) : dir;
-  return { branch, base, dir, cwd, top: t.top, path: rel(o.root, dir) };
+  const within = (p: string) => { const sub = path.relative(t.top, p); return sub && !sub.startsWith('..') && !path.isAbsolute(sub) ? path.join(dir, sub) : dir; };
+  return { branch, base, dir, cwd: within(o.cwd), home: within(o.root), top: t.top, path: rel(o.root, dir) };
 }
 
 const rel = (root: string, p: string) => path.relative(root, p).split(path.sep).join('/');
@@ -141,7 +142,7 @@ export async function leftover(o: { root: string; dir: string; prefix: string })
     if (!dir || !branch || !branch.startsWith(o.prefix)) continue;
     const abs = path.resolve(dir);
     if (path.relative(path.resolve(o.dir), abs).startsWith('..')) continue;
-    out.push({ branch, base, dir: abs, cwd: abs, top: t.top, path: rel(o.root, abs) });
+    out.push({ branch, base, dir: abs, cwd: abs, home: abs, top: t.top, path: rel(o.root, abs) });
   }
   return out;
 }

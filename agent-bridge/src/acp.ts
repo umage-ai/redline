@@ -20,6 +20,7 @@ import type { PromptView, Span } from './screen.ts';
 import { adapterFor } from './adapters.ts';
 import { commandName, resolveCommand } from './sessions.ts';
 import type { Worktree } from './worktrees.ts';
+import { Rounds } from './attachments.ts';
 
 export const ACP_PROTOCOL_VERSION = 1;
 const CLIENT_INFO = { name: 'agent-bridge', title: 'Agent bridge', version: '0' };
@@ -172,6 +173,10 @@ export class AcpSession {
   prepare?: () => Promise<void>;
   /** Its git worktree (D64), once prepared. */
   worktree?: Worktree;
+  /** Its rounds and what it pointed at in each (D56). */
+  readonly rounds: Rounds;
+  /** The label of the next round (the prompt's `task`). */
+  private nextTask?: string;
 
   readonly root: string;
   readonly id: string;
@@ -186,6 +191,7 @@ export class AcpSession {
   private onChange: () => void;
   constructor(opts: BridgeOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
     this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange; this.cli = cli;
+    this.rounds = new Rounds(root, cwd, () => this.pushStatus());
   }
 
   get running() { return !!this.child || !!this.starting; }
@@ -328,9 +334,11 @@ export class AcpSession {
   private update(u: Json) {
     switch (u.sessionUpdate) {
       case 'agent_message_chunk': {
+        this.content(u.content);   // a resource link or an image with a URI: attached (D56)
         const t = u.content?.type === 'text' ? String(u.content.text ?? '') : '';
         if (!t) return;
         this.said += t;
+        this.rounds.feed(t);
         this.text(t);
         return;
       }
@@ -346,6 +354,12 @@ export class AcpSession {
         const title = typeof u.title === 'string' && u.title ? u.title : was?.title ?? 'tool';
         const status = typeof u.status === 'string' ? u.status : was?.status ?? 'pending';
         this.tools.set(id, { title, status });
+        // Its files (D56): the locations it names and the diffs it carries are explicit attachments.
+        for (const loc of Array.isArray(u.locations) ? u.locations.slice(0, 20) : []) if (typeof loc?.path === 'string') this.rounds.addFile(loc.path, 'explicit');
+        for (const c of Array.isArray(u.content) ? u.content.slice(0, 20) : []) {
+          if (c?.type === 'diff' && typeof c.path === 'string') this.rounds.addFile(c.path, 'explicit');
+          else if (c?.type === 'content') this.content(c.content);
+        }
         if (this.tools.size > 200) this.tools.delete(this.tools.keys().next().value!);
         if (was && was.title === title && was.status === status) return;
         if (status === 'completed' || status === 'failed') {
@@ -369,6 +383,16 @@ export class AcpSession {
     }
   }
 
+  /** ACP content that points somewhere (D56): a resource link (file:// or http), an image or resource with a URI. */
+  private content(c: Json | undefined) {
+    const uri = typeof c?.uri === 'string' ? c.uri : typeof c?.resource?.uri === 'string' ? c.resource.uri : '';
+    if (!c || !uri || !['resource_link', 'image', 'resource'].includes(c.type)) return;
+    const title = typeof c.title === 'string' ? c.title : typeof c.name === 'string' ? c.name : undefined;
+    if (uri.startsWith('file://')) {
+      try { this.rounds.addFile(decodeURIComponent(new URL(uri).pathname.replace(/^\/([A-Za-z]:)/, '$1')), 'explicit', title); } catch { /* bad URI */ }
+    } else this.rounds.addUrl(uri, 'explicit', title);
+  }
+
   private text(t: string, style = '') {
     this.print(style + crlf(t) + (style ? C.reset : ''));
     this.atLineStart = /\n$/.test(t);
@@ -381,6 +405,7 @@ export class AcpSession {
     if (!clean.trim()) return;
     this.remember(notes);
     nameSession(this, about);
+    if (typeof about.task === 'string' && about.task.trim()) this.nextTask = about.task.trim().slice(0, 80);
     this.queued.push(clean);
     if (!this.child) await this.start();
     this.pump();
@@ -397,7 +422,12 @@ export class AcpSession {
     this.newline();
     this.print(`\r\n${C.cyan}${C.bold}› ${C.reset}${C.cyan}${crlf(text)}${C.reset}\r\n`);
     this.pushStatus();
+    const task = this.nextTask ?? firstLine(text);
+    this.nextTask = undefined;
+    this.rounds.base = this.worktree?.home ?? this.root; this.rounds.cwd = this.cwd;
     this.turn = (async () => {
+      // A new round (D56): the working tree's snapshot before the agent gets the prompt.
+      await this.rounds.begin(task).catch(() => {});
       try {
         const r = await rpc.request('session/prompt', { sessionId: this.sessionId, prompt: [{ type: 'text', text: full }] });
         if (this.rpc !== rpc) return;
@@ -413,6 +443,7 @@ export class AcpSession {
         this.newline();
         this.print(`${C.red}${(e as Error).message}${C.reset}\r\n`);
       } finally {
+        await this.rounds.finish().catch(() => {});
         if (this.rpc === rpc) { this.turn = null; this.permission?.resolve({ outcome: 'cancelled' }); this.pushStatus(); this.pump(); }
       }
     })();
@@ -558,11 +589,15 @@ export class AcpSession {
 }
 
 /** A session's tab name, prompt, model and effort for its info (D62). */
-export const meta = (s: { title?: string; task?: string; opts: BridgeOptions; worktree?: Worktree }) => ({
+export const meta = (s: { title?: string; task?: string; opts: BridgeOptions; worktree?: Worktree; rounds?: Rounds }) => ({
+  ...(s.rounds?.list.length ? { rounds: s.rounds.list.length, attachments: s.rounds.count } : {}),
   ...(s.title ? { title: s.title } : {}), ...(s.task ? { task: s.task } : {}),
   ...(s.worktree ? { worktree: { branch: s.worktree.branch, path: s.worktree.path, base: s.worktree.base } } : {}),
   ...(s.opts.model ? { model: s.opts.model } : {}), ...(s.opts.effort ? { effort: s.opts.effort } : {}),
 });
+/** A prompt's first line, cut: a round's label when the prompt has none. */
+export const firstLine = (t: string) => oneLine(t.split('\n').find(l => l.trim()) ?? '', 60);
+
 /** The first prompt that names the session sets its tab name and prompt label: no control characters, 80 characters at most. */
 export function nameSession(s: { title?: string; task?: string }, about: { title?: unknown; task?: unknown }) {
   const clean = (v: unknown) => typeof v === 'string' ? v.replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : '';

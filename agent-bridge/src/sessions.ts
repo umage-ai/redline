@@ -14,8 +14,9 @@ import type { ServerResponse } from 'node:http';
 import { DA1_REPLY, OscScanner, PROBE_REPLY, ProgramRecords, type ProgramState } from './program-status.ts';
 import { Screen, type PromptView } from './screen.ts';
 import { adapterFor, choices, claudeCode, commandName, type CliChoice } from './adapters.ts';
-import { AcpSession, meta, nameSession, probeAcp, usesAcp, type AcpOffer } from './acp.ts';
+import { AcpSession, firstLine, meta, nameSession, probeAcp, usesAcp, type AcpOffer } from './acp.ts';
 import type { AgentAdapter, BridgeOptions, CliInfo, GroupInfo, SessionInfo } from './types.ts';
+import { Rounds } from './attachments.ts';
 import { act, addWorktree, gitTop, leftover, status, type Worktree, type WorktreeAction } from './worktrees.ts';
 export { commandName };
 
@@ -150,11 +151,18 @@ export class AgentSession {
   prepare?: () => Promise<void>;
   /** Its git worktree (D64), once prepared. */
   worktree?: Worktree;
+  /** Its rounds and what it pointed at in each (D56). */
+  readonly rounds: Rounds;
+  /** The label of the next round (the prompt's `task`). */
+  private nextTask?: string;
+  private roundWorked = false;   // the round's turn has been seen working: resting again ends it
+  private roundLive = false;   // its prompt has been typed: only then does working count (not a CLI still starting up)
   /** The CLI's id (D59); `opts` has its command, arguments and environment. */
   readonly cli: string;
   private onChange: () => void;
   constructor(opts: BridgeOptions, cwd: string, root: string, n: number, onChange: () => void, cli = '') {
     this.opts = opts; this.cwd = cwd; this.root = root; this.id = `s${n}`; this.label = `#${n}`; this.onChange = onChange; this.cli = cli;
+    this.rounds = new Rounds(root, cwd, () => this.pushStatus());
   }
 
   get running() { return !!this.pty || !!this.starting; }
@@ -233,6 +241,7 @@ export class AgentSession {
         this.pty = null;
         this.exitCode = exitCode;
         this.records.dropTransient();
+        void this.rounds.finish();
         this.broadcast('exit', { exitCode });
         this.pushStatus();
         release(p);
@@ -257,6 +266,7 @@ export class AgentSession {
     const on = d.lastIndexOf('\x1b[?2004h'), off = d.lastIndexOf('\x1b[?2004l');
     if (on > off) this.bracketedPaste = true; else if (off > on) this.bracketedPaste = false;
     this.lastOutput = Date.now();
+    this.rounds.feed(d);
     this.scrollback += d;
     this.screen?.write(d);
     this.screenDirty = true;
@@ -280,6 +290,7 @@ export class AgentSession {
     if (!clean.trim()) return;
     this.remember(notes);
     nameSession(this, about);
+    if (typeof about.task === 'string' && about.task.trim()) this.nextTask = about.task.trim().slice(0, 80);
     if (!this.pty || !this.ready()) { this.queued.push(clean); await this.start(); this.flush(); return; }
     this.type(clean);
   }
@@ -310,9 +321,18 @@ export class AgentSession {
     const clean = this.preamble ? `${this.preamble.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')}\n\n${text}` : text;
     this.preamble = '';
     this.worked = false;
-    p.write(this.bracketedPaste ? `\x1b[200~${clean}\x1b[201~` : clean);
-    // A separate Enter, a moment later: TUIs treat text + CR in one read as a paste with a newline.
-    setTimeout(() => { if (this.pty === p) p.write('\r'); }, 80);
+    // A new round (D56): the working tree's snapshot first, so what the turn changes can be told apart.
+    const task = this.nextTask ?? firstLine(text);
+    this.nextTask = undefined;
+    this.rounds.base = this.worktree?.home ?? this.root; this.rounds.cwd = this.cwd;
+    this.roundWorked = false; this.roundLive = false;
+    void this.rounds.begin(task).catch(() => {}).then(() => {
+      if (this.pty !== p) return;
+      this.roundLive = true;
+      p.write(this.bracketedPaste ? `\x1b[200~${clean}\x1b[201~` : clean);
+      // A separate Enter, a moment later: TUIs treat text + CR in one read as a paste with a newline.
+      setTimeout(() => { if (this.pty === p) p.write('\r'); }, 80);
+    });
   }
 
   /** The notes a prompt named: the panel tags them "sent to the agent" until they are done. */
@@ -408,6 +428,13 @@ export class AgentSession {
 
   private pushStatus() {
     const info = this.info();
+    // A round (D56) ends when the turn rests again after working; a turn typed in the CLI window starts one.
+    const st = info.status.state, r = this.rounds.current;
+    if (r && !r.done) {
+      if (!this.roundLive) { /* the prompt isn't typed yet */ }
+      else if (st === 'working' || st === 'blocked') this.roundWorked = true;
+      else if (this.roundWorked && !this.queued.length) { this.roundWorked = false; void this.rounds.finish(); }
+    } else if (st === 'working' && this.pty && this.reported) { this.roundWorked = true; this.roundLive = true; void this.rounds.begin('typed in the CLI window'); }
     const key = JSON.stringify(info);
     if (key === this.lastStatus) return;
     this.lastStatus = key;
@@ -599,6 +626,23 @@ export class AgentGroup {
     if (on && g && 'why' in g) throw Object.assign(new Error(`worktrees need a git repository: ${g.why}`), { status: 409 });
     this.wt.on = on;
     this.push();
+  }
+
+  /**
+   * An attachment the agent points at (D56: Redline's MCP `attach`, the /attach route): a file inside the
+   * session's folder (relative to where it runs, or absolute) or an http(s) URL, with an optional title.
+   */
+  attach(id: string, a: { path?: unknown; url?: unknown; title?: unknown }): { ok: true; attachment: import('./types.ts').Attachment } | { error: string } {
+    const s = this.get(id);
+    if (!s || s.id !== id) return { error: `no agent session ${id}` };
+    const title = typeof a.title === 'string' && a.title.trim() ? a.title.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 200) : undefined;
+    if (typeof a.url === 'string' && a.url) {
+      const item = s.rounds.addUrl(a.url.trim(), 'explicit', title);
+      return item ? { ok: true, attachment: item } : { error: 'url must be http or https' };
+    }
+    if (typeof a.path !== 'string' || !a.path) return { error: 'give path (a file in the project) or url' };
+    const item = s.rounds.addFile(a.path, 'explicit', title);
+    return item ? { ok: true, attachment: item } : { error: `${a.path} is not a file inside the project${s.worktree ? ` (this session works in ${s.worktree.path})` : ''}` };
   }
 
   /** Keep, merge or discard an ended session's worktree (D64); see worktrees.ts `act`. */

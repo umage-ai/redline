@@ -7,7 +7,7 @@
 //   "form"  stepped questions: "← ☐ Color ☐ Size ✔ Submit →", options with descriptions,
 //           "Type something.", then a review step
 // Keys there: ↑/↓ move, a digit picks, Enter picks the ❯ row, ←/→ change step, Esc cancels.
-// "write <file> <text>" writes a file in its folder (D64). "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent); FAKE_NO_DONE: idle, not done, after a turn.
+// "write <file> <text>" writes a file in its folder (D64); "link…" prints an OSC 8 link and a file name (D56). "exit" quits with code 3; a prompt with "slow" in it stays working for 8 s. FAKE_APP: the app it reports (default fake-agent); FAKE_NO_DONE: idle, not done, after a turn.
 
 import { writeFileSync } from 'node:fs';
 const ESC = '\x1b', ST = ESC + '\\';
@@ -120,6 +120,8 @@ function prompt(p) {
   // "write <file> <text>": writes the file in its working folder (a worktree's, D64), like an agent's edit.
   const w = /^write (\S+) ?(.*)$/.exec(p);
   if (w) writeFileSync(w[1], `${w[2]}\n`);
+  // "link …": an OSC 8 hyperlink and a file named in the text (D56), as a CLI would print them.
+  if (p.includes('link')) history.push(`Open ${ESC}]8;;http://localhost:5199/preview${ST}the preview${ESC}]8;;${ST} or see index.html and missing.md`);
   draw();
   report('state=working');
   setTimeout(() => {

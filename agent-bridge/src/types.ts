@@ -155,6 +155,25 @@ export interface WorktreeInfo {
   ahead?: number;
 }
 
+/** One file, link or image a session pointed at in a round (D56; attachments.ts). */
+export interface Attachment {
+  /** `<round>-<n>`, unique in the session. */
+  id: string;
+  /** The round (one prompt and its turn) it came in, from 1. */
+  round: number;
+  /** explicit (the agent said so: MCP `attach`, ACP content), changed (git, this round), link (OSC 8), mentioned (in the text). */
+  source: 'explicit' | 'changed' | 'link' | 'mentioned';
+  kind: 'file' | 'image' | 'url' | 'diff';
+  /** A file: relative to the session's folder (its worktree, or the project root), forward slashes. */
+  path?: string;
+  url?: string;
+  title?: string;
+  /** A changed file: lines added and removed, git's status letter (A, M, D). */
+  added?: number;
+  removed?: number;
+  status?: string;
+}
+
 /** What a viewer shows: the session's state and the program's status. */
 export interface SessionInfo {
   /** `s1`, `s2`… in this server. */
@@ -187,6 +206,9 @@ export interface SessionInfo {
   effort?: string;
   /** Its git worktree (D64), when it runs in one. */
   worktree?: WorktreeInfo;
+  /** Rounds so far and attachments worth counting in them (D56: all but mentions); the list is GET /attachments. */
+  rounds?: number;
+  attachments?: number;
 }
 
 /** A CLI in /info (D59, D62): what the settings offer for it. `pending`: an ACP agent not asked yet. */

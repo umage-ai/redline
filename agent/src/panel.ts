@@ -42,7 +42,12 @@ export interface Session extends Info {
   model?: string; effort?: string;
   /** Its git worktree (D64). */
   worktree?: { branch: string; path: string; base: string };
+  /** Rounds so far and attachments in them worth a count (D56). */
+  rounds?: number; attachments?: number;
 }
+/** One attachment (D56), as GET /agent/attachments lists it. */
+export interface Attached { id: string; round: number; source: 'explicit' | 'changed' | 'link' | 'mentioned'; kind: 'file' | 'image' | 'url' | 'diff'; path?: string; url?: string; title?: string; added?: number; removed?: number; status?: string }
+export interface AttachedRound { n: number; task?: string; at: number; done: boolean; items: Attached[] }
 /** An ended session's worktree, waiting for keep, merge or discard (D64). */
 export interface LeftWorktree { branch: string; path: string; base: string; dirty?: boolean; ahead?: number; session?: string; title?: string }
 /** All of the project's sessions: one that keeps its context ('shared'), or one per prompt ('fresh'). */
@@ -160,6 +165,27 @@ export function visibleTabs(sessions: Pick<Session, 'id' | 'running' | 'status'>
   return { shown: order(sessions.filter(s => keep.has(s.id))), hidden: order(sessions.filter(s => !keep.has(s.id))) };
 }
 
+const IMG = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
+/** A URL on this machine (localhost, 127.x, ::1, *.localhost): it may open in a new tab (D56). Others are shown, never fetched. */
+export function isLocalUrl(u: string): boolean {
+  try { const { hostname, protocol } = new URL(u); return /^https?:$/.test(protocol) && /^(localhost|127(\.\d+){3}|\[::1\]|[^.]+\.localhost)$/i.test(hostname); } catch { return false; }
+}
+/**
+ * A round's attachments grouped for the card (D56): images (any source, changed ones too), changed files,
+ * other files, links, and what was only mentioned (its own group, folded).
+ */
+export function groupAttachments(items: Attached[]) {
+  const mentioned = items.filter(i => i.source === 'mentioned');
+  const rest = items.filter(i => i.source !== 'mentioned');
+  return {
+    images: rest.filter(i => i.kind === 'image' || (i.kind === 'diff' && i.status !== 'D' && IMG.test(i.path ?? ''))),
+    changed: rest.filter(i => i.kind === 'diff'),
+    files: rest.filter(i => i.kind === 'file'),
+    links: rest.filter(i => i.kind === 'url'),
+    mentioned,
+  };
+}
+
 /** An ended session's worktree in a few words: "2 commits · uncommitted changes", or "no changes". */
 export function worktreeState(w: Pick<LeftWorktree, 'dirty' | 'ahead'>): string {
   const parts = [w.ahead ? `${w.ahead} commit${w.ahead === 1 ? '' : 's'}` : '', w.dirty ? 'uncommitted changes' : ''].filter(Boolean);
@@ -193,6 +219,7 @@ const ICONS = {
   more: svg('<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>'),
   x: svg('<path d="M7 7l10 10M17 7L7 17"/>'),
   down: svg('<path d="M7 10l5 5 5-5"/>'),
+  clip: svg('<path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>'),
   branch: svg('<circle cx="6" cy="5.5" r="2.2"/><circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.7v8.6"/><path d="M18 10.2c0 4-4.5 3.8-10.4 7"/>'),
 };
 const icon = (k: keyof typeof ICONS) => { const s = document.createElement('span'); s.className = 'ag-ic'; s.innerHTML = ICONS[k]; return s; };
@@ -319,6 +346,32 @@ const STYLES = `
 .ag-set :is(.ag-note, .ag-help) { color: var(--fg-2); font-size: 12px; line-height: 1.4; }
 .ag-set footer { display: flex; align-items: center; gap: 8px; color: var(--fg-2); font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .ag-set footer span { flex: 1; }
+/* attachments (D56): the 📎 on a tab, and the card's list */
+.bar .ag-tab button.ag-att { padding: 5px 2px 5px 4px; gap: 2px; color: var(--fg-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ag-att .ag-ic, .ag-att .ag-ic svg { width: 13px; height: 13px; }
+.bar .ag-tab button.ag-att:hover, .bar .ag-tab button.ag-att[aria-expanded="true"] { color: var(--fg); }
+.ag-files { max-height: min(60vh, 560px); overflow: auto; }
+.ag-round { display: grid; gap: 4px; padding: 6px 0 8px; border-top: 1px solid var(--line); }
+.ag-round:first-of-type { border-top: 0; padding-top: 0; }
+.ag-round-h { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ag-round-h span { color: var(--fg-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ag-round-h .ag-live { color: #8fb4ff; }
+.ag-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-2); }
+.ag-num { font: 600 11.5px ui-monospace, Consolas, monospace; text-transform: none; letter-spacing: 0; }
+.ag-num i { font-style: normal; } .ag-num .add, .ag-diff .add { color: #3ecf8e; } .ag-num .del, .ag-diff .del { color: #ff6b6b; } .ag-diff .hunk { color: #8fb4ff; }
+.ag-frow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; background: var(--bg-2); color: var(--fg); text-align: left; text-decoration: none; min-width: 0; cursor: pointer; border: 0; font: inherit; font-size: 12.5px; }
+.ag-frow:hover { background: var(--bg-3); }
+.ag-frow.ag-ext, div.ag-frow { cursor: text; user-select: text; }
+.ag-frow.dim { opacity: .75; }
+.ag-frow .ag-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.ag-frow .ag-t { color: var(--fg-2); font-size: 12px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-st { flex: none; width: 16px; text-align: center; font: 700 11px ui-monospace, Consolas, monospace; color: var(--fg-2); }
+.ag-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ag-thumb { padding: 0; border-radius: 7px; border: 1px solid var(--line); background: var(--bg-2); cursor: zoom-in; overflow: hidden; }
+.ag-thumb img { display: block; width: 96px; height: 64px; object-fit: cover; }
+.ag-diff { max-height: 220px; }
+.ag-ment summary { cursor: pointer; color: var(--fg-2); font-size: 12px; padding: 4px 2px; }
+.ag-ment { display: grid; gap: 4px; }
 /* ended sessions' branches (D64) */
 .ag-bc { display: flex; align-items: center; gap: 4px; }
 .bar button.ag-branches .count { background: var(--bg-3); color: var(--fg); }
@@ -375,7 +428,7 @@ function roving(box: HTMLElement, items: HTMLElement[]) {
   });
 }
 
-type View = 'list' | 'switch' | 'cmds' | 'settings' | 'branches' | null;
+type View = 'list' | 'switch' | 'cmds' | 'settings' | 'branches' | 'files' | null;
 
 export default async function agentPanel(rl: RedlineApi) {
   if (!(rl.version >= 5) || typeof rl.addToolbar !== 'function') return;
@@ -476,7 +529,7 @@ export default async function agentPanel(rl: RedlineApi) {
     wantFocus = view ? focus : wantFocus;
     toolbar?.render();
   };
-  const OPENER: Record<Exclude<View, null>, string> = { list: 'more', switch: 'primary', cmds: 'more-cmds', settings: 'gear', branches: 'branches' };
+  const OPENER: Record<Exclude<View, null>, string> = { list: 'more', switch: 'primary', cmds: 'more-cmds', settings: 'gear', branches: 'branches', files: 'att' };
   const closeView = () => {
     if (!view) return false;
     const back = view === 'list' && matchMedia('(max-width: 560px)').matches ? 'sw' : OPENER[view];
@@ -623,7 +676,13 @@ export default async function agentPanel(rl: RedlineApi) {
         // Picked: its card (a question) or nothing; a menu or the settings close.
         onclick: () => { sel = x.id; view = null; sync(); },
       }, el('span', { class: 'ag-dot' }), mixed ? el('span', { class: 'ag-ini', attrs: { 'aria-hidden': 'true' } }, initials(nameOf(x))) : null, el('span', { class: 'ag-name' }, tabName(x)));
-      const t = el('div', { class: 'ag-tab' + (x.id === info.id ? ' cur' : ''), data: { id: x.id, state } }, main, endX(x, `x:${x.id}`));
+      // What it pointed at (D56): a 📎 count, only when there is something; it opens the list in the card.
+      const att = x.attachments ? el('button', {
+        class: 'ag-att', title: `${x.attachments} attachment${x.attachments === 1 ? '' : 's'}: files changed, images, links`, data: { k: `att:${x.id}` },
+        attrs: { 'aria-label': `${x.attachments} attachment${x.attachments === 1 ? '' : 's'} of ${tabName(x)}`, 'aria-haspopup': 'dialog', 'aria-expanded': String(view === 'files' && x.id === info.id) },
+        onclick: (e: Event) => { e.stopPropagation(); const again = view === 'files' && sel === x.id; sel = x.id; view = again ? null : 'files'; wantFocus = again ? `att:${x.id}` : 'files-first'; sync(); },
+      }, icon('clip'), el('span', {}, String(x.attachments))) : null;
+      const t = el('div', { class: 'ag-tab' + (x.id === info.id ? ' cur' : ''), data: { id: x.id, state } }, main, att, endX(x, `x:${x.id}`));
       t.style.setProperty('--c', xl.color);
       return t;
     }), more, sep()) : null;
@@ -671,6 +730,7 @@ export default async function agentPanel(rl: RedlineApi) {
     if (view === 'cmds') return void box.append(style(), cmdsMenu());
     if (view === 'list') return renderList(box);
     if (view === 'branches') return void box.append(style(), renderBranches());
+    if (view === 'files') return void box.append(style(), renderFiles());
     const info = cur();
     const pv = info.running ? info.prompt : undefined;
     const st = stateLabel(info);
@@ -843,6 +903,114 @@ export default async function agentPanel(rl: RedlineApi) {
    * Ended sessions' branches (D64): keep, merge (only a fast-forward or a clean merge; the server
    * checks) or discard. Discarding work asks first here ("Discard? …"), and the server asks again.
    */
+  // Attachments (D56): fetched per session when its card opens, again when its counts change.
+  const attCache = new Map<string, { key: string; rounds: AttachedRound[] | null }>();
+  const openDiffs = new Set<string>();
+  let focusWhenLoaded = false;   // opened by keyboard or click before the list came: focus its first item then
+  const diffs = new Map<string, string>();
+  const fileUrl = (id: string, p: string) => `${BASE}/file?id=${encodeURIComponent(id)}&path=${encodeURIComponent(p)}&token=${encodeURIComponent(client.info.token)}`;
+  function loadAttachments(x: Session) {
+    const key = `${x.rounds ?? 0}:${x.attachments ?? 0}`, had = attCache.get(x.id);
+    if (had?.key === key) return had.rounds;
+    attCache.set(x.id, { key, rounds: had?.rounds ?? null });
+    void fetch(`${BASE}/attachments?id=${encodeURIComponent(x.id)}&token=${encodeURIComponent(client.info.token)}`).then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        attCache.set(x.id, { key, rounds: d.rounds });
+        if (view !== 'files') return;
+        if (focusWhenLoaded) { focusWhenLoaded = false; wantFocus = 'files-first'; }
+        toolbar?.render();
+      }).catch(() => {});
+    return had?.rounds ?? null;
+  }
+  /** An image, big, over everything (the core's zoom); a click or Esc closes it and focus goes back. */
+  function zoom(src: string, back: HTMLElement) {
+    const root = rootOf();
+    if (!root) return;
+    const z = el('div', { class: 'zoom', tabIndex: -1, attrs: { role: 'dialog', 'aria-label': 'Image, Esc to close' } }, el('img', { src, alt: '' }));
+    const close = () => { z.remove(); back.focus(); };
+    z.addEventListener('click', close);
+    z.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } });
+    root.append(z);
+    z.focus();
+  }
+  function renderFiles(): HTMLElement {
+    const x = cur();
+    const box = el('div', { class: 'ag-list ag-files', attrs: { role: 'dialog', 'aria-label': `Attachments of ${tabName(x)}` } },
+      el('h4', {}, `${x.label}${x.title ? ` · ${x.title}` : ''} · attachments`));
+    const rounds = x.id ? loadAttachments(x) : [];
+    if (!rounds) { focusWhenLoaded = true; box.append(el('div', { class: 'ag-hint', data: { k: 'files-first' }, tabIndex: -1 }, 'Loading…')); return box; }
+    if (!rounds.some(r => r.items.length)) box.append(el('div', { class: 'ag-hint' }, 'Nothing yet: files it changes, images and links it points at show here, per prompt.'));
+    let first = true;
+    const k = (key: string) => { if (first) { first = false; return 'files-first'; } return key; };
+    for (const r of rounds) {
+      if (!r.items.length) continue;
+      const g = groupAttachments(r.items);
+      const sec = el('section', { class: 'ag-round', attrs: { 'aria-label': `Prompt ${r.n}` } },
+        el('div', { class: 'ag-round-h' }, el('b', {}, `Prompt ${r.n}`), r.task ? el('span', {}, r.task) : null, r.done ? null : el('span', { class: 'ag-live' }, 'working…')));
+      if (g.images.length) {
+        sec.append(el('div', { class: 'ag-thumbs' }, ...g.images.map(i => {
+          const src = fileUrl(x.id, i.path!);
+          const b = el('button', { class: 'ag-thumb', title: `${i.title ? i.title + ' · ' : ''}${i.path} (click to zoom)`, data: { k: k(`img:${i.id}`) }, attrs: { 'aria-label': `Zoom ${i.title ?? i.path}` } },
+            el('img', { src, alt: i.title ?? i.path ?? '', loading: 'lazy' }));
+          b.onclick = () => zoom(src, b);
+          return b;
+        })));
+      }
+      if (g.changed.length) {
+        const add = g.changed.reduce((n, i) => n + (i.added ?? 0), 0), del = g.changed.reduce((n, i) => n + (i.removed ?? 0), 0);
+        sec.append(el('div', { class: 'ag-sub' }, `Changed ${g.changed.length} file${g.changed.length === 1 ? '' : 's'}`, el('span', { class: 'ag-num' }, el('i', { class: 'add' }, `+${add}`), ' ', el('i', { class: 'del' }, `−${del}`))));
+        for (const i of g.changed) {
+          const dk = `${x.id}:${r.n}:${i.path}`, open = openDiffs.has(dk);
+          const row = el('button', { class: 'ag-frow', data: { k: k(`chg:${i.id}`) }, attrs: { 'aria-expanded': String(open) }, title: open ? 'Hide the diff' : 'Show the diff',
+            onclick: () => {
+              if (openDiffs.has(dk)) openDiffs.delete(dk); else {
+                openDiffs.add(dk);
+                if (!diffs.has(dk)) void fetch(`${BASE}/diff?id=${encodeURIComponent(x.id)}&round=${r.n}&path=${encodeURIComponent(i.path!)}&token=${encodeURIComponent(client.info.token)}`)
+                  .then(res => res.ok ? res.text() : '(no diff)').then(t => { diffs.set(dk, t); toolbar?.render(); }).catch(() => {});
+              }
+              wantFocus = `chg:${i.id}`;
+              toolbar?.render();
+            } },
+          el('span', { class: 'ag-st', attrs: { 'aria-label': ({ A: 'added', D: 'deleted', M: 'modified' } as Record<string, string>)[i.status ?? 'M'] ?? 'changed' } }, i.status ?? 'M'),
+          el('span', { class: 'ag-path' }, i.path ?? ''),
+          el('span', { class: 'ag-num' }, el('i', { class: 'add' }, `+${i.added ?? 0}`), ' ', el('i', { class: 'del' }, `−${i.removed ?? 0}`)));
+          sec.append(row);
+          if (open) {
+            const t = diffs.get(dk);
+            sec.append(t === undefined ? el('div', { class: 'ag-hint' }, 'Loading the diff…')
+              : el('pre', { class: 'ag-ctx ag-diff' }, ...t.split('\n').filter(l => !/^(diff --git|index |--- |\+\+\+ )/.test(l)).flatMap((l, n) => [...(n ? ['\n'] : []),
+                el('span', { class: l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : l.startsWith('@@') ? 'hunk' : '' }, l)])));
+          }
+        }
+      }
+      const fileRow = (i: Attached, cls = '') => {
+        const served = /\.(png|jpe?g|gif|webp|avif|svg|txt|md|json|csv|log|ya?ml|html?|css|[cm]?[jt]sx?|vue|svelte|astro|py|cs|razor|cshtml)$/i.test(i.path ?? '');
+        const label = [el('span', { class: 'ag-path' }, i.path ?? ''), i.title ? el('span', { class: 'ag-t' }, i.title) : null];
+        return served
+          ? el('a', { class: 'ag-frow ' + cls, href: fileUrl(x.id, i.path!), target: '_blank', rel: 'noopener noreferrer', title: `Open ${i.path} in a new tab`, data: { k: k(`file:${i.id}`) } }, ...label)
+          : el('div', { class: 'ag-frow ' + cls, title: i.path ?? '' }, ...label);
+      };
+      const linkRow = (i: Attached, cls = '') => {
+        const local = isLocalUrl(i.url ?? '');
+        const label = [el('span', { class: 'ag-path' }, i.title ?? i.url ?? ''), i.title ? el('span', { class: 'ag-t' }, i.url ?? '') : null];
+        // This machine's pages open in a new tab; anything else is shown to copy, never fetched.
+        return local
+          ? el('a', { class: 'ag-frow ' + cls, href: i.url!, target: '_blank', rel: 'noopener noreferrer', title: `Open ${i.url} in a new tab`, data: { k: k(`url:${i.id}`) } }, ...label)
+          : el('div', { class: 'ag-frow ag-ext ' + cls, title: `${i.url} (not on this machine: copy it to open)` }, ...label);
+      };
+      if (g.files.length) sec.append(el('div', { class: 'ag-sub' }, 'Files'), ...g.files.map(i => fileRow(i)));
+      if (g.links.length) sec.append(el('div', { class: 'ag-sub' }, 'Links'), ...g.links.map(i => linkRow(i)));
+      if (g.mentioned.length) {
+        sec.append(el('details', { class: 'ag-ment' }, el('summary', {}, `Mentioned (${g.mentioned.length})`),
+          ...g.mentioned.map(i => i.kind === 'url' ? linkRow(i, 'dim') : fileRow(i, 'dim'))));
+      }
+      box.append(sec);
+    }
+    box.append(el('div', { class: 'ag-foot' }, el('span', {}, 'Kept while the session runs'), el('button', { data: { k: 'files-done' }, onclick: () => closeView() }, 'Done')));
+    return box;
+  }
+
   let armedWt: string | null = null, armWtTimer = 0;
   function renderBranches(): HTMLElement {
     const left = group.worktrees?.left ?? [];
@@ -882,7 +1050,7 @@ export default async function agentPanel(rl: RedlineApi) {
         class: 'ag-row-main', title: tabTip(x), data: { k: `row:${x.id}` }, attrs: { 'aria-current': x.id === cur().id ? 'true' : undefined },
         onclick: () => { sel = x.id; view = null; wantFocus = matchMedia('(max-width: 560px)').matches ? 'sw' : `tab:${x.id}`; sync(); },
       }, el('span', { class: 'ag-dot' }), el('span', { class: 'l' }, x.label), el('b', {}, xl.label),
-      el('span', { class: 'm' }, [x.title, multi() ? nameOf(x) : '', x.worktree?.branch ?? '', n ? `${n} note${n === 1 ? '' : 's'}` : '', xl.msg ?? ''].filter(Boolean).join(' · ')));
+      el('span', { class: 'm' }, [x.title, multi() ? nameOf(x) : '', x.worktree?.branch ?? '', n ? `${n} note${n === 1 ? '' : 's'}` : '', x.attachments ? `${x.attachments} attached` : '', xl.msg ?? ''].filter(Boolean).join(' · ')));
       const r = el('div', { class: 'ag-row' + (x.id === cur().id ? ' cur' : ''), data: { id: x.id, state: shownState(x) } }, main, endX(x, `rowx:${x.id}`));
       r.style.setProperty('--c', xl.color);
       return r;
@@ -977,6 +1145,7 @@ export default async function agentPanel(rl: RedlineApi) {
     const next = newly ?? (answered ? asking[0] : undefined);
     if (next && !typing && !isAsking(c)) { sel = next; if (view === 'list') view = null; }
     lastCur = { id: cur().id, asking: isAsking(cur()) };
+    if (view === 'files' && isAsking(cur())) view = null;   // a question comes first: the attachments wait
     pick = pickCli(clis(), pick, setup.cli);
     const top = overall(group.sessions);
     const ind = top ? indicatorFor({ ...top, command: who(top) }) : null;

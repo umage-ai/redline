@@ -11,7 +11,9 @@
 
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { promises as fsp } from 'node:fs';
 import { foreignOrigin, isLocal, json, readBody } from './http.ts';
+import { fileType, inside, MAX_FILE } from './attachments.ts';
 import { cliChoices, commandName } from './adapters.ts';
 import { checkPick, DEFAULT_KEYS, groupFor, type AgentGroup, type Picked } from './sessions.ts';
 import type { AgentAdapter, BridgeOptions } from './types.ts';
@@ -86,6 +88,33 @@ export function createBridge(setup: BridgeSetup): Bridge {
         const s = group.get(url.searchParams.get('id'));
         if (!s) return json(res, 404, { error: 'no such agent session' });
         s.attach(res);
+        return;
+      }
+      // Attachments (D56): a session's rounds; a file in its folder (images and text, capped); a changed file's diff.
+      if (method === 'GET' && (p === '/attachments' || p === '/file' || p === '/diff')) {
+        const s = group.get(url.searchParams.get('id') || undefined);
+        if (!s || !url.searchParams.get('id')) return json(res, 404, { error: 'no such agent session' });
+        if (p === '/attachments') return json(res, 200, { id: s.id, rounds: s.rounds.view() });
+        const rel = url.searchParams.get('path') ?? '';
+        if (p === '/diff') {
+          const d = await s.rounds.diff(Number(url.searchParams.get('round')), rel).catch(() => null);
+          if (d === null) return json(res, 404, { error: 'no such changed file in that round' });
+          res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+          res.end(d);
+          return;
+        }
+        // Inside the session's folder only (its worktree, or the project root): symlinks resolved, no escape.
+        const hit = inside(s.rounds.base, rel), type = hit && fileType(hit.rel);
+        if (!hit || !type) return json(res, 404, { error: 'not a served file: images and text inside the session\'s folder only' });
+        const st = await fsp.stat(hit.abs).catch(() => null);
+        if (!st?.isFile()) return json(res, 404, { error: 'no such file' });
+        if (st.size > MAX_FILE) return json(res, 413, { error: `over ${MAX_FILE / 1024 / 1024} MB` });
+        res.writeHead(200, {
+          'content-type': type.type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+          // Opened in a tab, an SVG or HTML file runs nothing.
+          'content-security-policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+        });
+        res.end(await fsp.readFile(hit.abs));
         return;
       }
 
@@ -179,6 +208,11 @@ export function createBridge(setup: BridgeSetup): Bridge {
         case '/ack':
           session.acknowledge();
           return json(res, 200, { ok: true });
+        case '/attach': {
+          // A file in the session's folder or an http(s) URL the agent points at (D56; Redline's MCP `attach` calls group.attach).
+          const r = group.attach(session.id, { path: body.path, url: body.url, title: body.title });
+          return 'error' in r ? json(res, 400, r) : json(res, 200, r);
+        }
       }
       return json(res, 404, { error: 'unknown agent endpoint' });
     },
