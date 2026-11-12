@@ -1,6 +1,6 @@
 {
   "name": "@umage.ai/redline-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The agent panel for Redline's dev server: run your agent CLI (Claude Code, Codex, …) from an agent toolbar in the overlay. Apply notes, approve edits, see its live status. Local dev only.",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,7 @@
     "node-pty": "^1.1.0"
   },
   "peerDependencies": {
-    "@umage.ai/redline": ">=0.9.0"
+    "@umage.ai/redline": ">=0.10.0"
   },
   "peerDependenciesMeta": {
     "@umage.ai/redline": {

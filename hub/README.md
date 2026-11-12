@@ -16,7 +16,7 @@ npx @umage.ai/redline-hub
 ```
 
 ```
-  Redline hub 0.2.0  http://127.0.0.1:4780
+  Redline hub 0.3.0  http://127.0.0.1:4780
   Data: /home/me/redline-hub.db
 
   Admin key (shown once; keep it):  rha_…
