@@ -9,7 +9,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { createBridge, TOKEN_HEADER } from '../../agent-bridge/src/handler.ts';
-import { slug } from '../../agent-bridge/src/worktrees.ts';
+import { act, addWorktree, slug } from '../../agent-bridge/src/worktrees.ts';
 
 const FAKE = path.resolve('test/fixtures/agent/fake-agent.mjs');
 const run = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).trim();
@@ -151,4 +151,22 @@ test('worktrees: not a git repo → off, with the reason; turning them on is ref
     assert.match(r.body.error, /git repository/);
   } finally { b.close(); }
   assert.equal(slug('Make it  BLUE — now!'), 'make-it-blue-now');
+});
+
+test('worktrees: on a detached HEAD (a tag checkout in CI) a worktree still starts; merging asks for a branch (L62)', async () => {
+  const root = await repo();
+  run(root, 'checkout', '-q', '--detach');
+  const sha = run(root, 'rev-parse', '--short', 'HEAD');
+  const w = await addWorktree({ root, cwd: root, dir: path.join(root, '.redline/worktrees'), prefix: 'redline/', name: 'Detached work' });
+  assert.equal(w.branch, 'redline/detached-work');
+  assert.equal(w.base, sha);
+  await fs.writeFile(path.join(w.dir, 'b.txt'), 'b\n');
+  run(w.dir, 'add', '.');
+  run(w.dir, 'commit', '-q', '-m', 'b');
+  const m = await act(w, 'merge');
+  assert.equal(m.ok, false);
+  assert.equal(m.kept, true);
+  assert.match(m.message, /detached HEAD/);
+  assert.equal((await act(w, 'discard', true)).ok, true);
+  assert.equal(existsSync(w.dir), false);
 });

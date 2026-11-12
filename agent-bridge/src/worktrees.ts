@@ -52,8 +52,7 @@ export interface Worktree extends WorktreeInfo {
 export async function addWorktree(o: { root: string; cwd: string; dir: string; prefix: string; name: string }): Promise<Worktree> {
   const t = await gitTop(o.root);
   if ('why' in t) throw new Error(`no worktree: ${t.why}`);
-  const base = (await git(t.top, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
-  if (base === 'HEAD') throw new Error('no worktree: the repository is on a detached HEAD (check out a branch first)');
+  const base = await headName(t.top);
   const taken = new Set((await git(t.top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'])).split('\n').map(s => s.trim()));
   const stem = `${o.prefix}${slug(o.name) || 'session'}`;
   let branch = stem;
@@ -66,6 +65,16 @@ export async function addWorktree(o: { root: string; cwd: string; dir: string; p
   const within = (p: string) => { const sub = path.relative(t.top, p); return sub && !sub.startsWith('..') && !path.isAbsolute(sub) ? path.join(dir, sub) : dir; };
   return { branch, base, dir, cwd: within(o.cwd), home: within(o.root), top: t.top, path: rel(o.root, dir) };
 }
+
+/**
+ * The branch the main tree is on, or on a detached HEAD (a tag checkout, a rebase, CI) its short commit:
+ * a worktree still branches from it, and merging back asks for a branch first (`act`). L62.
+ */
+async function headName(top: string): Promise<string> {
+  const name = (await git(top, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim();
+  return name !== 'HEAD' ? name : (await git(top, ['rev-parse', '--short', 'HEAD']).catch(() => 'HEAD')).trim();
+}
+const isBranch = (top: string, name: string) => git(top, ['show-ref', '--verify', '--quiet', `refs/heads/${name}`]).then(() => true, () => false);
 
 const rel = (root: string, p: string) => path.relative(root, p).split(path.sep).join('/');
 
@@ -111,6 +120,7 @@ export async function act(w: Worktree, action: WorktreeAction, confirm = false):
     await git(w.top, ['branch', '-d', w.branch]).catch(() => '');
     return { ok: true, kept: false, message: `${w.branch} had nothing to merge: removed` };
   }
+  if (!(await isBranch(w.top, w.base))) return { ok: false, kept: true, message: `${w.branch} came from a detached HEAD (${w.base}): check out a branch, then merge ${w.branch} by hand` };
   const head = (await git(w.top, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
   if (head !== w.base) return { ok: false, kept: true, message: `The project is on ${head}, not ${w.base}: check out ${w.base} to merge ${w.branch}` };
   const ff = await git(w.top, ['merge-base', '--is-ancestor', w.base, w.branch]).then(() => true, () => false);
@@ -135,7 +145,7 @@ export async function leftover(o: { root: string; dir: string; prefix: string })
   if ('why' in t || !existsSync(o.dir)) return [];
   const out: Worktree[] = [];
   const list = await git(t.top, ['worktree', 'list', '--porcelain']).catch(() => '');
-  const base = (await git(t.top, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim();
+  const base = await headName(t.top);
   for (const block of list.split(/\n\n+/)) {
     const dir = /^worktree (.+)$/m.exec(block)?.[1];
     const branch = /^branch refs\/heads\/(.+)$/m.exec(block)?.[1];
