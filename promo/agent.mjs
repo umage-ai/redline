@@ -147,16 +147,20 @@ try {
   // 6 · done: both applied live, both notes ticked off
   await caption('08 · Done', 'Applied live, both notes ticked off.');
   await glide(await centre(page.locator('h2', { hasText: 'Routes today' })), 700);
-  await hold(1200);
-  await page.keyboard.press('n');
-  await ui('.filters label').filter({ hasText: 'Show done' }).click();
-  await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.querySelectorAll('.card .ag-tag.done').length === 2, null, { timeout: 10_000 });
-  await glide(await centre(ui('.card .ag-tag.done').last()), 700);
-  await hold(2400);
+  await hold(1800);
+
+  // 6b · what it changed: the 📎 on a tab opens the files the session changed, with the diff (D56)
+  await caption('09 · Changes', 'See what each session changed:<br>the files and the diff, on its tab.');
+  await click(ui('.ag-tab button.ag-att').first());
+  await hold(900);
+  await click(ui('.ag-files .ag-frow').first());
+  await ui('.ag-files .ag-diff').waitFor({ timeout: 10_000 });
+  await hold(3200);
+  await click(ui('.ag-tab button.ag-att').first());
+  await hold(400);
 
   // 7 · the terminal, on demand
-  await caption('09 · CLI', 'Each session\'s terminal is one click away.');
-  await page.keyboard.press('n');
+  await caption('10 · CLI', 'Each session\'s terminal is one click away.');
   await click(ui('.xbar button[data-cli]'));
   await page.frameLocator('iframe[title$="terminal"]').locator('.xterm-rows').filter({ hasText: 'update_note' }).waitFor();
   await hold(2600);

@@ -469,6 +469,8 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   // v5: an extension toolbar in place of the main one; its hotkey from anywhere, ← and Esc go back, ✕ closes, a mode leaves it.
   await w(x => {
     x.tbLog = [];
+    x.qHits = 0;
+    x.rl.addButton({ id: 'q', label: 'Q', key: 'q', onClick: () => x.qHits++ });
     x.tb = x.rl.addToolbar({
       id: 'deck', hotkey: 'alt+shift+d',
       render: (el: HTMLElement) => { el.append(Object.assign(document.createElement('button'), { textContent: `Next ${x.tbLog.length}` })); },
@@ -487,8 +489,13 @@ test('API v4: error and change events, beforeSave, card decorators and actions, 
   expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(barBox!.y);
   await expect(ui('.bar button').filter({ hasText: 'Comment' })).toHaveCount(0);
   expect(await w(x => x.tb.isOpen())).toBe(true);
+  await page.keyboard.press('q');   // a main-toolbar button's key: not while another toolbar shows
+  expect(await w(x => x.qHits)).toBe(0);
   await ui('.bar button.back').click();
   await expect(ui('.bar button').filter({ hasText: 'Comment' })).toBeVisible();
+  await page.keyboard.press('q');
+  expect(await w(x => x.qHits)).toBe(1);
+  await w(x => x.rl.removeButton('q'));
   await expect(ui('.attach')).toBeHidden();   // the card goes with its toolbar
   await w(x => x.tb.show());
   await page.keyboard.press('Escape');

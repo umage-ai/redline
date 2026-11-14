@@ -114,7 +114,7 @@ export async function snapshot(cwd: string): Promise<string | null> {
   const tmp = path.join(os.tmpdir(), `agent-bridge-index-${process.pid}-${Math.random().toString(36).slice(2)}`);
   try {
     await fs.copyFile(index, tmp).catch(() => { /* a fresh repo has no index yet: start empty */ });
-    const env = { ...process.env, GIT_INDEX_FILE: tmp, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' };
+    const env = { ...process.env, GIT_INDEX_FILE: tmp, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' };
     const run = (args: string[]) => new Promise<string>((resolve, reject) => execFile('git', args, { cwd, env, windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: 60_000 }, (e, out, err) => e ? reject(new Error(String(err || e.message))) : resolve(String(out))));
     await run(['add', '-A', '--', ':/']);
     return (await run(['write-tree'])).trim() || null;

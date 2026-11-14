@@ -9,7 +9,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { createBridge, TOKEN_HEADER } from '../../agent-bridge/src/handler.ts';
-import { act, addWorktree, slug } from '../../agent-bridge/src/worktrees.ts';
+import { act, addWorktree, git, slug } from '../../agent-bridge/src/worktrees.ts';
 
 const FAKE = path.resolve('test/fixtures/agent/fake-agent.mjs');
 const run = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }).trim();
@@ -169,4 +169,10 @@ test('worktrees: on a detached HEAD (a tag checkout in CI) a worktree still star
   assert.match(m.message, /detached HEAD/);
   assert.equal((await act(w, 'discard', true)).ok, true);
   assert.equal(existsSync(w.dir), false);
+});
+
+test('worktrees: git runs without optional locks, so a background status never blocks a commit with index.lock (L63)', async () => {
+  const root = await repo();
+  // A shell alias sees git's environment: the setting reaches every git the bridge runs.
+  assert.equal((await git(root, ['-c', 'alias.locks=!echo "${GIT_OPTIONAL_LOCKS:-unset}"', 'locks'])).trim(), '0');
 });

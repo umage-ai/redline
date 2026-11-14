@@ -1,6 +1,6 @@
 # Using Redline
 
-Last updated: 2026-11-11 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
+Last updated: 2026-11-13 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
 
 Setup per framework: [FRAMEWORKS.md](FRAMEWORKS.md). Every option and its default: [OPTIONS.md](OPTIONS.md).
 
@@ -169,7 +169,7 @@ All optional; without them Redline behaves as described above. Types come from `
   API v2: `removeButton`, `panelState()` + `panel` event, `setPageKey(fn)` + `page` event; v3: `addSlot`, `gate`;
   v4: `beforeSave`, card decorators and actions, `setPinStyle`, `addMode`, `addSketchTool`, and the
   `error`/`noteUpdated`/`noteRemoved`/`messageSent` events; v5: `addToolbar` (your own toolbar in place of the main one,
-  with a hotkey), `addWindow` (a floating window), `setStatus` (the toolbar's outline or a dot, and a ring or dot on the
+  with a hotkey; while it shows, the main toolbar's button keys rest, so its own may reuse a letter), `addWindow` (a floating window), `setStatus` (the toolbar's outline or a dot, and a ring or dot on the
   closed launcher) with the `status` event, and `setBadge` (the launcher bubble: open notes by default).
 - **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or
   `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text

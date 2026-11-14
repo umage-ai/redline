@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-11-11 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-11-12 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -186,3 +186,6 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 ## D66 — Redline's MCP in the sessions it starts; the note being worked on; session tools (2026-11-11)
 - **Decision:** the bridge takes `mcp(sessionId)` and `sessionEnv` from its host: Claude Code gets `--mcp-config` (a temp file, owner-only, deleted at exit; no quoting through cmd.exe), an ACP agent `mcpServers` in `session/new` when it advertises `mcpCapabilities.http`, every CLI `REDLINE_AGENT_SESSION=s<n>`. Redline hands `<dev server>/__redline/mcp` with a per-process bearer and `x-redline-agent-session`; the handler accepts that bearer from loopback (whatever `mcpTokens` says) and trusts the session header only with it. Tools: `working_on` (`{ id | null }`, the session's `focus` until its turn is done: that note's tag says "is working on it", the others "sent to …, next", the tab "On: …"), `attach`, `list_agent_sessions`, `get_agent_session` (with the screen or transcript tail). A session Redline didn't start can pass `session`. Node only: the agent package is Node-only; stdio `redline mcp` and .NET keep the note tools.
 - **Why:** headers in the MCP config name the session without the agent having to (it may never read env vars); a bearer of its own keeps a page from posing as a session, while loopback-only keeps `mcpTokens` users working. `working_on` rather than an `update_note` field: it changes no note, and clears itself. **Revisit if:** ACP agents without HTTP MCP matter (then a stdio bridge), or Claude Code's `--mcp-config` changes.
+
+## D67 — ⚙ opens on an overview: a row per CLI and one for the sessions, each opening its options (2026-11-12)
+- **Decision:** ⚙ lists a row per CLI (name, "In use" on the one the next prompt runs, a summary: "Smart · high", "Its own config") and a Sessions row ("One kept going", "New per prompt, up to 3 · worktrees"); a row is a button (`aria-expanded`) that opens its options under it, one row at a time, closed when ⚙ opens. A CLI's row holds "Use <name> for the next prompt" (several CLIs) and its Model and Effort; the Sessions row holds the mode and worktrees. Replaces the radio list of CLIs with the picked one's selects always shown (D62). **Why:** with two CLIs, models, efforts, sessions and worktrees all open the card was a form to read through; the overview says what is set at a glance, and looking at another CLI's options no longer switches to it. **Revisit if:** people mostly come to ⚙ to change the model (then open the in-use CLI's row by default).

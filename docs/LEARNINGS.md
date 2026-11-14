@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-12 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-13 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -174,3 +174,6 @@ Prune entries whose cause is gone from the code.
 
 ## L62 — The release build failed the worktree and attachment e2e tests; the dry run had passed
 - **Cause / fix:** a tag push checks out a detached HEAD, and a worktree refused to start without a branch to come from, so the session never started ("Not started"). A dry run from `main` is on a branch and can't see it. The worktree now branches from the commit; Merge then asks for a branch (Keep and Discard work as before). **Guard:** `agent-worktrees.test.ts` "on a detached HEAD".
+
+## L63 — A worktree unit test failed now and then: `git commit` → "index.lock: File exists"
+- **Cause / fix:** the bridge's `git status` on a session's worktree (its state for the card) refreshes the index and takes `index.lock` for that; a commit at the same moment, the test's or a person's, fails. Every git the bridge runs now has `GIT_OPTIONAL_LOCKS=0` (git's own advice for background readers). **Guard:** `agent-worktrees.test.ts` "without optional locks".

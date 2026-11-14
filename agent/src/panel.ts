@@ -343,6 +343,19 @@ const STYLES = `
 .ag-radio input { accent-color: var(--ink); margin: 0; flex: none; }
 .ag-radio span { min-width: 0; }
 .ag-radio small { margin-left: auto; color: var(--fg-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-sgroup { display: grid; border-radius: 9px; background: var(--bg-2); border: 1px solid transparent; }
+.ag-sgroup.open { border-color: var(--line); }
+.ag-srow { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--fg); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.ag-srow:hover { background: var(--bg-3); }
+.ag-srow .ag-sname { font-weight: 600; white-space: nowrap; }
+.ag-srow .ag-sbadge { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 22%, var(--bg-3)); color: var(--fg); white-space: nowrap; }
+.ag-srow small { margin-left: auto; color: var(--fg-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ag-srow .ag-ic { flex: none; color: var(--fg-2); transform: rotate(-90deg); transition: transform .15s; }
+.ag-sgroup.open .ag-srow .ag-ic { transform: none; }
+.ag-sbody { display: grid; gap: 12px; padding: 4px 10px 12px; }
+.ag-sbody .ag-radio { background: var(--bg-3); }
+.ag-use { justify-self: start; padding: 6px 12px; border-radius: 7px; border: 0; background: var(--bg-3); color: var(--fg); font: inherit; cursor: pointer; }
+.ag-use:hover { background: color-mix(in srgb, var(--fg) 12%, var(--bg-3)); }
 .ag-field { display: grid; gap: 0; }
 .ag-field select { width: 100%; font: inherit; color: var(--fg); background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
 .ag-field select:disabled { opacity: .6; }
@@ -710,8 +723,7 @@ export default async function agentPanel(rl: RedlineApi) {
     const term = btn(icon('term'), open ? 'Hide the CLI window (the session keeps running)' : needsCli ? `${who(info)} is asking: answer in the CLI window` : `Show ${who(info)}'s CLI window`,
       () => win?.toggle(), 'ag-icon ag-term' + (needsCli && !open ? ' ask' : ''), 'term', { 'aria-label': 'CLI window', 'aria-pressed': String(open) });
     term.dataset.cli = '';
-    const firstSetting = multi() ? `set-cli:${pick}` : picked()?.models?.length || picked()?.pending ? 'set-model' : picked()?.efforts?.length ? 'set-effort' : `set-mode:${group.mode}`;
-    const gear = btn(icon('gear'), 'Agent settings: CLI, model, effort, sessions', () => openView('settings', firstSetting), 'ag-icon ag-gear', 'gear',
+    const gear = btn(icon('gear'), 'Agent settings: CLI, model, effort, sessions', () => { setOpen = null; openView('settings', `set-cli:${pick}`); }, 'ag-icon ag-gear', 'gear',
       { 'aria-label': 'Agent settings', 'aria-haspopup': 'dialog', 'aria-expanded': String(view === 'settings') });
     // Ended sessions' branches waiting for a decision (D64): one button with their count.
     const left = group.worktrees?.left ?? [];
@@ -817,13 +829,17 @@ export default async function agentPanel(rl: RedlineApi) {
   const setPick = (id: string) => { pick = id; rememberCli(id); };
 
   /**
-   * The settings (⚙, D62): the CLI (several), its model and effort (those it offers), new session per
-   * prompt or one kept going, and reset. Kept per viewer in this browser (model and effort per CLI);
-   * the project's options are the defaults. They apply to new sessions.
+   * The settings (⚙, D62, D67): an overview first, one row per CLI ("Claude Code · In use · Smart ·
+   * high") and one for the sessions; a row opens its options under it, one at a time. A CLI's row
+   * holds "Use for the next prompt" (several CLIs) and its model and effort (those it offers); the
+   * sessions row holds new session per prompt or one kept going, and worktrees. Kept per viewer in
+   * this browser (model and effort per CLI); the project's options are the defaults. They apply to
+   * new sessions.
    */
   let setEl: HTMLElement | null = null;
+  let setOpen: string | null = null;   // the row open in ⚙: 'cli:<id>', 'sessions', or none (the overview)
   function renderSettings(): HTMLElement {
-    const c = picked(), d = setup.defaults ?? {}, mine = pickFor(c, per);
+    const d = setup.defaults ?? {};
     const box = el('div', { class: 'ag-set', attrs: { role: 'dialog', 'aria-label': 'Agent settings' } }, el('h4', { attrs: { 'aria-hidden': 'true' } }, 'Agent settings'));
     const radios = (legend: string, nameAttr: string, items: { value: string; label: string; sub?: string; k: string }[], checked: string, on: (v: string) => void) => {
       const fs = el('fieldset', {}, el('legend', {}, legend));
@@ -840,8 +856,29 @@ export default async function agentPanel(rl: RedlineApi) {
       sel.addEventListener('change', () => on(sel.value));
       return el('div', { class: 'ag-field' }, el('label', { class: 'ag-lbl', htmlFor: id }, label), sel);
     };
-    const setFor = (field: 'model' | 'effort', v: string) => {
-      if (!c) return;
+    /** A row of the overview: its name, a summary of what it is set to, and its options under it when open. */
+    const row = (id: string, k: string, label: string, badge: string | null, summary: string, body: () => (Node | null)[]) => {
+      const open = setOpen === id, bodyId = `ag-sb-${k.replace(/[^\w-]/g, '_')}`;
+      const head = el('button', {
+        class: 'ag-srow', data: { k }, attrs: { 'aria-expanded': String(open), 'aria-controls': open ? bodyId : undefined },
+        title: open ? `Close the options of ${label}` : `${label}: ${summary}. Open its options`,
+        onclick: () => { setOpen = open ? null : id; wantFocus = k; refreshSettings(); },
+      }, el('span', { class: 'ag-sname' }, label), badge ? el('span', { class: 'ag-sbadge' }, badge) : null, el('small', {}, summary), icon('down'));
+      return el('div', { class: 'ag-sgroup' + (open ? ' open' : '') }, head, open ? el('div', { class: 'ag-sbody', id: bodyId }, ...body()) : null);
+    };
+    const nameIn = (list: { value: string; name?: string }[] | undefined, v?: string) => { const m = list?.find(x => x.value === v); return m ? m.name ?? m.value : undefined; };
+    const defaultsFor = (_c: Cli) => d;   // the project's model and effort, as Default (…) shows them
+    const summaryOf = (c: Cli) => {
+      if (c.pending) return 'Asking for its models…';
+      if (!c.models?.length && !c.efforts?.length) return 'Its own config';
+      const mine = pickFor(c, per), dd = defaultsFor(c);
+      const parts = [
+        c.models?.length ? nameIn(c.models, mine.model) ?? (dd.model ? `Default (${dd.model})` : 'Default model') : null,
+        c.efforts?.length ? nameIn(c.efforts, mine.effort) ?? (dd.effort ? `default (${dd.effort})` : 'default effort') : null,
+      ];
+      return parts.filter(Boolean).join(' · ');
+    };
+    const setFor = (c: Cli, field: 'model' | 'effort', v: string) => {
       const next = { ...per[c.id], [field]: v || undefined };
       if (!next.model) delete next.model;
       if (!next.effort) delete next.effort;
@@ -850,29 +887,43 @@ export default async function agentPanel(rl: RedlineApi) {
       rememberSettings(per);
       refreshSettings();
     };
-    if (multi()) box.append(radios('Agent', 'ag-set-cli', clis().map(x => ({ value: x.id, label: x.name, sub: x.name !== x.command ? x.command : undefined, k: `set-cli:${x.id}` })), pick, v => { setPick(v); refreshSettings(); sync(); }));
-    if (c?.pending) {
-      box.append(el('div', { class: 'ag-field' }, el('label', { class: 'ag-lbl', htmlFor: 'ag-set-model' }, 'Model'),
-        el('select', { id: 'ag-set-model', disabled: true, data: { k: 'set-model' } }, el('option', {}, `Asking ${c.name} for its models…`))));
-    } else if (c?.models?.length) box.append(select('Model', 'set-model', c.models, mine.model, d.model, v => setFor('model', v)));
-    if (c?.efforts?.length) box.append(select('Effort', 'set-effort', c.efforts, mine.effort, d.effort, v => setFor('effort', v)));
-    if (c && !c.pending && !c.models?.length && !c.efforts?.length) box.append(el('div', { class: 'ag-note' }, `${c.name} offers no model or effort choice here: it uses its own config.`));
-    box.append(radios('Sessions', 'ag-set-mode', [
-      { value: 'fresh', label: 'New session per prompt', sub: `up to ${group.max} at once`, k: 'set-mode:fresh' },
-      { value: 'shared', label: 'Keep one session going', sub: 'keeps its context', k: 'set-mode:shared' },
-    ], group.mode, v => void post('/mode', { mode: v }).then(g => { group = { ...group, ...g }; sync(); }).catch(fail)));
-    // Worktrees (D64): a toggle, off with the reason when the project isn't a git repo.
+    const cliBody = (c: Cli) => {
+      const mine = pickFor(c, per), dd = defaultsFor(c), kids: (Node | null)[] = [];
+      if (multi()) {
+        kids.push(c.id === pick
+          ? el('div', { class: 'ag-note' }, `${c.name} runs the next prompt.`)
+          : el('button', { class: 'ag-use', data: { k: `use-cli:${c.id}` }, title: `Run ${c.name} for the next prompt`, onclick: () => { setPick(c.id); wantFocus = `set-cli:${c.id}`; refreshSettings(); sync(); } }, `Use ${c.name} for the next prompt`));
+      }
+      if (c.pending) {
+        kids.push(el('div', { class: 'ag-field' }, el('label', { class: 'ag-lbl', htmlFor: 'ag-set-model' }, 'Model'),
+          el('select', { id: 'ag-set-model', disabled: true, data: { k: 'set-model' } }, el('option', {}, `Asking ${c.name} for its models…`))));
+      } else if (c.models?.length) kids.push(select('Model', 'set-model', c.models, mine.model, dd.model, v => setFor(c, 'model', v)));
+      if (c.efforts?.length) kids.push(select('Effort', 'set-effort', c.efforts, mine.effort, dd.effort, v => setFor(c, 'effort', v)));
+      if (!c.pending && !c.models?.length && !c.efforts?.length) kids.push(el('div', { class: 'ag-note' }, `${c.name} offers no model or effort choice here: it uses its own config.`));
+      return kids;
+    };
+    box.append(el('div', { class: 'ag-lbl' }, multi() ? 'Agents' : 'Agent'));
+    for (const c of clis()) box.append(row(`cli:${c.id}`, `set-cli:${c.id}`, c.name, multi() && c.id === pick ? 'In use' : null, summaryOf(c), () => cliBody(c)));
+    // Sessions: the server's mode, and worktrees (D64): a toggle, off with the reason when the project isn't a git repo.
     const wt = group.worktrees;
-    if (wt) {
-      const off = !wt.git;
-      const input = el('input', { type: 'checkbox', checked: wt.on, disabled: off, data: { k: 'set-wt' }, attrs: { 'aria-describedby': 'ag-wt-help' } });
-      input.addEventListener('change', () => void post('/worktrees', { on: input.checked }).then(g => { group = { ...group, ...g }; refreshSettings(); sync(); }).catch(e => { input.checked = !input.checked; fail(e); }));
-      const help = off ? `Needs a git repository (${wt.why ?? 'checking…'}).`
-        : `Its own branch (redline/…) and folder in .redline/worktrees, so sessions never edit the same files; when it ends: keep, merge or discard the branch.${group.mode === 'shared' ? ' Only with a new session per prompt.' : ''} No node_modules there: the agent can edit and use git; running the app or tests in it needs an install.`;
-      box.append(el('fieldset', {}, el('legend', {}, 'Worktrees'),
-        el('label', { class: 'ag-radio' + (off ? ' off' : '') }, input, el('span', {}, 'Each new session in its own git worktree')),
-        el('div', { class: 'ag-help', id: 'ag-wt-help' }, help)));
-    }
+    const sessSummary = (fresh() ? `New per prompt, up to ${group.max}` : 'One kept going') + (wt?.on && fresh() ? ' · worktrees' : '');
+    box.append(row('sessions', 'set-sessions', 'Sessions', null, sessSummary, () => {
+      const kids: (Node | null)[] = [radios('Sessions', 'ag-set-mode', [
+        { value: 'fresh', label: 'New session per prompt', sub: `up to ${group.max} at once`, k: 'set-mode:fresh' },
+        { value: 'shared', label: 'Keep one session going', sub: 'keeps its context', k: 'set-mode:shared' },
+      ], group.mode, v => void post('/mode', { mode: v }).then(g => { group = { ...group, ...g }; refreshSettings(); sync(); }).catch(fail))];
+      if (wt) {
+        const off = !wt.git;
+        const input = el('input', { type: 'checkbox', checked: wt.on, disabled: off, data: { k: 'set-wt' }, attrs: { 'aria-describedby': 'ag-wt-help' } });
+        input.addEventListener('change', () => void post('/worktrees', { on: input.checked }).then(g => { group = { ...group, ...g }; refreshSettings(); sync(); }).catch(e => { input.checked = !input.checked; fail(e); }));
+        const help = off ? `Needs a git repository (${wt.why ?? 'checking…'}).`
+          : `Its own branch (redline/…) and folder in .redline/worktrees, so sessions never edit the same files; when it ends: keep, merge or discard the branch.${group.mode === 'shared' ? ' Only with a new session per prompt.' : ''} No node_modules there: the agent can edit and use git; running the app or tests in it needs an install.`;
+        kids.push(el('fieldset', {}, el('legend', {}, 'Worktrees'),
+          el('label', { class: 'ag-radio' + (off ? ' off' : '') }, input, el('span', {}, 'Each new session in its own git worktree')),
+          el('div', { class: 'ag-help', id: 'ag-wt-help' }, help)));
+      }
+      return kids;
+    }));
     box.append(el('footer', {}, el('span', {}, 'Applies to new sessions.'),
       el('button', { data: { k: 'set-reset' }, title: 'Forget this browser\'s choices: the project\'s CLI, model, effort and sessions', onclick: reset }, 'Reset to project defaults')));
     // Esc in a field (the core leaves keys in fields alone): close the settings, back on ⚙.

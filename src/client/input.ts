@@ -124,7 +124,9 @@ function onKey(ctx: Ctx, e: KeyboardEvent) {
   else if (k === 'n') ctx.togglePanel();
   else {
     const m = ctx.ext.modes.find(x => x.key?.toLowerCase() === k);
-    const b = m ? null : ctx.ext.buttons.find(x => x.key?.toLowerCase() === k);
+    // A main-toolbar button's key works while that toolbar shows: an extension toolbar in its place
+    // (v5) leaves the key to the extension, so the two can share a letter (decks: A is Agent, Deck's A + Slide).
+    const b = m || ctx.extToolbar() ? null : ctx.ext.buttons.find(x => x.key?.toLowerCase() === k);
     if (m) ctx.setMode(`ext:${m.id}`);
     else if (b) safely(() => b.onClick(), undefined);
     else return;

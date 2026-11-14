@@ -11,10 +11,14 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { WorktreeInfo } from './types.ts';
 
-/** Runs git; resolves with stdout, rejects with git's own message. */
+/**
+ * Runs git; resolves with stdout, rejects with git's own message. Without optional locks: a background
+ * `git status` would otherwise take index.lock to refresh the index, and the person's (or the agent's)
+ * own `git commit` at that moment fails with "index.lock: File exists" (L63).
+ */
 export function git(cwd: string, args: string[], timeout = 30_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, timeout, windowsHide: true, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' } }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd, timeout, windowsHide: true, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' } }, (err, stdout, stderr) => {
       if (err) reject(Object.assign(new Error(String(stderr || err.message).trim().split('\n').pop() || 'git failed'), { code: (err as { code?: unknown }).code }));
       else resolve(String(stdout));
     });

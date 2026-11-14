@@ -35,6 +35,13 @@ const apply = (page: Page) => agentBar(page).locator('button.ag-primary');
 const tab = (page: Page, id: string) => agentBar(page).locator(`.ag-tab[data-id="${id}"]`);
 const card = (page: Page) => ui(page, '.attach[data-toolbar="agent"] .ag-card');
 const settings = (page: Page) => ui(page, '.attach[data-toolbar="agent"] .ag-set');
+/** A row of ⚙'s overview (D67): `set-cli:<id>` or `set-sessions`; `open` clicks it open when it is closed. */
+const setRow = (page: Page, k: string) => settings(page).locator(`button.ag-srow[data-k="${k}"]`);
+async function openRow(page: Page, k: string) {
+  const r = setRow(page, k);
+  if ((await r.getAttribute('aria-expanded')) !== 'true') await r.click();
+  await expect(r).toHaveAttribute('aria-expanded', 'true');
+}
 const cliMenu = (page: Page) => ui(page, '.attach[data-toolbar="agent"] [role="menu"]');
 const win = (page: Page) => ui(page, '.win[data-win="agent"]');
 const api = async (page: Page) => {
@@ -232,6 +239,7 @@ test('agent toolbar: fresh sessions, a tab each, named by their notes; a waiting
 
   // Fresh, in ⚙: every prompt starts its own session.
   await agentBar(page).locator('button.ag-gear').click();
+  await openRow(page, 'set-sessions');
   await settings(page).getByRole('radio', { name: /New session per prompt/ }).check();
   await expect.poll(async () => (await (await api(page)).info()).mode).toBe('fresh');
   await agentBar(page).locator('button.ag-gear').click();
@@ -411,14 +419,15 @@ test('agent toolbar: hold Apply (or right-click, Alt+↓) to switch the CLI; rem
   await page.setViewportSize({ width: 390, height: 760 });
   await expect(apply(page)).toBeInViewport();
   await expect(apply(page)).toBeDisabled();
-  const pb = (await apply(page).boundingBox())!;
-  await page.mouse.click(pb.x + pb.width / 2, pb.y + pb.height / 2, { button: 'right' });
+  // Through the locator, not a bounding box: the toolbar is redrawn on every poll, so a box read first
+  // can belong to a button already replaced (null). force: a disabled button still takes the right-click.
+  await apply(page).click({ button: 'right', force: true });
   await cliMenu(page).getByRole('menuitemradio', { name: /Fake Code/ }).click();
   await expect(apply(page)).toHaveAttribute('title', /with Fake Code/);
   await page.setViewportSize({ width: 1280, height: 720 });
 });
 
-test('agent toolbar: ⚙ settings: CLI, model and effort per CLI, sessions; remembered after a reload; only offered values reach the CLI; reset (D62)', async ({ page }) => {
+test('agent toolbar: ⚙ settings: an overview of rows that open; CLI, model and effort per CLI, sessions; remembered after a reload; only offered values reach the CLI; reset (D62, D67)', async ({ page }) => {
   await openOverlay(page, f);
   await page.keyboard.press('c');
   await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
@@ -428,29 +437,50 @@ test('agent toolbar: ⚙ settings: CLI, model and effort per CLI, sessions; reme
   await gear.click();
   const set = settings(page);
   await expect(set).toHaveAttribute('role', 'dialog');
-  await expect(set.getByRole('radio', { name: /Fake Code/ })).toBeFocused();   // opened on the current CLI
-  await expect(set.getByRole('radio', { name: /Fake Code/ })).toBeChecked();
+  // The overview: a row per CLI and one for the sessions, each with what it is set to; nothing open yet.
+  await expect(set.locator('button.ag-srow')).toHaveCount(3);
+  await expect(setRow(page, 'set-cli:fake')).toBeFocused();   // opened on the current CLI
+  await expect(setRow(page, 'set-cli:fake')).toHaveAttribute('aria-expanded', 'false');
+  await expect(setRow(page, 'set-cli:fake')).toContainText('In use');
+  await expect(setRow(page, 'set-cli:fake')).toContainText('Default model · default effort');
+  await expect(setRow(page, 'set-cli:fake-two')).toContainText('Its own config');
+  await expect(setRow(page, 'set-sessions')).toContainText('One kept going');   // the project's sessions: 'shared'
+  await expect(set.getByLabel('Model')).toHaveCount(0);
+  await expect(set.locator('footer')).toContainText('Applies to new sessions.');
+
+  // A row opens its options under it.
+  await setRow(page, 'set-cli:fake').click();
+  await expect(setRow(page, 'set-cli:fake')).toHaveAttribute('aria-expanded', 'true');
+  await expect(setRow(page, 'set-cli:fake')).toBeFocused();
   const model = set.getByLabel('Model'), effort = set.getByLabel('Effort');
   await expect(model.locator('option')).toHaveText(['Default', 'Fast', 'Smart']);
   await expect(effort.locator('option')).toHaveText(['Default', 'low', 'high']);
-  await expect(set.getByRole('radio', { name: /Keep one session going/ })).toBeChecked();   // the project's sessions: 'shared'
-  await expect(set.locator('footer')).toContainText('Applies to new sessions.');
+  await expect(set.locator('.ag-note')).toHaveText('Fake Code runs the next prompt.');
 
-  // Picked per CLI: Fake Two offers neither (they hide), Fake Code keeps its own.
+  // Picked per CLI: Fake Two offers neither, Fake Code keeps its own; one row open at a time.
   await model.selectOption('smart');
   await effort.selectOption('high');
-  await set.getByRole('radio', { name: /Fake Two/ }).check();
+  await expect(setRow(page, 'set-cli:fake')).toContainText('Smart · high');
+  await setRow(page, 'set-cli:fake-two').click();
+  await expect(setRow(page, 'set-cli:fake')).toHaveAttribute('aria-expanded', 'false');
   await expect(set.getByLabel('Model')).toHaveCount(0);
   await expect(set.locator('.ag-note')).toHaveText('Fake Two offers no model or effort choice here: it uses its own config.');
+  await set.getByRole('button', { name: 'Use Fake Two for the next prompt' }).click();
   await expect(apply(page)).toHaveAttribute('title', /with Fake Two/);
-  await set.getByRole('radio', { name: /Fake Code/ }).check();
+  await expect(setRow(page, 'set-cli:fake-two')).toContainText('In use');
+  await expect(setRow(page, 'set-cli:fake')).not.toContainText('In use');
+  await setRow(page, 'set-cli:fake').click();
   await expect(set.getByLabel('Model')).toHaveValue('smart');
   await expect(set.getByLabel('Effort')).toHaveValue('high');
+  await set.getByRole('button', { name: 'Use Fake Code for the next prompt' }).click();
+  await expect(apply(page)).toHaveAttribute('title', /with Fake Code/);
 
   // Remembered after a reload (this browser), and sent with the prompt: the CLI gets them as flags.
   await page.reload({ waitUntil: 'networkidle' });
   if (!(await agentBar(page).isVisible())) await page.keyboard.press('Alt+Shift+KeyA');
   await gear.click();
+  await expect(setRow(page, 'set-cli:fake')).toContainText('Smart · high');
+  await openRow(page, 'set-cli:fake');
   await expect(settings(page).getByLabel('Model')).toHaveValue('smart');
   await expect(settings(page).getByLabel('Effort')).toHaveValue('high');
   await gear.click();
@@ -465,14 +495,22 @@ test('agent toolbar: ⚙ settings: CLI, model and effort per CLI, sessions; reme
 
   // Sessions: the server's mode. Reset: the project's CLI, model, effort and sessions again; Esc in a field closes.
   await gear.click();
+  await openRow(page, 'set-sessions');
   await settings(page).getByRole('radio', { name: /New session per prompt/ }).check();
   await expect.poll(async () => (await a.info()).mode).toBe('fresh');
-  await settings(page).getByRole('radio', { name: /Fake Two/ }).check();
+  await expect(setRow(page, 'set-sessions')).toContainText('New per prompt');
+  await openRow(page, 'set-cli:fake-two');
+  await settings(page).getByRole('button', { name: 'Use Fake Two for the next prompt' }).click();
   await settings(page).getByRole('button', { name: 'Reset to project defaults' }).click();
-  await expect(settings(page).getByRole('radio', { name: /Fake Code/ })).toBeChecked();
+  await expect(setRow(page, 'set-cli:fake')).toContainText('In use');
+  await expect(setRow(page, 'set-cli:fake')).toContainText('Default model · default effort');
+  await expect(setRow(page, 'set-sessions')).toContainText('One kept going');
+  await openRow(page, 'set-cli:fake');
   await expect(settings(page).getByLabel('Model')).toHaveValue('');
   await expect(settings(page).getByLabel('Effort')).toHaveValue('');
+  await openRow(page, 'set-sessions');
   await expect(settings(page).getByRole('radio', { name: /Keep one session going/ })).toBeChecked();
+  await openRow(page, 'set-cli:fake');
   expect((await a.info()).mode).toBe('shared');
   expect(await page.evaluate(() => [localStorage.getItem('redline.agent.settings'), localStorage.getItem('redline.agent.cli')])).toEqual([null, null]);
   await settings(page).getByLabel('Model').focus();
@@ -491,6 +529,7 @@ test('agent toolbar: ⚙ worktrees: a fresh session on its own branch; when it e
   await a.post('/mode', { mode: 'fresh' });
   const gear = agentBar(page).locator('button.ag-gear');
   await gear.click();
+  await openRow(page, 'set-sessions');
   const toggle = settings(page).getByRole('checkbox', { name: 'Each new session in its own git worktree' });
   await expect(toggle).toBeEnabled();   // the fixture lives in a git repo
   await expect(toggle).not.toBeChecked();
