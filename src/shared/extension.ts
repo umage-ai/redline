@@ -211,6 +211,16 @@ export interface RedlineStatus {
  */
 export type RedlineBadge = (open: number) => string | number | null | undefined;
 
+/** A toast's options (v7). */
+export interface RedlineToastOptions {
+  error?: boolean;
+  /** Buttons after the message, e.g. "Send to the agent". */
+  actions?: RedlineToastAction[];
+  /** How long it shows, in ms (default 2.6 s; 8 s with actions). */
+  ms?: number;
+}
+export interface RedlineToastAction { label: string; title?: string; primary?: boolean; onClick(): void }
+
 /** Which store call failed (v4). */
 export type RedlineOp = 'load' | 'create' | 'update' | 'remove' | 'message';
 
@@ -267,9 +277,9 @@ export interface RedlineApi {
    * removeSlot and gate; 4 adds beforeSave, card decorators and actions, setPinStyle, addMode,
    * addSketchTool and the error/noteUpdated/noteRemoved/messageSent events; 5 adds addWindow,
    * addToolbar, setStatus, statuses, setBadge and the status event; 6 adds addTargetEnricher and
-   * beforeCreate (also as `rl.on('beforeCreate', fn)`). Check `rl.version >= 6`.
+   * beforeCreate (also as `rl.on('beforeCreate', fn)`); 7 adds toast options with action buttons. Check `rl.version >= 7`.
    */
-  version: 6;
+  version: 7;
   /** Adds a toolbar button; a button with the same id is replaced (use that to update one). */
   addButton(b: RedlineButton): void;
   /** Removes a toolbar button added with addButton (v2). */
@@ -325,9 +335,13 @@ export interface RedlineApi {
   togglePanel(open?: boolean): void;
   /** Whether the notes panel is open and how wide it is (v2). */
   panelState(): RedlinePanelState;
-  toast(message: string, error?: boolean): void;
-  /** Notes for this page (this app), or all notes. */
-  notes(scope?: 'page' | 'all'): Note[];
+  /**
+   * A short message at the bottom (or next to a moved toolbar). With `actions` (v7) it carries buttons, stays
+   * longer (8 s, paused while the pointer is on it) and has ✕; a click on an action closes it. Returns close.
+   */
+  toast(message: string, options?: boolean | RedlineToastOptions): () => void;
+  /** Notes for this page (this app); this app's notes on every page (`'app'`, since 0.10.2); or all notes (every app in a monorepo). */
+  notes(scope?: 'page' | 'app' | 'all'): Note[];
   /** The normalised page key notes are grouped by. */
   page(): string;
   /** Group notes by your own key, e.g. one key per deck regardless of the slide hash (v2). null restores the default. */

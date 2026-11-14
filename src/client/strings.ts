@@ -88,6 +88,8 @@ export const STRINGS = {
   written: 'Written to {file}',
   writeFirst: 'Write a comment first',
   saved: 'Saved → {file}',
+  dismiss: 'Dismiss',
+  popDragTitle: 'Drag to move this box',
   saveFailed: 'Could not save: {error}',
   saving: 'Saving…',
   savingLarge: 'Large pages take a little longer to screenshot. Hold on…',

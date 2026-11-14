@@ -438,7 +438,7 @@ test('agent toolbar: ⚙ settings: an overview of rows that open; CLI, model and
   const set = settings(page);
   await expect(set).toHaveAttribute('role', 'dialog');
   // The overview: a row per CLI and one for the sessions, each with what it is set to; nothing open yet.
-  await expect(set.locator('button.ag-srow')).toHaveCount(3);
+  await expect(set.locator('button.ag-srow')).toHaveCount(4);   // two CLIs, Notes (D68), Sessions
   await expect(setRow(page, 'set-cli:fake')).toBeFocused();   // opened on the current CLI
   await expect(setRow(page, 'set-cli:fake')).toHaveAttribute('aria-expanded', 'false');
   await expect(setRow(page, 'set-cli:fake')).toContainText('In use');
@@ -623,4 +623,76 @@ test('agent toolbar: the note an agent says it is on (MCP working_on, D66) is ta
   await page.keyboard.press('n');
   await expect(ui(page, `.card[data-id="${second.id}"] .ag-tag`)).toHaveText(`${NAME} is working on it`);
   await expect(ui(page, `.card[data-id="${first.id}"] .ag-tag`)).toHaveText(`⤳ sent to ${NAME}, next`);
+});
+
+test('agent toolbar: Apply hands over the open notes on every page by default; ⚙ › Notes narrows it to this page; ⋯ the other once (D68)', async ({ page }) => {
+  // A note on the index page, then the agent toolbar on another page.
+  await openOverlay(page, f);
+  const pinned = await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
+  // The overlay comes back open after the navigation (sessionStorage); Alt+Shift+A opens the agent toolbar from anywhere.
+  await page.goto(`${f.url}/edit.html`, { waitUntil: 'networkidle' });
+  await expect(ui(page, '.launcher')).toBeAttached();
+  if (!(await agentBar(page).isVisible())) await page.keyboard.press('Alt+Shift+KeyA');
+  await expect(agentBar(page)).toBeVisible();
+  const a = await api(page);
+  await expect(apply(page)).toHaveAttribute('data-count', '1');
+  await expect(apply(page)).toHaveAttribute('title', /the open notes on every page/);
+
+  // ⚙ › Notes: this page only. Nothing here: Apply is off and says where the note is; remembered in this browser.
+  await agentBar(page).locator('button.ag-gear').click();
+  await expect(setRow(page, 'set-notes')).toContainText('Every page');
+  await openRow(page, 'set-notes');
+  await settings(page).getByRole('radio', { name: /Open notes on this page/ }).check();
+  await expect(setRow(page, 'set-notes')).toContainText('This page only');
+  await agentBar(page).locator('button.ag-gear').click();
+  await expect(apply(page)).toHaveAttribute('data-count', '0');
+  await expect(apply(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(apply(page)).toHaveAttribute('title', /1 on other pages: ⋯ or ⚙ › Notes/);
+  expect(await page.evaluate(() => localStorage.getItem('redline.agent.scope'))).toBe('page');
+
+  // ⋯: Apply on every page, this time only; the note goes to the session, the setting stays.
+  await agentBar(page).locator('button.ag-cmds').click();
+  const once = cliMenu(page).locator('[data-k="cmd:scope"]');
+  await expect(once).toHaveText(/Apply 1 note on every page/);
+  await expect(once).toBeFocused();
+  await once.click();
+  await expect.poll(async () => (await a.info()).sessions[0]?.sent ?? []).toEqual([pinned.id]);
+  await expect(apply(page)).toHaveAttribute('data-count', '0');
+  expect(await page.evaluate(() => localStorage.getItem('redline.agent.scope'))).toBe('page');
+
+  // Reset: every page again.
+  await agentBar(page).locator('button.ag-gear').click();
+  await settings(page).getByRole('button', { name: 'Reset to project defaults' }).click();
+  await expect(setRow(page, 'set-notes')).toContainText('Every page');
+  expect(await page.evaluate(() => localStorage.getItem('redline.agent.scope'))).toBeNull();
+});
+
+test('after a save, a toast offers to send the note (or every open note) to the agent; ⚙ › Notes turns it off (D69)', async ({ page }) => {
+  await openOverlay(page, f);
+  const offer = ui(page, '.toast.act');
+  await comment(page, page.getByTestId('agent-save'), 'Make this secondary');
+  await expect(offer.locator('.msg')).toHaveText(/^Saved → .+\.md · Send to Fake Code\?$/);
+  await expect(offer.locator('button.btn')).toHaveText(['This note']);   // the only open note
+
+  const second = await comment(page, page.getByTestId('agent-save'), 'And smaller');
+  await expect(offer.locator('button.btn')).toHaveText(['This note', 'All 2']);
+  const a = await api(page);
+  await offer.getByRole('button', { name: 'This note' }).click();
+  await expect(offer).toBeHidden();
+  await expect.poll(async () => (await a.info()).sessions[0]?.sent ?? []).toEqual([second.id]);
+  await expect(agentBar(page)).toBeHidden();   // sent from the main toolbar: no detour
+
+  // Opening the agent toolbar takes the offer away; ⚙ › Notes turns it off (this browser), Reset back on.
+  await comment(page, page.getByTestId('agent-save'), 'Third');
+  await expect(offer.locator('button.btn')).toHaveText(['This note', 'All 2']);   // the second is with the session
+  await page.keyboard.press('a');
+  await expect(offer).toBeHidden();
+  await agentBar(page).locator('button.ag-gear').click();
+  await openRow(page, 'set-notes');
+  await settings(page).getByRole('checkbox', { name: 'Offer to send the new note to the agent' }).uncheck();
+  expect(await page.evaluate(() => localStorage.getItem('redline.agent.offer'))).toBe('0');
+  await page.keyboard.press('Escape');   // the settings
+  await page.keyboard.press('Escape');   // back to the main toolbar
+  await comment(page, page.getByTestId('agent-save'), 'Fourth');
+  await expect(ui(page, '.toast')).not.toHaveClass(/act/);
 });

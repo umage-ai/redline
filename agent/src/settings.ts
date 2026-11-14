@@ -9,12 +9,22 @@ export interface Cli { id: string; name: string; command: string; models?: Choic
 /** Per CLI id: the model and effort picked (none: the project's default). */
 export type PerCli = Record<string, { model?: string; effort?: string }>;
 
+/** Which open notes Apply hands over (D68): this app's on every page, or this page's only. */
+export type Scope = 'app' | 'page';
+
 export const CLI_KEY = 'redline.agent.cli';
+export const SCOPE_KEY = 'redline.agent.scope';
 export const SETTINGS_KEY = 'redline.agent.settings';
+export const OFFER_KEY = 'redline.agent.offer';
 
 // localStorage can be missing or throw (a private window, blocked site data): the choice then lasts this page only.
 export const recallCli = () => { try { return localStorage.getItem(CLI_KEY); } catch { return null; } };
 export const rememberCli = (id: string | null) => { try { if (id) localStorage.setItem(CLI_KEY, id); else localStorage.removeItem(CLI_KEY); } catch { /* this page only */ } };
+export const recallScope = (): Scope | null => { try { const v = localStorage.getItem(SCOPE_KEY); return v === 'app' || v === 'page' ? v : null; } catch { return null; } };
+export const rememberScope = (s: Scope | null) => { try { if (s) localStorage.setItem(SCOPE_KEY, s); else localStorage.removeItem(SCOPE_KEY); } catch { /* this page only */ } };
+/** Whether a saved note offers to go to the agent (D69): on unless turned off in this browser. */
+export const recallOffer = () => { try { return localStorage.getItem(OFFER_KEY) !== '0'; } catch { return true; } };
+export const rememberOffer = (on: boolean | null) => { try { if (on === false) localStorage.setItem(OFFER_KEY, '0'); else localStorage.removeItem(OFFER_KEY); } catch { /* this page only */ } };
 export function recallSettings(): PerCli {
   try {
     const v = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');

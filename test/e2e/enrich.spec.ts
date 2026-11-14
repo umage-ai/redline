@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(() => s.close());
 
 test('an enricher copies the nearest data-epi-property-name into target.extra; the saved note carries it', async ({ page }) => {
-  expect(await page.evaluate(() => (window as { rlVersion?: number }).rlVersion)).toBe(6);
+  expect(await page.evaluate(() => (window as { rlVersion?: number }).rlVersion)).toBe(7);
   const note = await commentOn(page, 'Shorter label', '/__redline') as { target?: { extra?: unknown }; meta?: unknown };
   // Only primitives are kept; both enrichers' keys merged.
   expect(note.target?.extra).toEqual({ epiProperty: 'MainBody', depth: 1, block: 117 });

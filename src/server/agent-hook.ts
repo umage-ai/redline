@@ -14,7 +14,7 @@ import type { AgentAdapter, AgentChoice, AgentCli, AgentStart, BridgeOptions, Se
 // The generic types live in the agent bridge (D63); re-exported here, where consumers already import them.
 export type { AgentAdapter, AgentChoice, AgentCli, AgentStart, BridgeOptions, SessionInfo };
 
-/** A button in the agent toolbar that sends a prompt; `{page}`, `{url}` and `{ids}` (the open notes on the page) are filled in. A prompt with `{ids}` shows their count and tags those notes "sent". */
+/** A button in the agent toolbar that sends a prompt; `{page}`, `{url}`, `{ids}` (the open notes Apply hands over: on every page, or this page only, per viewer in ⚙) and `{pages}` (where those notes are) are filled in. A prompt with `{ids}` shows their count and tags those notes "sent". */
 export interface AgentCommand { label: string; prompt: string; title?: string }
 
 /**

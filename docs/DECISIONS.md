@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-11-12 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
+Last updated: 2026-11-14 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
 Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
@@ -189,3 +189,9 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D67 — ⚙ opens on an overview: a row per CLI and one for the sessions, each opening its options (2026-11-12)
 - **Decision:** ⚙ lists a row per CLI (name, "In use" on the one the next prompt runs, a summary: "Smart · high", "Its own config") and a Sessions row ("One kept going", "New per prompt, up to 3 · worktrees"); a row is a button (`aria-expanded`) that opens its options under it, one row at a time, closed when ⚙ opens. A CLI's row holds "Use <name> for the next prompt" (several CLIs) and its Model and Effort; the Sessions row holds the mode and worktrees. Replaces the radio list of CLIs with the picked one's selects always shown (D62). **Why:** with two CLIs, models, efforts, sessions and worktrees all open the card was a form to read through; the overview says what is set at a glance, and looking at another CLI's options no longer switches to it. **Revisit if:** people mostly come to ⚙ to change the model (then open the in-use CLI's row by default).
+
+## D68 — Apply hands over the open notes on every page by default; this page only in ⚙ (2026-11-14)
+- **Decision:** Apply's `{ids}` are this app's open notes on every page (the extension API's new `notes('app')`), not only the page on screen; ⚙ › Notes narrows it to this page, per viewer in this browser (`redline.agent.scope`), and ⋯ runs the other scope once. `{pages}` names where the handed notes are; the default prompt uses it. Notes a running session has are still left out. **Why:** the common loop is pin a few notes across pages, apply them all, keep reviewing; with page scope Apply went empty on any page without notes. **Revisit if:** big projects pile up many open notes (then a cap, or a project option for the default).
+
+## D69 — The note popover drags; after a save the agent offers to take the note, in a toast (2026-11-14)
+- **Decision:** the popover moves by its header (with `draggable`; kept until the draft closes, focus stays in the text). After a save the agent extension shows a toast with actions (extension API v7): **This note** and, with more open, **All N** (the Notes scope), gone after 8 s unless hovered, closed when the agent toolbar opens, off per viewer in ⚙ › Notes (`redline.agent.offer`). Not a modal or a third "this page" button. **Why:** the box hid the very thing being described; and the loop is note → send, without a detour through the agent toolbar, while a reviewer who batches notes can ignore it. **Revisit if:** "This note" in fresh mode spawns too many sessions (then send to an idle session).

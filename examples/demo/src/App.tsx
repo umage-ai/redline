@@ -1,6 +1,6 @@
 // Parcelly is fictional. Everything here is static demo data.
 import { useState } from 'react';
-import { DriverFilter, ExportMenu, RowMenu } from './menus.tsx';
+import { DriverFilter, ExportMenu, RowMenu } from './menus.tsx'; import { PAGES, navigate } from './nav.ts';
 
 const stats = [
   { label: 'Out for delivery', value: '1,284', delta: '+6.2%', up: true },
@@ -49,13 +49,15 @@ export function App() {
   );
 }
 
-function Sidebar() {
+export function Sidebar({ active = 'Overview' }: { active?: string }) {
   const items = ['Overview', 'Routes', 'Drivers', 'Depots', 'Customers', 'Settings'];
+  // Overview and Drivers are real pages (nav.ts); the rest are dummies.
+  const go = (it: string) => (e: { preventDefault(): void }) => { e.preventDefault(); if (PAGES[it]) navigate(PAGES[it]); };
   return (
     <aside className="side">
       <div className="logo"><span className="mark">P</span> Parcelly</div>
       <nav>
-        {items.map((it, i) => <a key={it} className={i === 0 ? 'on' : ''} href="#">{it}</a>)}
+        {items.map(it => <a key={it} className={it === active ? 'on' : ''} href={PAGES[it] ?? '#'} onClick={go(it)}>{it}</a>)}
       </nav>
       <div className="me">
         <span className="avatar">JD</span>

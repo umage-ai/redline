@@ -1,6 +1,6 @@
 # Using Redline
 
-Last updated: 2026-11-13 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
+Last updated: 2026-11-14 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
 
 Setup per framework: [FRAMEWORKS.md](FRAMEWORKS.md). Every option and its default: [OPTIONS.md](OPTIONS.md).
 
@@ -13,6 +13,8 @@ Setup per framework: [FRAMEWORKS.md](FRAMEWORKS.md). Every option and its defaul
 | `S` | **Sketch** | Draw with box `1`, arrow `2`, pen `3` and text `4`, in six colours (tap the colour dot to fold out the palette, or `C` to cycle). `Ctrl+Z` undoes, `Enter` finishes. | The SVG plus a viewport screenshot with the sketch drawn on top |
 | `N` | **Notes** | Open the panel: this page or all pages, done/reopen, edit, delete, agent replies, and **Copy prompt for your agent**. | |
 | `Esc` | | Steps back one level: draft → mode → panel → closed. | |
+
+The box you type a note in drags by its header, to see what it covers (with `draggable`, the default).
 
 Saving a note returns to idle; press `C` (or tap **Comment**) for the next one. Clicks never reach the app while you're
 picking, and the app never sees you using the overlay, so an open dropdown, popover or combobox stays open: open it,
@@ -107,9 +109,10 @@ Local dev: `agent: true` (Claude Code or OpenCode, whichever is installed; or a 
 `{ command, args, model, effort, commands: [{ label, prompt }], keys, hotkey, sessions, instructions, adapters }`) runs your
 agent CLI from the overlay without opening a terminal: **Agent** (A), or `Alt+Shift+A` from anywhere, opens the agent
 toolbar: **← Agent** (back to the main toolbar; Esc too), the state ("Claude Code · Working…"), a tab per session named
-by its notes (× ends it, asking first while the agent works or waits on you), **Apply 3 notes** (your other prompt buttons
-behind ⋯; `{page}`, `{ids}`), **>_** for the CLI window (**End session** in its header, — minimizes it while the session
-runs on), **⚙** and ✕. A card on the toolbar shows whatever the agent asks (an edit with its diff, Claude's stepped
+by its notes (× ends it, asking first while the agent works or waits on you), **Apply 3 notes** (the open notes on every page; ⚙ › Notes:
+this page only, ⋯ the other once; your other prompt buttons behind ⋯; `{page}`, `{pages}`, `{ids}`), **>_** for the CLI window (**End session** in its header, — minimizes it while the session
+runs on), **⚙** and ✕. After a save, a toast offers to send the new note (**This note**) or every open note (**All N**) to the agent
+for a few seconds; ⚙ › Notes turns it off. A card on the toolbar shows whatever the agent asks (an edit with its diff, Claude's stepped
 questions, Allow/Deny) with every option and a field for your own answer; the notes panel tags the notes it is working
 on, waiting on you for, was sent and has done. **⚙** holds this browser's settings: the CLI (with several installed;
 holding Apply, right-click or Alt+↓ switches it too), its model and effort (Claude Code's aliases and `--effort` levels,
@@ -170,7 +173,8 @@ All optional; without them Redline behaves as described above. Types come from `
   v4: `beforeSave`, card decorators and actions, `setPinStyle`, `addMode`, `addSketchTool`, and the
   `error`/`noteUpdated`/`noteRemoved`/`messageSent` events; v5: `addToolbar` (your own toolbar in place of the main one,
   with a hotkey; while it shows, the main toolbar's button keys rest, so its own may reuse a letter), `addWindow` (a floating window), `setStatus` (the toolbar's outline or a dot, and a ring or dot on the
-  closed launcher) with the `status` event, and `setBadge` (the launcher bubble: open notes by default).
+  closed launcher) with the `status` event, and `setBadge` (the launcher bubble: open notes by default); v7: `toast(msg, { actions })`
+  (buttons on a toast, which waits while hovered; returns close).
 - **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or
   `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text
   ([SETUPS.md](SETUPS.md#embedding-the-overlay-in-your-product), [overlay/README.md](../overlay/README.md)).

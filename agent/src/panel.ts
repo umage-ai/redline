@@ -16,7 +16,7 @@ import type { RedlineApi, RedlineStatus, RedlineWindow } from '../../src/shared/
 import { API_BASE } from '../../src/shared/types.ts';
 import type { PromptView, Span } from '../../agent-bridge/src/screen.ts';
 import { bridgeClient, type BridgeClient } from '../../agent-bridge/src/client.ts';
-import { pickCli, pickFor, recallCli, recallSettings, rememberCli, rememberSettings, type Cli, type PerCli } from './settings.ts';
+import { pickCli, pickFor, recallCli, recallOffer, recallScope, recallSettings, rememberCli, rememberOffer, rememberScope, rememberSettings, type Cli, type PerCli, type Scope } from './settings.ts';
 
 export { pickCli };
 export type { Cli };
@@ -116,19 +116,26 @@ export function stateLabel(info: Info): { label: string; msg?: string; color: st
   }
 }
 
-/** A prompt template with {page}, {url} and {ids} (the notes it hands over: by default the open notes on the page) filled in. */
+/**
+ * A prompt template filled in: {page} (this page), {url}, {ids} (the notes it hands over) and {pages}
+ * (where those notes are: "page /" or "pages /, /drivers"; none: this page).
+ */
 export function fill(prompt: string, rl: Pick<RedlineApi, 'page' | 'notes'>, list = openIds(rl)): string {
   const ids = list.join(', ');
-  return prompt.replace(/\{(page|url|ids)\}/g, (_, k: string) => k === 'page' ? rl.page() : k === 'url' ? location.href : ids || 'none');
+  const all = rl.notes('all');
+  const where = [...new Set(list.map(id => all.find(n => n.id === id)?.page).filter((p): p is string => !!p))];
+  const pages = where.length > 1 ? `pages ${where.join(', ')}` : `page ${where[0] ?? rl.page()}`;
+  return prompt.replace(/\{(page|pages|url|ids)\}/g, (_, k: string) => k === 'page' ? rl.page() : k === 'pages' ? pages : k === 'url' ? location.href : ids || 'none');
 }
-const openIds = (rl: Pick<RedlineApi, 'notes'>) => rl.notes('page').filter(n => !n.done).map(n => n.id);
+/** The open notes Apply may hand over (D68): this app's on every page, or this page's. */
+const openIds = (rl: Pick<RedlineApi, 'notes'>, scope: Scope = 'page') => rl.notes(scope).filter(n => !n.done).map(n => n.id);
 /**
  * The open notes on the page no running session has yet: what a prompt hands over, in both modes, so
  * two sessions never work on one note and the count doesn't change with Fresh. Stopping a session frees its notes.
  */
-export function freeIds(rl: Pick<RedlineApi, 'notes'>, sessions: Pick<Session, 'running' | 'sent'>[]): string[] {
+export function freeIds(rl: Pick<RedlineApi, 'notes'>, sessions: Pick<Session, 'running' | 'sent'>[], scope: Scope = 'page'): string[] {
   const taken = new Set(sessions.filter(s => s.running).flatMap(s => s.sent ?? []));
-  return openIds(rl).filter(id => !taken.has(id));
+  return openIds(rl, scope).filter(id => !taken.has(id));
 }
 const usesIds = (c: Command) => c.prompt.includes('{ids}');
 
@@ -461,6 +468,13 @@ export default async function agentPanel(rl: RedlineApi) {
   const cliOf = (id?: string) => clis().find(c => c.id === id);
   let pick = pickCli(clis(), recallCli(), setup.cli);
   let per: PerCli = recallSettings();
+  // Which open notes Apply hands over (D68): every page of this app by default, or this page only.
+  let scope: Scope = recallScope() ?? 'app';
+  const setScope = (s: Scope) => { scope = s; rememberScope(s); };
+  const where = (s: Scope = scope) => s === 'app' ? 'on every page' : 'on this page';
+  // A saved note offers to go to the agent (D69), unless turned off in ⚙ › Notes.
+  let offer = recallOffer();
+  let closeOffer: (() => void) | null = null;   // the offer on screen (the agent toolbar takes its place)
   const picked = () => cliOf(pick);
   const pickName = () => picked()?.name ?? name();
   /** The CLI a session runs, by name ("Claude Code"). */
@@ -487,14 +501,14 @@ export default async function agentPanel(rl: RedlineApi) {
   /** A call for the selected session. */
   const here = (p: string, body: Record<string, unknown> = {}) => post(p, { ...body, ...(cur().id ? { id: cur().id } : {}) });
   const fail = (e: unknown) => rl.toast(`Agent: ${(e as Error).message}`, true);
-  /** The notes a prompt hands over: the open ones on the page no running session has (both modes). */
-  const handed = () => freeIds(rl, group.sessions);
+  /** The notes a prompt hands over: the open ones (every page or this one, D68) no running session has (both modes). */
+  const handed = (s: Scope = scope) => freeIds(rl, group.sessions, s);
   /**
    * A prompt: starts the CLI when needed (the server holds the prompt until it is ready); the CLI window
    * stays closed. A new session runs the viewer's CLI, model and effort, and is named by its notes.
    */
-  const run = async (c: Command) => {
-    const notes = usesIds(c) ? handed() : [];
+  const run = async (c: Command, s: Scope = scope, only?: string[]) => {
+    const notes = !usesIds(c) ? [] : only ?? handed(s);
     if (fresh()) rl.toast(`Starting a new ${pickName()} session…`);
     else if (!cur().running || (multi() && cur().cli !== pick)) rl.toast(`Starting ${pickName()}…`);
     try {
@@ -636,14 +650,17 @@ export default async function agentPanel(rl: RedlineApi) {
   /** The primary prompt button: "Apply 2 notes" (filled); with several CLIs, hold it to switch the agent. */
   function primaryButton(c: Command, blocked: boolean) {
     const n = usesIds(c) ? handed().length : -1;
-    const taken = n >= 0 ? openIds(rl).length - n : 0;   // open notes a running session already has
+    const taken = n >= 0 ? openIds(rl, scope).length - n : 0;   // open notes a running session already has
+    // This page only and none here: say how many wait on other pages, and where to hand them over.
+    const elsewhere = n === 0 && scope === 'page' ? handed('app').length : 0;
     // "Apply 2 notes" ("Apply 2" on a phone, where every pixel of the row counts).
     const label = c.label === DEFAULT_LABEL && n >= 0 ? el('span', {}, n ? `Apply ${n}` : 'Apply', el('span', { class: 'ag-wide' }, n === 1 ? ' note' : ' notes')) : c.label;
     const off = n === 0 || (blocked && !fresh());
     const switchHint = 'Hold, right-click or Alt+↓ to switch the agent';
     const b = el('button', {
       class: 'ag-primary', data: { k: 'primary', cmd: c.label, ...(n >= 0 ? { count: String(n) } : {}) },
-      title: [c.title ?? c.prompt, `with ${pickName()}`, fresh() && 'in a new session', taken && `${taken} note${taken === 1 ? ' is' : 's are'} already with a session`, n === 0 && 'no open notes on this page', multi() && switchHint].filter(Boolean).join(' · '),
+      title: [c.title ?? c.prompt, n >= 0 && `the open notes ${where()}`, `with ${pickName()}`, fresh() && 'in a new session', taken && `${taken} note${taken === 1 ? ' is' : 's are'} already with a session`,
+        n === 0 && (scope === 'app' ? 'no open notes' : 'no open notes on this page'), elsewhere && `${elsewhere} on other pages: ⋯ or ⚙ › Notes`, multi() && switchHint].filter(Boolean).join(' · '),
       attrs: { 'aria-disabled': off ? 'true' : undefined, 'aria-keyshortcuts': multi() ? 'Alt+ArrowDown Shift+F10' : undefined, 'aria-description': multi() ? `Runs ${pickName()}. ${switchHint}.` : undefined },
       onclick: () => { if (held) { held = false; return; } if (!off) void run(c); },
     }, label, n >= 0 && c.label !== DEFAULT_LABEL ? el('span', { class: 'count' }, String(n)) : null);
@@ -713,8 +730,8 @@ export default async function agentPanel(rl: RedlineApi) {
     // The prompt: Apply (and ⋯ for the project's other prompts). Questions, Allow/Deny included, go in the card.
     const [first, ...rest] = setup.commands;
     const actions: HTMLElement[] = first ? [primaryButton(first, blocked)] : [];
-    if (rest.length) {
-      actions.push(btn(icon('more'), 'More prompts', () => openView('cmds', 'cmd:0'), 'ag-icon ag-cmds', 'more-cmds',
+    if (rest.length || (first && usesIds(first))) {
+      actions.push(btn(icon('more'), 'More prompts', () => openView('cmds', first && usesIds(first) ? 'cmd:scope' : 'cmd:0'), 'ag-icon ag-cmds', 'more-cmds',
         { 'aria-label': 'More prompts', 'aria-haspopup': 'menu', 'aria-expanded': String(view === 'cmds') }));
     }
     // >_ the CLI window; ⚙ the settings.
@@ -821,10 +838,18 @@ export default async function agentPanel(rl: RedlineApi) {
   }
   /** The project's other prompts (⋯). */
   function cmdsMenu() {
-    return menu('Prompts', setup.commands.slice(1).map((c, i) => {
+    // First, Apply with the other scope (D68), once: "Apply 2 notes on this page only" or "… on every page".
+    const first = setup.commands[0], other: Scope = scope === 'app' ? 'page' : 'app';
+    const once = first && usesIds(first) ? (() => {
+      const n = handed(other).length;
+      return { k: 'cmd:scope', text: `${first.label === DEFAULT_LABEL ? `Apply ${n} note${n === 1 ? '' : 's'}` : first.label} ${other === 'app' ? 'on every page' : 'on this page only'}`,
+        sub: 'this time', disabled: n === 0, title: `${first.title ?? first.prompt} · the open notes ${where(other)}, this time only (⚙ › Notes sets it for good)`,
+        act: () => { view = null; wantFocus = 'more-cmds'; toolbar?.render(); void run(first, other); } };
+    })() : null;
+    return menu('Prompts', [...(once ? [once] : []), ...setup.commands.slice(1).map((c, i) => {
       const n = usesIds(c) ? handed().length : -1;
       return { k: `cmd:${i}`, text: c.label, sub: n >= 0 ? `${n} note${n === 1 ? '' : 's'}` : undefined, disabled: n === 0, title: c.title ?? c.prompt, act: () => { view = null; wantFocus = 'more-cmds'; toolbar?.render(); void run(c); } };
-    }), `with ${pickName()}${fresh() ? ', in a new session' : ''}`);
+    })], `with ${pickName()}${fresh() ? ', in a new session' : ''}`);
   }
   const setPick = (id: string) => { pick = id; rememberCli(id); };
 
@@ -904,6 +929,17 @@ export default async function agentPanel(rl: RedlineApi) {
     };
     box.append(el('div', { class: 'ag-lbl' }, multi() ? 'Agents' : 'Agent'));
     for (const c of clis()) box.append(row(`cli:${c.id}`, `set-cli:${c.id}`, c.name, multi() && c.id === pick ? 'In use' : null, summaryOf(c), () => cliBody(c)));
+    // Notes (D68): which open notes Apply hands over; this browser only, like the CLI.
+    box.append(row('notes', 'set-notes', 'Notes', null, scope === 'app' ? 'Every page' : 'This page only', () => [radios('Apply hands over', 'ag-set-scope', [
+      { value: 'app', label: 'Open notes on every page', sub: `${handed('app').length} now`, k: 'set-scope:app' },
+      { value: 'page', label: 'Open notes on this page', sub: `${handed('page').length} now`, k: 'set-scope:page' },
+    ], scope, v => { setScope(v as Scope); refreshSettings(); sync(); }), (() => {
+      // D69: the toast after a save that sends the note on.
+      const input = el('input', { type: 'checkbox', checked: offer, data: { k: 'set-offer' } });
+      input.addEventListener('change', () => { offer = input.checked; rememberOffer(offer); refreshSettings(); });
+      return el('fieldset', {}, el('legend', {}, 'After a save'),
+        el('label', { class: 'ag-radio' }, input, el('span', {}, 'Offer to send the new note to the agent')));
+    })()]));
     // Sessions: the server's mode, and worktrees (D64): a toggle, off with the reason when the project isn't a git repo.
     const wt = group.worktrees;
     const sessSummary = (fresh() ? `New per prompt, up to ${group.max}` : 'One kept going') + (wt?.on && fresh() ? ' · worktrees' : '');
@@ -925,7 +961,7 @@ export default async function agentPanel(rl: RedlineApi) {
       return kids;
     }));
     box.append(el('footer', {}, el('span', {}, 'Applies to new sessions.'),
-      el('button', { data: { k: 'set-reset' }, title: 'Forget this browser\'s choices: the project\'s CLI, model, effort and sessions', onclick: reset }, 'Reset to project defaults')));
+      el('button', { data: { k: 'set-reset' }, title: 'Forget this browser\'s choices: the project\'s CLI, model, effort, notes and sessions', onclick: reset }, 'Reset to project defaults')));
     // Esc in a field (the core leaves keys in fields alone): close the settings, back on ⚙.
     box.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Escape' && /^(INPUT|SELECT)$/.test((e.target as HTMLElement).tagName)) { e.preventDefault(); closeView(); }
@@ -944,6 +980,8 @@ export default async function agentPanel(rl: RedlineApi) {
   }
   async function reset() {
     per = {}; rememberSettings(null);
+    scope = 'app'; rememberScope(null);
+    offer = true; rememberOffer(null);
     pick = pickCli(clis(), null, setup.cli); rememberCli(null);
     const mode = setup.defaults?.sessions ?? 'fresh';
     if (group.mode !== mode) { try { group = { ...group, ...(await post('/mode', { mode })) }; } catch (e) { fail(e); } }
@@ -1130,7 +1168,7 @@ export default async function agentPanel(rl: RedlineApi) {
   toolbar = rl.addToolbar({
     id: 'agent', title: 'Agent', backTitle: 'Back to the Redline toolbar (Esc)', hotkey: setup.hotkey || undefined, render: renderToolbar, attached: renderCard,
     onEscape: closeView,
-    onShow() { if (cur().id) void here('/ack').catch(() => {}); sync(); },
+    onShow() { closeOffer?.(); if (cur().id) void here('/ack').catch(() => {}); sync(); },
     onHide() { view = null; sync(); },
   });
 
@@ -1185,6 +1223,24 @@ export default async function agentPanel(rl: RedlineApi) {
     t.el.replaceChildren(...(tag ? [el('span', { class: `ag-tag ${tag.cls}`, ...(lit ? { title: 'Open the agent toolbar', onclick: () => toolbar?.show() } : {}) }, tag.text)] : []));
   }
   rl.addPanelSection({ id: 'agent', render(box) { line = box; renderLine(); } });
+
+  // After a save (D69): a toast offers to send the note on, or every open note, then goes away by
+  // itself. Not while the session a prompt would go to is waiting for an answer; needs a v7 core.
+  rl.on('noteCreated', note => {
+    const c = setup.commands[0];
+    if (!offer || !(rl.version >= 7) || !c || !usesIds(c) || note.done) return;
+    if (!fresh() && cur().running && cur().status.state === 'blocked') return;
+    // The notes list may not have the new note yet (it reloads after the save).
+    const all = () => [...new Set([note.id, ...handed()])];
+    const n = all().length;
+    closeOffer?.();
+    // Keeps the core's "Saved → <file>" it takes the place of.
+    const file = (note as Note & { file?: string }).file;
+    closeOffer = rl.toast(`${file ? `Saved → ${file}` : 'Saved'} · Send to ${pickName()}?`, { actions: [
+      { label: 'This note', primary: true, title: `Apply this note with ${pickName()}${fresh() ? ' in a new session' : ''}`, onClick: () => void run(c, scope, [note.id]) },
+      ...(n > 1 ? [{ label: `All ${n}`, title: `Apply the ${n} open notes ${where()} with ${pickName()}`, onClick: () => void run(c, scope, all()) }] : []),
+    ] });
+  });
   rl.addCardDecorator({ id: 'agent', render(note, box) { const t = { el: box, note }; tags.set(note.id, t); renderTag(t); } });
 
   function sync() {
