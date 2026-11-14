@@ -382,3 +382,65 @@ test('a reply from the panel joins the note thread in the markdown (D52)', async
   await expect.poll(() => readPage(f)).toMatch(/"messages":\[\{"body":"And bold, please","kind":"reviewer","at":"\d{4}-\d\d-\d\d \d\d:\d\d"\}\]/);
   expect(await readPage(f)).toMatch(/^### \[ \] Comment/m);
 });
+
+test('the note popover drags by its header, keeps focus in the text, and stays where it was left (D69)', async ({ page }) => {
+  await openOverlay(page, f);
+  await page.keyboard.press('c');
+  await mouseAt(page, page.getByTestId('agent-save'));
+  const pop = ui(page, '.pop'), ta = ui(page, '.pop textarea');
+  await expect(ta).toBeFocused();
+  await page.keyboard.type('Move me');
+  const before = (await pop.boundingBox())!;
+  const head = (await ui(page, '.pop header .what').boundingBox())!;
+  await page.mouse.move(head.x + 10, head.y + head.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(head.x + 10 - 150, head.y + head.height / 2 + 120, { steps: 5 });
+  await page.mouse.up();
+  const after = (await pop.boundingBox())!;
+  expect(Math.round(after.x - before.x)).toBe(-150);
+  expect(Math.round(after.y - before.y)).toBe(120);
+  await expect(ta).toBeFocused();
+  await expect(ta).toHaveValue('Move me');
+  // The header's buttons still click: Parent re-renders the popover in its dragged place.
+  await ui(page, '.pop header button').first().click();
+  const moved = (await pop.boundingBox())!;
+  expect(Math.round(moved.x)).toBe(Math.round(after.x));
+  expect(Math.round(moved.y)).toBe(Math.round(after.y));
+  await page.keyboard.press('Escape');
+  await expect(pop).toHaveCount(0);
+});
+
+test('a toast with actions (API v7): buttons that run and close it, ✕, and it waits while hovered', async ({ page }) => {
+  await openOverlay(page, f);
+  const ran = await page.evaluate(() => new Promise<boolean>(resolve => {
+    (window as unknown as { redlineExtensions: unknown[] }).redlineExtensions ??= [];
+    (window as unknown as { redlineExtensions: ((rl: any) => void)[] }).redlineExtensions.push(rl => {
+      (window as unknown as { toastRl: unknown }).toastRl = rl;
+      resolve(rl.version >= 7);
+    });
+  }));
+  expect(ran).toBe(true);
+  const show = (ms?: number) => page.evaluate(ms => {
+    const w = window as unknown as { toastRl: any; picked?: string };
+    w.toastRl.toast('Saved. Send it?', { ms, actions: [{ label: 'This note', primary: true, onClick: () => { w.picked = 'one'; } }, { label: 'All 3', onClick: () => { w.picked = 'all'; } }] });
+  }, ms);
+  const toast = ui(page, '.toast.act');
+  await show();
+  await expect(toast).toBeVisible();
+  await expect(toast.locator('.msg')).toHaveText('Saved. Send it?');
+  await toast.getByRole('button', { name: 'All 3' }).click();
+  expect(await page.evaluate(() => (window as unknown as { picked?: string }).picked)).toBe('all');
+  await expect(toast).toBeHidden();
+
+  await show();
+  await toast.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(toast).toBeHidden();
+
+  // Hovered, it stays past its time; left, it goes.
+  await show(1500);
+  await toast.locator('.msg').hover();
+  await page.waitForTimeout(2500);
+  await expect(toast).toBeVisible();
+  await page.mouse.move(5, 5);
+  await expect(toast).toBeHidden();
+});

@@ -13,7 +13,7 @@ import { agent } from '../../agent/src/index.ts';
 import { adapterFor, choices, claudeCode, cliChoices, defaultCommand, openCode } from '../../agent-bridge/src/adapters.ts';
 import { agentFor, type AgentAdapter } from '../../src/server/agent-hook.ts';
 import { createHandler } from '../../src/server/handler.ts';
-import { freeIds, initials, noteTag, overall, pickCli, shorten, stateLabel, tabRank, tabTitle, tagFor, visibleTabs } from '../../agent/src/panel.ts';
+import { fill, freeIds, initials, noteTag, overall, pickCli, shorten, stateLabel, tabRank, tabTitle, tagFor, visibleTabs } from '../../agent/src/panel.ts';
 import { pickFor } from '../../agent/src/settings.ts';
 
 const ESC = '\x1b', ST = ESC + '\\';
@@ -399,6 +399,14 @@ test('agent toolbar: the state chip and the note tags', () => {
   assert.deepEqual(freeIds(rl, [ses('1', 'working', true, ['a']), ses('2', 'done', false, ['b'])]), ['b'], 'a is with a running session; c is done');
   // The count is the same in both modes (it used to jump between 0 and 1 with Fresh): a running session keeps its notes, resting or not.
   assert.deepEqual(freeIds(rl, [ses('1', 'done', true, ['a'])]), ['b'], 'a rests with #1: not handed over again');
+  // Apply's scope (D68): this app's open notes on every page, or this page's; {pages} says where they are.
+  const both = [{ id: 'a', page: '/', done: false }, { id: 'b', page: '/drivers', done: false }, { id: 'c', page: '/', done: true }];
+  const scoped = { page: () => '/', notes: (s = 'page') => s === 'page' ? both.filter(n => n.page === '/') : both } as never;
+  assert.deepEqual(freeIds(scoped, [], 'app'), ['a', 'b'], 'every page');
+  assert.deepEqual(freeIds(scoped, [], 'page'), ['a'], 'this page only');
+  assert.equal(fill('Apply {ids} on {pages} (from {page})', scoped, ['a', 'b']), 'Apply a, b on pages /, /drivers (from /)');
+  assert.equal(fill('Apply {ids} on {pages}', scoped, ['b']), 'Apply b on page /drivers');
+  assert.equal(fill('Apply {ids} on {pages}', scoped, []), 'Apply none on page /', 'none: this page');
   // The note's tag says what is happening to it: worked on, asking, sent (resting or stopped), done.
   const who = (x: { label: string }) => `c ${x.label}`;
   assert.deepEqual(tagFor({ id: 'a', done: false }, [ses('1', 'working', true, ['a'])], who), { cls: 'sent working', text: 'c #1 is working on it' });

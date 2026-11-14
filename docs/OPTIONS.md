@@ -1,6 +1,6 @@
 # Options
 
-Last updated: 2026-11-11 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
+Last updated: 2026-11-14 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
 
 The same option is spelled `camelCase` in Node (`redline({ … })`, `withRedline(cfg, { … })`, `redlineMiddleware({ … })`,
 the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o => …)`). "—" means the server doesn't have it.
@@ -14,7 +14,7 @@ the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o =
 | `launcher` / `Launcher` | `true` | The round button while closed; `false`: hotkey or `data-redline-open` buttons (D51). |
 | `launcherSize` / `LauncherSize` | `medium` (32 px) | `small` 26, `large` 40, or px (20–64). |
 | `launcherPosition` / `LauncherPosition` | `bottom-right 16` | `'top-left 24'`, `'bottom-center 16 80'`, or `{ x, y, offsetX, offsetY }`. |
-| `draggable` / `Draggable` | **0.10:** `true` (was `false`) | Reviewers move the launcher, toolbar and sketch tools; double-click an icon resets (D51). |
+| `draggable` / `Draggable` | **0.10:** `true` (was `false`) | Reviewers move the launcher, toolbar and sketch tools; double-click an icon resets (D51). The note popover drags by its header (D69). |
 | `labels` / `Labels`, `LabelsFrom` | Bug, UX, Idea, Copy | Chips on a note; `false` turns them off; a function of the request (D46, D47). |
 | `prompt` / `Prompt` | shown with the markdown store | The panel's **Copy prompt** text (`{open}`, `{page}`); `false` hides it (D47). |
 | `pageKey` / `PageKey` | `'route'` | `'path'` keeps hash routes (a deck's `#/3`) on one page (D26). |
@@ -86,7 +86,7 @@ Set `window.redlineConfig = { … }` before the script loads, or `data-*` on its
 | `sessions` | **0.10:** `'fresh'` (was `'shared'`) | A new session per prompt with just its notes; `'shared'` keeps one. ⚙ switches it while the dev server runs. |
 | `maxSessions` | `3` | Fresh sessions at once (1–8). |
 | `worktrees` | `false` | Each new fresh session in its own git worktree (`.redline/worktrees/<name>`, branch `redline/<name>`, D64); when it ends: keep, merge or discard. ⚙ switches it while the dev server runs; off when the root isn't a git repo. No node_modules there. |
-| `commands` | one **Apply notes** button | Prompt buttons (`{page}`, `{url}`, `{ids}`). |
+| `commands` | one **Apply notes** button | Prompt buttons (`{page}`, `{url}`, `{ids}`: the open notes on every page, or this page only per viewer in ⚙ (D68); `{pages}`: where they are). |
 | `keys` | Enter / Esc | What Allow / Deny send to CLIs whose menus aren't read. |
 | `menus` | `'auto'` (Claude Code) | Read the CLI's menus into the toolbar's card (PTY only; ACP permission requests always show there). |
 | `hotkey`, `key` | `alt+shift+a`, `a` | Open the agent toolbar. |

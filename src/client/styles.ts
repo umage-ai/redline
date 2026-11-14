@@ -141,6 +141,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .pop header .what { flex: 1; min-width: 0; font: 600 11.5px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pop header button { padding: 2px 7px; border-radius: 6px; color: var(--fg-2); font-size: 12px; }
 .pop header button:hover { background: var(--bg-3); color: var(--fg); }
+.pop header.grab { cursor: grab; touch-action: none; user-select: none; }
+.pop.dragging, .pop.dragging header { cursor: grabbing; }
 .pop textarea { display: block; width: 100%; min-height: 92px; max-height: 300px; resize: vertical; padding: 10px 12px; border: 0; outline: 0;
   background: transparent; color: var(--fg); font: inherit; font-size: 13.5px; }
 .pop textarea::placeholder { color: var(--fg-3); }
@@ -257,6 +259,11 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .toast { position: fixed; left: calc((100vw - var(--panel-w, 0px)) / 2); bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
+.toast.act { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; pointer-events: auto; max-width: calc(100vw - 16px); }
+.toast.act .msg { min-width: 0; }
+.toast.act .btn { padding: 4px 10px; font-size: 12.5px; white-space: nowrap; }
+.toast.act .x { padding: 4px 7px; border-radius: 6px; color: var(--fg-2); }
+.toast.act .x:hover { background: var(--bg-3); color: var(--fg); }
 .toast.wait { display: flex; align-items: center; gap: 8px; }
 .toast.wait::before { content: ''; flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink); animation: rl-spin .8s linear infinite; }
 @keyframes rl-spin { to { transform: rotate(360deg); } }

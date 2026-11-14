@@ -17,7 +17,7 @@ const HERE = typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToP
 const DIST = path.basename(HERE) === 'dist' ? HERE : path.join(HERE, '../dist');
 
 export const DEFAULT_COMMANDS: AgentCommand[] = [
-  { label: 'Apply notes', title: 'Ask the agent to apply the open notes on this page', prompt: 'Apply the open Redline notes {ids} on page {page}, following the redline skill. Mark each one done when it is applied.' },
+  { label: 'Apply notes', title: 'Ask the agent to apply the open notes', prompt: 'Apply the open Redline notes {ids} on {pages}, following the redline skill. Mark each one done when it is applied.' },
 ];
 
 /** The bearer the sessions Redline starts present to its MCP (D66): per process, never shown to a page. */

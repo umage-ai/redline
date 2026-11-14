@@ -70,12 +70,37 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
 
   /* ---------- the popover ---------- */
   function popHeader(d: Draft, what: string) {
-    return h('header', {},
+    const draggable = config.draggable;
+    return h('header', draggable ? { class: 'grab', title: t('popDragTitle'), onpointerdown: (e: PointerEvent) => grab(e, d) } : {},
       h('span', { class: 'what', title: what }, (d.type === 'text' ? '✎ ' : d.type === 'sketch' ? '' : '💬 ') + what),
       d.type === 'comment' && d.el && d.el.parentElement && d.el.parentElement !== document.body
         ? h('button', { title: t('parentTitle'), onclick: () => { d.el = d.el!.parentElement; renderPop(); } }, t('parent')) : null,
       d.type === 'comment' && !d.whole ? h('button', { title: t('pageTitle'), onclick: () => { d.el = null; d.whole = true; renderPop(); } }, t('page')) : null,
     );
+  }
+
+  /**
+   * Dragging the popover by its header (D69), to see what it covers. It stays where it was left until
+   * the draft closes; the buttons in the header still click.
+   */
+  function grab(e: PointerEvent, d: Draft) {
+    const head = e.currentTarget as HTMLElement, pop = head.closest<HTMLElement>('.pop');
+    if (e.button !== 0 || !pop || (e.target as Element).closest('button')) return;
+    const r = pop.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
+    try { head.setPointerCapture(e.pointerId); } catch { /* already released */ }
+    pop.classList.add('dragging');
+    const move = (m: PointerEvent) => { d.pos = { x: r.left + m.clientX - sx, y: r.top + m.clientY - sy }; placePop(); };
+    const up = () => {
+      head.removeEventListener('pointermove', move);
+      head.removeEventListener('pointerup', up);
+      head.removeEventListener('pointercancel', up);
+      pop.classList.remove('dragging');
+    };
+    head.addEventListener('pointermove', move);
+    head.addEventListener('pointerup', up);
+    head.addEventListener('pointercancel', up);
+    e.preventDefault();   // the text field keeps focus, no text selection
+    e.stopPropagation();
   }
 
   function renderPop() {
@@ -180,6 +205,11 @@ export const draftPart: Part<'openDraft' | 'cancelDraft' | 'renderPop' | 'placeP
     const vv = visualViewport;
     const top = vv?.offsetTop ?? 0, bottom = vv ? vv.offsetTop + vv.height : innerHeight;
     const W = pop.offsetWidth || 360, H = pop.offsetHeight || 200;
+    if (d.pos) {   // dragged: where it was left, kept on screen
+      const x = Math.max(8, Math.min(d.pos.x, innerWidth - W - 8)), y = Math.max(top + 8, Math.min(d.pos.y, bottom - H - 8));
+      Object.assign(pop.style, { left: `${Math.round(x)}px`, top: `${Math.round(y)}px` });
+      return;
+    }
     let x = d.x + 14, y = d.y + 14;
     if (x + W > innerWidth - 8) x = Math.max(8, d.x - W - 14);
     if (x + W > innerWidth - 8) x = Math.max(8, innerWidth - W - 8);

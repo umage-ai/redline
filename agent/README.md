@@ -29,6 +29,8 @@ it (prebuilt on Windows and macOS, compiled on Linux; without build tools: `npm 
 | **The agent toolbar** | **← Agent**, the state ("Claude Code · Working…"), a tab per session (named by its notes), **Apply N notes**, **>_** the CLI window, **⚙** settings |
 | **Questions in a card** | Permission prompts with their diff, Claude Code's stepped questions, trust dialogs: every option, and a field for your own answer. ACP agents send theirs as data |
 | **Several CLIs** | Every installed one is offered; ⚙ or holding **Apply** switches; model and effort per CLI (only values the CLI offers reach it) |
+| **All your notes** | **Apply** hands over the open notes on every page, so you can pin across the app and apply them in one go; ⚙ › Notes narrows it to this page |
+| **Send after a save** | A toast after each note: **This note** or **All N** to the agent, gone in a few seconds; ⚙ › Notes turns it off |
 | **Fresh sessions** | A new session per prompt with only its notes, several at once; or one shared session that keeps its context |
 | **Worktrees** | ⚙ **Each new session in its own git worktree**: its own branch, `redline/<name>`; when it ends, keep, merge (clean only) or discard it |
 | **Attachments** | A 📎 count on each tab: per prompt, the files it changed (with the diff), images, files and links it pointed at |
@@ -61,7 +63,7 @@ redline({
 Or hand it over yourself, typed: `import { agent } from '@umage.ai/redline-agent'; redline({ agent: agent({ command: 'codex' }) })`.
 Every option and its default: [docs/OPTIONS.md](https://github.com/umage-ai/redline/blob/main/docs/OPTIONS.md#agent-umageairedline-agent-d53).
 
-Prompts fill in `{page}`, `{url}` and `{ids}` (the open notes on the page no running session has); a prompt with `{ids}`
+Prompts fill in `{page}`, `{url}`, `{ids}` (the open notes no running session has: on every page, or this page only per ⚙ › Notes) and `{pages}` (where they are); a prompt with `{ids}`
 shows their count and tags those notes in the notes panel (sent, being worked on, waiting for you, done).
 `instructions` (text, or `{ file }` read at every start) reach Claude Code as `--append-system-prompt-file`, any other CLI
 ahead of its first prompt.

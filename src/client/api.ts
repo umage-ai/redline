@@ -50,7 +50,7 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     if (k && BUILTIN_KEYS.includes(k)) console.warn(`[redline] key "${key}" for "${id}" is taken by the overlay; use the button`);
   };
   return {
-    version: 6,
+    version: 7,
     addButton(b) {
       const key = b.key?.toLowerCase();
       if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
@@ -126,8 +126,8 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     isOpen: () => state.open,
     setMode: m => ctx.setMode(m),
     togglePanel: v => ctx.togglePanel(v),
-    toast: (m, err) => ctx.toast(m, err),
-    notes: (scope = 'page') => (scope === 'page' ? ctx.pageNotes() : ctx.notes).map(n => ({ ...n })),
+    toast: (m, o) => typeof o === 'object' && o ? ctx.toast(m, !!o.error, o.ms, o.actions) : ctx.toast(m, !!o),
+    notes: (scope = 'page') => (scope === 'page' ? ctx.pageNotes() : scope === 'app' ? ctx.notes.filter(n => (n.app ?? '') === ctx.app) : ctx.notes).map(n => ({ ...n })),
     page: () => ctx.page,
     refresh: () => ctx.poll(true),
     render: () => { ctx.renderBar(); ctx.renderPanel(true); },

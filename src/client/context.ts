@@ -7,6 +7,7 @@ import type { LabelDef } from '../shared/labels.ts';
 import type {
   RedlineBeforeCreate, RedlineBeforeSave, RedlineButton, RedlineCardAction, RedlineCardDecorator, RedlineEvents, RedlineGate, RedlineMode, RedlineModeDef, RedlineTargetEnricher,
   RedlineOp, RedlinePanelSection, RedlinePanelState, RedlinePinStyle, RedlineSketchTool, RedlineSlot, RedlineStatus, RedlineBadge, RedlineToolbarDef, RedlineWindow, RedlineWindowDef,
+  RedlineToastAction,
 } from '../shared/extension.ts';
 import type { Life, Store } from './dom.ts';
 import type { Shield } from './shield.ts';
@@ -23,6 +24,7 @@ export interface Draft {
   from?: string; to?: string; sketch?: SketchLayer; editor?: HTMLElement;
   rich?: Inspection; html?: string;   // rich text edits (D20): the source tokens and the new source content
   label?: string;                     // the chip picked in the popover (D46)
+  pos?: { x: number; y: number };     // where the popover was dragged to (D69): kept until the draft closes
 }
 
 /** Kept in sessionStorage, so a reload comes back to the same view. */
@@ -109,7 +111,8 @@ export interface Ctx {
   lock(gate: RedlineGate): void;
 
   /* toast.ts */
-  toast(msg: string, err?: boolean, ms?: number): void;
+  /** Returns close. With `actions` (v7): clickable, 8 s by default, paused on hover, with ✕. */
+  toast(msg: string, err?: boolean, ms?: number, actions?: RedlineToastAction[]): () => void;
   savingNotice(): () => void;
   /* bar.ts */
   renderBar(): void;
