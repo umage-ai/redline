@@ -44,7 +44,9 @@ async function main() {
   term.open(host);
   // The server answers DA1 (and the OSC 7501 query) itself, in order (D53): xterm must not answer it again.
   term.parser.registerCsiHandler({ final: 'c' }, () => true);
-  const refit = () => { try { fit.fit(); } catch { /* not laid out yet */ } };
+  // Not while the window is minimized or hidden: a 0×0 host fits to xterm's 2-column minimum, and the session's
+  // terminal (and the menus read off it) would be redrawn 20 columns wide.
+  const refit = () => { if (!host.clientWidth || !host.clientHeight) return; try { fit.fit(); } catch { /* not laid out yet */ } };
   refit();
 
   // Keys go out in order: one request at a time, with whatever was typed meanwhile batched.
