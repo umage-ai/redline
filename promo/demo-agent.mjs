@@ -15,6 +15,8 @@ const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 let supported = false, probing = true, line = '', menu = null;
 const report = f => { if (supported) out(`${ESC}]7501;${f}:app=demo-agent${ST}`); };
 const dim = s => `${ESC}[2m${s}${ESC}[22m`, bold = s => `${ESC}[1m${s}${ESC}[22m`, accent = s => `${ESC}[38;5;209m${s}${ESC}[39m`;
+// Rules as wide as the terminal allows: the CLI window narrows it, and a wrapped rule breaks the menu reading.
+const width = () => Math.max(20, Math.min(72, (process.stdout.columns || 80) - 2));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const PLAN = Number(process.env.PLAN_MS ?? 900);
 
@@ -25,6 +27,11 @@ const EDITS = [
   { when: /Plan a route/i, line: 35, from: '>New route</button>', to: '>+ Plan a route</button>', show: ['<button>New route</button>', '<button>+ Plan a route</button>'], reply: 'added a + and renamed it "Plan a route"' },
   { when: /Routes today/i, line: 84, from: '<h2>Active routes</h2>', to: '<h2>Routes today</h2>', show: ['<h2>Active routes</h2>', '<h2>Routes today</h2>'], reply: 'renamed the heading to "Routes today"' },
 ];
+// A prompt typed straight into the CLI window (no notes): recognised by its text.
+const DIRECT = [
+  { when: /Deliveries per day/i, line: 118, from: '<h2>Deliveries per day</h2>', to: '<h2>Deliveries this week</h2>', show: ['<h2>Deliveries per day</h2>', '<h2>Deliveries this week</h2>'], done: 'renamed the chart heading' },
+];
+let trusted = false;   // "Yes, and don't ask again this session" was picked
 const OPTIONS = ['Yes', "Yes, and don't ask again this session", 'No'];
 
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
@@ -50,8 +57,37 @@ function drawOptions(first) {
   out(`\r${ESC}[2K\r\n\r${ESC}[2K ${dim('Esc to cancel · Tab to amend')}\r\n`);
 }
 
+/** Shows the edit; asks first unless the session said don't ask again. False when declined. */
+async function ask(edit) {
+  out(`\r\n${'─'.repeat(width())}\r\n ${bold('Edit file')}\r\n src/App.tsx\r\n${'╌'.repeat(width())}\r\n`);
+  out(`${ESC}[48;2;80;20;30m ${edit.line} -  ${edit.show[0]} ${ESC}[0m\r\n${ESC}[48;2;20;70;40m ${edit.line} +  ${edit.show[1]} ${ESC}[0m\r\n${'╌'.repeat(width())}\r\n`);
+  if (trusted) return true;
+  out(` Do you want to make this edit to ${bold('src/App.tsx')}?\r\n`);
+  menu = { cursor: 0 };
+  drawOptions(true);
+  report(`state=blocked:kind=permission:msg=${b64('Edit src/App.tsx?')}`);
+  const pick = await new Promise(r => { menu.done = r; });
+  menu = null;
+  if (pick === 1) trusted = true;
+  return !(pick === 2 || pick < 0);
+}
+
+async function runDirect(edit) {
+  report(`state=working:msg=${b64('reading src/App.tsx')}`);
+  await sleep(600);
+  out(`${accent('●')} Read src/App.tsx ${dim('(212 lines)')}\r\n`);
+  await sleep(700);
+  if (!await ask(edit)) { out(`\r\n${dim('Edit declined.')}\r\n> `); report(`state=done:msg=${b64('edit declined')}`); return; }
+  report(`state=working:msg=${b64('editing src/App.tsx')}`);
+  await fs.writeFile(APP, (await fs.readFile(APP, 'utf8')).replace(edit.from, edit.to));
+  out(`\r\n${accent('●')} Updated src/App.tsx ${dim('(1 line)')}\r\n\r\n> `);
+  report(`state=done:msg=${b64(edit.done)}`);
+}
+
 async function run(prompt) {
   out('\r\n\r\n');   // the prompt was echoed as it was typed
+  const direct = DIRECT.find(d => d.when.test(prompt));
+  if (direct && !/Redline notes/i.test(prompt)) return runDirect(direct);
   report(`state=working:msg=${b64('reading the notes')}`);
   const todo = await notesFor(prompt);
   await sleep(700);
@@ -61,15 +97,7 @@ async function run(prompt) {
   report(`state=working:msg=${b64('planning the edit')}`);
   await sleep(PLAN);
   for (const { id, edit } of todo) {
-    out(`\r\n${'─'.repeat(72)}\r\n ${bold('Edit file')}\r\n src/App.tsx\r\n${'╌'.repeat(72)}\r\n`);
-    out(`${ESC}[48;2;80;20;30m ${edit.line} -  ${edit.show[0]} ${ESC}[0m\r\n${ESC}[48;2;20;70;40m ${edit.line} +  ${edit.show[1]} ${ESC}[0m\r\n${'╌'.repeat(72)}\r\n`);
-    out(` Do you want to make this edit to ${bold('src/App.tsx')}?\r\n`);
-    menu = { cursor: 0 };
-    drawOptions(true);
-    report(`state=blocked:kind=permission:msg=${b64('Edit src/App.tsx?')}`);
-    const pick = await new Promise(r => { menu.done = r; });
-    menu = null;
-    if (pick === 2 || pick < 0) { out(`\r\n${dim('Edit declined.')}\r\n> `); report(`state=done:msg=${b64('edit declined')}`); return; }
+    if (!await ask(edit)) { out(`\r\n${dim('Edit declined.')}\r\n> `); report(`state=done:msg=${b64('edit declined')}`); return; }
     report(`state=working:msg=${b64('editing src/App.tsx')}`);
     await fs.writeFile(APP, (await fs.readFile(APP, 'utf8')).replace(edit.from, edit.to));
     out(`\r\n${accent('●')} Updated src/App.tsx ${dim('(1 line)')}\r\n`);

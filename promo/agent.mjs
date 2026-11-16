@@ -28,19 +28,22 @@ const appSource = await fs.readFile(appFile, 'utf8');
 const server = await createServer({
   configFile: false, root: demo, cacheDir: path.join(demo, '.vite-cache'), logLevel: 'warn',
   server: { port: PORT, strictPort: true },
-  plugins: [redline({ root: demo, agent: { command: process.execPath, args: [path.resolve('promo/demo-agent.mjs')], label: 'claude', menus: true, env: { PLAN_MS: '8500' } } }), react()],
+  plugins: [redline({ root: demo, agent: { command: process.execPath, args: [path.resolve('promo/demo-agent.mjs')], label: 'claude', menus: true, env: { PLAN_MS: '6000' } } }), react()],
   optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime'] },
 });
 await server.listen();
 const browser = await chromium.launch({ channel: process.env.PW_CHROMIUM ? undefined : 'chrome', headless: !process.env.PROMO_HEADED });
-const page = await browser.newPage({ viewport: { width: 1024, height: 640 }, deviceScaleFactor: 1.875 });
+// 1280 px wide: at 1024 the agent toolbar wraps onto two rows once the status reads "Done · applied 1 note"
+// (and at 1120 the demo's route table wraps its cells).
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1.5 });
 await page.addInitScript(stageScript);
 const ui = sel => page.locator('redline-root').locator(sel);
 const hold = ms => page.waitForTimeout(ms);
 const caption = (step, title, keys = []) => page.evaluate(([s, t, k]) => window.__stage.caption(s, t, k), [step, title, keys]);
+const term = () => page.frameLocator('iframe[title$="terminal"]');
 const card = (kind) => page.evaluate(k => window.__stage.card(k), kind);
 const centre = async loc => { const b = await loc.boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
-let cursor = [512, 400];
+let cursor = [640, 500];
 async function glide([x, y], ms = 650) {
   const [x0, y0] = cursor, n = Math.max(1, Math.round(ms / 16));
   for (let i = 1; i <= n; i++) {
@@ -102,23 +105,31 @@ try {
   await page.keyboard.press('a');
   await ui('.bar.ext').waitFor();
   await hold(1600);
-  await caption('03 · Fresh', 'A new session for each batch of notes (⚙).<br>A clean context every time.');
+  await caption('03 · Settings', 'The CLI, its notes and its sessions: all under ⚙.');
   await click(ui('.xbar button.ag-gear'));
-  await hold(700);
-  await click(ui('.attach[data-toolbar="agent"] .ag-set label').filter({ hasText: 'New session per prompt' }));
-  await hold(900);
+  await hold(1800);
   await click(ui('.xbar button.ag-gear'));
-  await hold(500);
+  await hold(400);
 
   // 3 · apply, no terminal
   await caption('04 · Apply', 'Your agent CLI starts in the background.<br>No terminal needed.');
   await click(ui('.xbar button[data-cmd="Apply notes"]'));
   await ui('.bar.lit.spin').waitFor({ timeout: 20_000 });
-  await glide([512, 330], 600);
-  await hold(1400);
+  await hold(900);
+
+  // 3b · its terminal, one click away
+  if (!process.env.NO_EARLY_CLI) {
+  await caption('05 · CLI', 'Want to watch? Its terminal is one click away.');
+  await click(ui('.xbar button[data-cli]'));
+  await term().locator('.xterm-rows').filter({ hasText: 'get_note' }).waitFor({ timeout: 20_000 });
+  await hold(2000);
+  await click(ui('.xbar button[data-cli]'));
+  await glide([640, 420], 500);
+  await hold(300);
+  }
 
   // 4 · keep reviewing: a second note, a second session
-  await caption('05 · Parallel', 'Keep reviewing. The next note gets its own session.');
+  await caption('06 · Parallel', 'Keep reviewing. The next note gets its own session.');
   await pin(page.locator('h2', { hasText: 'Active routes' }), COMMENT2);
   await page.keyboard.press('a');
   await ui('.bar.ext').waitFor();
@@ -131,13 +142,13 @@ try {
   // 5 · the questions, in a card
   const qcard = ui('.attach[data-toolbar="agent"] .ag-card');
   await qcard.waitFor({ timeout: 30_000 });
-  await caption('06 · Ask', 'It asks before it edits:<br>the diff and every option, on the toolbar.');
+  await caption('07 · Ask', 'It asks before it edits:<br>the diff and every option, on the toolbar.');
   await hold(2600);
   // Whichever session asks first; then the other one's question comes up.
   const first = await qcard.getAttribute('data-session'), other = first === 's1' ? 's2' : 's1';
   await click(qcard.locator('.ag-opt').first());
   await ui(`.attach[data-toolbar="agent"] .ag-card[data-session="${other}"]`).waitFor({ timeout: 30_000 });
-  await caption('07 · Next', 'The next session\'s question comes up by itself.');
+  await caption('08 · Next', 'The next session\'s question comes up by itself.');
   await hold(2200);
   await click(qcard.locator('.ag-opt', { hasText: "don't ask again" }));
   await page.locator('h2', { hasText: 'Routes today' }).waitFor({ timeout: 20_000 });
@@ -145,33 +156,48 @@ try {
   await page.waitForFunction(() => document.querySelector('redline-root')?.shadowRoot?.querySelectorAll('.ag-tab:is([data-state="done"], [data-state="seen"])').length === 2, null, { timeout: 20_000 });
 
   // 6 · done: both applied live, both notes ticked off
-  await caption('08 · Done', 'Applied live, both notes ticked off.');
+  await caption('09 · Done', 'Applied live, both notes ticked off.');
   await glide(await centre(page.locator('h2', { hasText: 'Routes today' })), 700);
-  await hold(1800);
+  await hold(1400);
 
   // 6b · what it changed: the 📎 on a tab opens the files the session changed, with the diff (D56)
-  await caption('09 · Changes', 'See what each session changed:<br>the files and the diff, on its tab.');
+  await caption('10 · Changes', 'See what each session changed:<br>the files and the diff, on its tab.');
   await click(ui('.ag-tab button.ag-att').first());
   await hold(900);
   await click(ui('.ag-files .ag-frow').first());
   await ui('.ag-files .ag-diff').waitFor({ timeout: 10_000 });
-  await hold(3200);
-  await click(ui('.ag-tab button.ag-att').first());
+  await hold(3000);
+  await click(ui('button[data-k="files-done"]'));   // the tabs re-sort: close it by its own button
   await hold(400);
 
-  // 7 · the terminal, on demand
-  await caption('10 · CLI', 'Each session\'s terminal is one click away.');
+  // 7 · prompt it yourself, in its terminal
+  await caption('11 · Prompt', 'Or just tell it, in its own terminal.');
   await click(ui('.xbar button[data-cli]'));
-  await page.frameLocator('iframe[title$="terminal"]').locator('.xterm-rows').filter({ hasText: 'update_note' }).waitFor();
-  await hold(2600);
+  const rows = term().locator('.xterm-rows');
+  await rows.filter({ hasText: 'update_note' }).waitFor();
+  await hold(500);
+  await click(rows);
+  await page.keyboard.type('Rename "Deliveries per day" to "Deliveries this week"', { delay: 30 });
+  await hold(300);
+  await page.keyboard.press('Enter');
+  // The session that said "don't ask again" goes straight on; the other one asks, in the card as usual.
+  const asked = ui('.attach[data-toolbar="agent"] .ag-card .ag-opt').first();
+  await Promise.race([asked.waitFor({ timeout: 20_000 }), page.locator('h2', { hasText: 'Deliveries this week' }).waitFor({ timeout: 20_000 })]);
+  if (await asked.isVisible()) { await hold(1400); await click(asked); }
+  await page.locator('h2', { hasText: 'Deliveries this week' }).waitFor({ timeout: 20_000 });
+  await hold(1600);
   await click(ui('.xbar button[data-cli]'));   // the window sits above the page: close it before the end card
-  await hold(400);
+  await glide(await centre(page.locator('h2', { hasText: 'Deliveries this week' })), 700);
+  await hold(1600);
 
   await card('end');
   await hold(3600);
   await cdp.send('Page.stopScreencast');
   end = Date.now() / 1000 - t0;
   await fetch(`http://localhost:${PORT}/__redline/agent/stop`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-agent-token': token }, body: '{}' }).catch(() => {});
+} catch (e) {
+  await page.screenshot({ path: path.join(outDir, 'agent-fail.png') }).catch(() => {});
+  throw e;
 } finally {
   await fs.writeFile(appFile, appSource);
   await browser.close();
