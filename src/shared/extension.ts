@@ -8,7 +8,7 @@
 //     rl.on('noteCreated', n => console.log('new note', n.id));
 //   };
 
-import type { NewNoteRequest, Note, Target } from './types.ts';
+import type { NewNoteRequest, Note, NoteType, Target } from './types.ts';
 
 /** The built-in modes, or an extension's pick mode as `ext:<id>` (v4). */
 export type RedlineMode = 'idle' | 'comment' | 'text' | 'sketch' | `ext:${string}`;
@@ -89,6 +89,12 @@ export interface RedlineModeDef {
   key?: string;
   title?: string;
   stay?: boolean;
+  /**
+   * The extension toolbar this mode belongs to (v8): started while that toolbar shows, the toolbar stays
+   * (a recorder's Point button) instead of giving way to the main one. Esc ends the mode first. Such a mode
+   * gets no button on the main toolbar (draw your own in the toolbar) and its `key` isn't bound there.
+   */
+  toolbar?: string;
   onPick(pick: { el: Element | null; whole: boolean; x: number; y: number }): void;
   onStart?(): void;
   onStop?(): void;
@@ -167,6 +173,11 @@ export interface RedlineToolbarDef {
    * otherwise Esc goes back to the main toolbar as before.
    */
   onEscape?(): boolean;
+  /**
+   * Keys while this toolbar shows and nothing is being typed (v8): return true when you handled one; it then
+   * doesn't reach the overlay's own keys (C, T, S…) or the app. The overlay's hotkey and Esc aren't offered.
+   */
+  onKey?(e: KeyboardEvent): boolean;
   onShow?(): void;
   onHide?(): void;
 }
@@ -220,6 +231,31 @@ export interface RedlineToastOptions {
   ms?: number;
 }
 export interface RedlineToastAction { label: string; title?: string; primary?: boolean; onClick(): void }
+
+/** What `rl.screenshot` captures (v8): the viewport, the target outlined in red and cropped around it unless `crop` is false. */
+export interface RedlineShot {
+  /** The element to mark; or `box` in viewport px (x, y, width, height). */
+  el?: Element | null;
+  box?: [number, number, number, number];
+  crop?: boolean;
+  /** Drawn over the shot, at viewport size (an ink layer). */
+  sketch?: SVGSVGElement | null;
+}
+
+/** What `rl.noteRequest` builds a note from (v8). */
+export interface RedlineNoteInput {
+  /** The element; none (or `whole`) for the whole page. */
+  el?: Element | null;
+  whole?: boolean;
+  /** Where on the element it was picked (pin position), viewport px. */
+  x?: number;
+  y?: number;
+  type?: NoteType;
+  body?: string;
+  label?: string;
+  /** Capture a screenshot with the element outlined (default true). */
+  screenshot?: boolean;
+}
 
 /** Which store call failed (v4). */
 export type RedlineOp = 'load' | 'create' | 'update' | 'remove' | 'message';
@@ -277,9 +313,10 @@ export interface RedlineApi {
    * removeSlot and gate; 4 adds beforeSave, card decorators and actions, setPinStyle, addMode,
    * addSketchTool and the error/noteUpdated/noteRemoved/messageSent events; 5 adds addWindow,
    * addToolbar, setStatus, statuses, setBadge and the status event; 6 adds addTargetEnricher and
-   * beforeCreate (also as `rl.on('beforeCreate', fn)`); 7 adds toast options with action buttons. Check `rl.version >= 7`.
+   * beforeCreate (also as `rl.on('beforeCreate', fn)`); 7 adds toast options with action buttons; 8 adds describe,
+   * screenshot and noteRequest. Check `rl.version >= 8`.
    */
-  version: 7;
+  version: 8;
   /** Adds a toolbar button; a button with the same id is replaced (use that to update one). */
   addButton(b: RedlineButton): void;
   /** Removes a toolbar button added with addButton (v2). */
@@ -350,6 +387,15 @@ export interface RedlineApi {
   refresh(): Promise<void>;
   /** Re-render the bar and panel (after your button/section state changed). */
   render(): void;
+  /** The target a note on `el` would get (v8): selector, source, components…, enrichers applied. `x`, `y`: the pick point. */
+  describe(el: Element, x?: number, y?: number): Target;
+  /** A screenshot as a PNG data URL, the overlay hidden (v8); undefined when capture failed. */
+  screenshot(shot?: RedlineShot): Promise<string | undefined>;
+  /**
+   * A new note's request as the overlay builds it (v8): target, page, URL, viewport, scroll, theme, recent
+   * console errors and (unless `screenshot: false`) a screenshot. Send it to your own route, or change it first.
+   */
+  noteRequest(input: RedlineNoteInput): Promise<NewNoteRequest>;
 }
 
 export type RedlineExtension = (api: RedlineApi) => void | Promise<void>;

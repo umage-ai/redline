@@ -117,13 +117,16 @@ function onKey(ctx: Ctx, e: KeyboardEvent) {
   if (ctx.sketchKey(e)) return;
   if (isTyping(e, ctx.shadow) || e.ctrlKey) return;
   const k = e.key.toLowerCase();
+  // An extension toolbar on screen takes keys first (v8), all but Esc.
+  const own = ctx.extToolbar();
+  if (own?.onKey && k !== 'escape' && safely(() => own.onKey!(e) === true, false)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
   if (k === 'escape') escape(ctx);
   else if (k === 'c') ctx.setMode('comment');
   else if (k === 't') ctx.setMode('text');
   else if (k === 's' || k === 'k') ctx.setMode('sketch');
   else if (k === 'n') ctx.togglePanel();
   else {
-    const m = ctx.ext.modes.find(x => x.key?.toLowerCase() === k);
+    const m = ctx.ext.modes.find(x => !x.toolbar && x.key?.toLowerCase() === k);
     // A main-toolbar button's key works while that toolbar shows: an extension toolbar in its place
     // (v5) leaves the key to the extension, so the two can share a letter (decks: A is Agent, Deck's A + Slide).
     const b = m || ctx.extToolbar() ? null : ctx.ext.buttons.find(x => x.key?.toLowerCase() === k);

@@ -80,6 +80,14 @@ note it is on and read the open page. Local dev only. See [agent/README.md](http
 
 ![The agent toolbar: the CLI asks to edit src/App.tsx; the card shows the diff and its three options](https://raw.githubusercontent.com/umage-ai/redline/main/docs/images/agent.png)
 
+## Voice notes and recorded sessions
+
+With `@umage.ai/redline-voice`, talk instead of typing: **Voice** (V) picks an element, you talk, and the note's text is the
+transcript, with the recording linked. **Record** goes further: talk while you point at elements, draw on the page, take
+screenshots and click through the app; the agent gets a `session.md` lining up what you said with what you showed, by time.
+Transcripts come from the browser, your own Whisper server, any OpenAI-compatible API or a local tool, tried in order. See
+[voice/README.md](https://github.com/umage-ai/redline/blob/main/voice/README.md).
+
 ## Packages
 
 Start with the core; add the others only when you need them. Each has its own README.
@@ -88,6 +96,7 @@ Start with the core; add the others only when you need them. Each has its own RE
 |---|---|---|---|
 | [`@umage.ai/redline`](https://www.npmjs.com/package/@umage.ai/redline) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline) | The core: dev-server plugins (Vite, Astro, Next.js, Angular, any Node server), the overlay, the agent skill, the MCP server and the CLI | Always: this is Redline ([setup](#quick-start)) |
 | [`@umage.ai/redline-agent`](https://www.npmjs.com/package/@umage.ai/redline-agent) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-agent?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-agent) | Your agent CLI run from the overlay: the agent toolbar, fresh sessions, its questions in a card ([agent/](https://github.com/umage-ai/redline/blob/main/agent/README.md)) | You want notes applied without opening a terminal (local dev) |
+| [`@umage.ai/redline-voice`](https://www.npmjs.com/package/@umage.ai/redline-voice) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-voice?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-voice) | Voice notes and recorded review sessions, transcribed by the browser, Whisper or any OpenAI-compatible API ([voice/](https://github.com/umage-ai/redline/blob/main/voice/README.md)) | Talking is faster than typing, or you want to walk the agent through a flow |
 | [`@umage.ai/redline-hub`](https://www.npmjs.com/package/@umage.ai/redline-hub) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-hub?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-hub) | A shared note server for a team: projects, members, live notes ([hub/](https://github.com/umage-ai/redline/blob/main/hub/README.md)) | Several people review the same app |
 | [`@umage.ai/redline-overlay`](https://www.npmjs.com/package/@umage.ai/redline-overlay) | [![npm](https://img.shields.io/npm/v/@umage.ai/redline-overlay?label=&color=e5484d)](https://www.npmjs.com/package/@umage.ai/redline-overlay) | The overlay as browser modules, no server parts ([overlay/](https://github.com/umage-ai/redline/blob/main/overlay/README.md)) | You embed Redline in your own product (an extension, a review site) |
 
