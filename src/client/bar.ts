@@ -43,10 +43,11 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     }, b.label, b.key ? h('kbd', {}, b.key.toUpperCase()) : null))];
   }
 
-  // Extension pick modes (v4): highlighted like the built-in modes while on.
+  // Extension pick modes (v4): highlighted like the built-in modes while on. A mode of an extension toolbar
+  // (v8 `toolbar`) has its button there, not here.
   function extModes(): HTMLElement[] {
     const locked = ctx.locked();
-    return ctx.ext.modes.map(m => {
+    return ctx.ext.modes.filter(m => !m.toolbar).map(m => {
       const key = m.key?.toUpperCase();
       return h('button', { class: state.mode === `ext:${m.id}` ? 'on' : '', 'data-mode': m.id, disabled: locked,
         title: (m.title ?? m.label) + (key ? ` (${key})` : ''), onclick: () => ctx.setMode(`ext:${m.id}`) }, m.label, key ? h('kbd', {}, key) : null);
@@ -135,6 +136,8 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
 
   /** Above the toolbar while it sits in the lower half of the window, below it otherwise; centred on it, kept on screen. */
   function placeAttached() {
+    // Toasts go above a card that sits above the toolbar, or they would be under it.
+    ui.style.removeProperty('--toast-above');
     if (card.style.display === 'none' || el.bar.style.display === 'none') return;
     const r = el.bar.getBoundingClientRect(), s = card.style, GAP = 8, EDGE = 8;
     s.minWidth = `${Math.min(Math.round(r.width), innerWidth - 2 * EDGE)}px`;
@@ -143,6 +146,7 @@ export const barPart: Part<'renderBar' | 'renderLauncher' | 'syncPanel' | 'panel
     if (r.top + r.height / 2 > innerHeight / 2) {
       s.top = 'auto'; s.bottom = `${Math.round(innerHeight - r.top + GAP)}px`; s.maxHeight = `${Math.round(r.top - GAP - EDGE)}px`;
       card.classList.add('above'); card.classList.remove('below');
+      ui.style.setProperty('--toast-above', `${Math.round(innerHeight - r.top + GAP + card.offsetHeight + GAP)}px`);
     } else {
       s.bottom = 'auto'; s.top = `${Math.round(r.bottom + GAP)}px`; s.maxHeight = `${Math.round(innerHeight - r.bottom - GAP - EDGE)}px`;
       card.classList.add('below'); card.classList.remove('above');

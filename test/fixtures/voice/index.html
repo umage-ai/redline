@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fixture — Voice</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f6f6f8; color: #222; }
+    main { padding: 24px; max-width: 760px; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    button { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1 id="title">Checkout</h1>
+      <p class="lead">Review your order before paying.</p>
+      <button data-testid="pay" onclick="window.paid = (window.paid || 0) + 1">Pay now</button>
+      <a href="#/done" data-testid="done-link">Go to the receipt</a>
+    </section>
+  </main>
+</body>
+</html>

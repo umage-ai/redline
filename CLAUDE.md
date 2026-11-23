@@ -34,9 +34,9 @@ npm run build          # esbuild → dist/ (vite.js, astro.js, server.js, cli.js
 npm run dev            # rebuild on change
 npm run typecheck      # tsc --noEmit (src, test/unit, test/e2e)
 npm test               # unit tests (node:test, runs .ts directly) + docs check
-npm run test:e2e       # build + Playwright against 10 fixture servers (installed Chrome; PW_CHROMIUM=1 for bundled; PW_FIXTURES=vue,angular starts only those)
+npm run test:e2e       # build + Playwright against 11 fixture servers (installed Chrome; PW_CHROMIUM=1 for bundled; PW_FIXTURES=vue,angular starts only those)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
-npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests; also the hub and overlay packages (slow; runs on prepublishOnly)
+npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests; also the hub, overlay, agent and voice packages (slow; runs on prepublishOnly)
 # Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.
 npm run smoke -- <url> "<selector>"   # pin a throwaway note on any running app, print the saved target
 node dist/cli.js mcp [dir]            # the MCP server (stdio) agents use; finds dev servers via .redline/servers.json (D22); dev servers also answer POST /__redline/mcp (D37)
@@ -55,7 +55,7 @@ npx playwright test -c dotnet/playwright.config.ts      # browser smoke: Razor/B
 dotnet pack dotnet/Redline.slnx                         # the NuGet packages
 ```
 
-The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact,next}`, ports 5199–5206, Next on 5207 webpack + 5208 Turbopack) load `dist/`, so **rebuild before e2e**. They use the root `node_modules`, except Angular (own TypeScript major) and Next (large): their `serve.mjs` installs their own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
+The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact,next,voice}`, ports 5199–5206, Next on 5207 webpack + 5208 Turbopack, voice on 5209) load `dist/`, so **rebuild before e2e**. They use the root `node_modules`, except Angular (own TypeScript major) and Next (large): their `serve.mjs` installs their own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
 changing server-side code (handler/store/plugin), and restart Next's after any rebuild (L47). Client-only changes just need a rebuild and a page reload.
 
 ## Architecture (the parts that span files)
@@ -82,11 +82,11 @@ body, diff block for text notes, generated image lines, `> ` reply. Files: `.red
 
 **Remote stores** (D40–D45, docs/PROTOCOL.md, docs/SETUPS.md): `src/server/remote.ts` (client), `protocol.ts` (reference
 server), `/__redline/events` fans one feed out to every overlay; .NET `Notes/RemoteNoteStore.cs`. Store methods take an
-optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`, `overlay/` a third (dist/overlay, D50), `agent/` a fourth (D53, on `agent-bridge/`, D63); `examples/review-frontend`: deployed review, shapes A–C.
+optional last `ctx: { req }`. `hub/` is a second npm package (D44) importing `src/`, `overlay/` a third (dist/overlay, D50), `agent/` a fourth (D53, on `agent-bridge/`, D63), `voice/` a fifth (D71: voice notes, session recorder; on `plugins`); `examples/review-frontend`: deployed review, shapes A–C.
 
 **Extension points** (all opt-in, D19–D21): the handler talks to a `NoteStore` (markdown `createStore` by default)
 and runs `hooks`; `POST /__redline/edit` runs `SourceWriter`s (`src/server/writers.ts`, pure guards in `edit.ts`);
-`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`). The `agent` option (D53) is a fourth package, `agent/` (`@umage.ai/redline-agent`: the toolbar extension `panel.ts`, the xterm iframe `terminal.ts`, the mount in `server.ts`), on `agent-bridge/` (D63; unpublished, bundled in; imports nothing outside its folder: sessions in `sessions.ts`/`acp.ts`, OSC 7501 in `program-status.ts`, routes in `handler.ts`, types in `types.ts`); the core only has `src/server/agent-hook.ts` (option types, loads the package from the project).
+`/__redline/ext/<i>.js` serves overlay extensions, which get `RedlineApi` (`src/shared/extension.ts`). `plugins` (D70, `src/server/plugins.ts`) mount packages at `/__redline/p/<name>/` with notes access. The `agent` option (D53) is a fourth package, `agent/` (`@umage.ai/redline-agent`: the toolbar extension `panel.ts`, the xterm iframe `terminal.ts`, the mount in `server.ts`), on `agent-bridge/` (D63; unpublished, bundled in; imports nothing outside its folder: sessions in `sessions.ts`/`acp.ts`, OSC 7501 in `program-status.ts`, routes in `handler.ts`, types in `types.ts`); the core only has `src/server/agent-hook.ts` (option types, loads the package from the project).
 
 **Source location per framework** (`anchor.ts` `sourceInfo`, D7/D23): JSX through a dev-only transform
 (`src/server/jsx-source.ts` stamps `data-redline-src="file:line:col Component"` on an HTML-tag allowlist), Vue SFC templates

@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-13 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-23 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -177,3 +177,6 @@ Prune entries whose cause is gone from the code.
 
 ## L63 — A worktree unit test failed now and then: `git commit` → "index.lock: File exists"
 - **Cause / fix:** the bridge's `git status` on a session's worktree (its state for the card) refreshes the index and takes `index.lock` for that; a commit at the same moment, the test's or a person's, fails. Every git the bridge runs now has `GIT_OPTIONAL_LOCKS=0` (git's own advice for background readers). **Guard:** `agent-worktrees.test.ts` "without optional locks".
+
+## L64 — A voice note's transcript overwrote what the reviewer had typed meanwhile
+- **Symptom:** the reviewer rewrote a pending voice note; when the transcript landed, their text was gone. **Cause:** a plugin's `notes.get` then `notes.update` isn't atomic, and the "transcribing" step rewrote the (unchanged) body in between. **Fix:** the plugin keeps a hash of the body it last wrote (`meta.voice.bodyHash`) and only replaces a body that still matches, and only when it changes. Extension gotcha found alongside: `rl.setMode(m)` toggles, so calling it with the current mode turns it off; track the mode from the `mode` event. **Guard:** `voice.test.ts` "the reviewer’s own edit…", `voice.spec.ts`.

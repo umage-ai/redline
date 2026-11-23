@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import redline from '../../dist/vite.js';
+import voicePkg from '../../voice/dist/index.cjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 // REDLINE_AGENT=1 adds the agent toolbar (D53) with every agent CLI installed here (Claude Code, OpenCode;
@@ -16,9 +17,13 @@ const agent = !cmd ? undefined : cmd === '1' ? true : cmd !== 'fake' ? { command
     { id: 'opencode', label: 'OpenCode', command: process.execPath, args: [fake, '--two'] }],
   sessions: 'shared',
 };
+// Voice notes and the session recorder (D71). REDLINE_WHISPER=<OpenAI-compatible url> transcribes there first,
+// falling back to the browser's live transcript (Chrome/Edge). Left out of `npm run screenshots`.
+const whisper = process.env.REDLINE_WHISPER;
+const voice = voicePkg.voice({ transcribe: whisper ? [{ url: whisper, model: process.env.REDLINE_WHISPER_MODEL }, 'browser'] : 'browser' });
 export default defineConfig({
   root,
   cacheDir: '.vite-cache',
-  plugins: [redline({ root, dir: process.env.REDLINE_DIR, directEdit: true, extensions: ['redline.ext.js'], ...(agent ? { agent } : {}) }), react()],
+  plugins: [redline({ root, dir: process.env.REDLINE_DIR, directEdit: true, extensions: ['redline.ext.js'], ...(cmd === 'fake' ? {} : { plugins: [voice] }), ...(agent ? { agent } : {}) }), react()],
   optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime'] },
 });

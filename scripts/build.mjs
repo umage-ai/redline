@@ -3,7 +3,7 @@
 // side-effect-free ESM modules for embedding (dist/overlay, D49), and type declarations in dist/types.
 // Also hub/dist/cli.js: @umage.ai/redline-hub as one file with no dependencies (D44), and
 // overlay/dist: @umage.ai/redline-overlay, the same overlay modules and their types on their own (D50),
-// agent/dist: @umage.ai/redline-agent, the agent panel (D53), and agent-bridge/dist: @umage.ai/agent-bridge,
+// agent/dist: @umage.ai/redline-agent, the agent panel (D53), voice/dist: @umage.ai/redline-voice (D71), and agent-bridge/dist: @umage.ai/agent-bridge,
 // the Redline-free core it bundles (D63; unpublished for now).
 import * as esbuild from 'esbuild';
 import { execFileSync } from 'node:child_process';
@@ -16,6 +16,7 @@ rmSync('hub/dist', { recursive: true, force: true });
 rmSync('overlay/dist', { recursive: true, force: true });
 rmSync('agent/dist', { recursive: true, force: true });
 rmSync('agent-bridge/dist', { recursive: true, force: true });
+rmSync('voice/dist', { recursive: true, force: true });
 
 const node = {
   entryPoints: { vite: 'src/vite.ts', astro: 'src/astro.ts', angular: 'src/angular.ts', server: 'src/server/index.ts', cli: 'src/cli.ts', next: 'src/next.ts', 'next-script': 'src/next-script.ts' },
@@ -67,6 +68,19 @@ const bridgeClient = {
   outdir: 'agent-bridge/dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022', logLevel: 'info',
 };
 
+// @umage.ai/redline-voice (voice/, D71): the overlay extension (browser ESM) and the server plugin as one
+// CommonJS file, like the agent package (configs that `require` it work too).
+const voiceClient = {
+  entryPoints: { extension: 'voice/src/extension.ts' },
+  outdir: 'voice/dist', bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
+  minify: !watch, sourcemap: watch ? 'inline' : false, logLevel: 'info', legalComments: 'none',
+};
+const voiceServer = {
+  entryPoints: { index: 'voice/src/index.ts' },
+  outdir: 'voice/dist', outExtension: { '.js': '.cjs' }, bundle: true, platform: 'node', format: 'cjs', target: 'node20',
+  logLevel: 'info', define: { 'import.meta.url': 'undefined' },
+};
+
 const hub = {
   entryPoints: { cli: 'hub/src/cli.ts' },
   outdir: 'hub/dist', bundle: true, platform: 'node', format: 'esm', target: 'node22',
@@ -74,9 +88,9 @@ const hub = {
 };
 
 if (watch) {
-  for (const o of [node, nextLoader, client, agent, agentServer, bridgeNode, bridgeClient, overlay, hub]) await (await esbuild.context(o)).watch();
+  for (const o of [node, nextLoader, client, agent, agentServer, bridgeNode, bridgeClient, overlay, hub, voiceClient, voiceServer]) await (await esbuild.context(o)).watch();
 } else {
-  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(agentServer), esbuild.build(bridgeNode), esbuild.build(bridgeClient), esbuild.build(overlay), esbuild.build(hub)]);
+  await Promise.all([esbuild.build(node), esbuild.build(nextLoader), esbuild.build(client), esbuild.build(agent), esbuild.build(agentServer), esbuild.build(bridgeNode), esbuild.build(bridgeClient), esbuild.build(overlay), esbuild.build(hub), esbuild.build(voiceClient), esbuild.build(voiceServer)]);
   emitTypes();
   overlayPackage();
 }

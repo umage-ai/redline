@@ -299,7 +299,8 @@ function core(ctx: Ctx, keyNow: () => string) {
       if (!state.open) setOpen(true); else ctx.toast(ctx.t('gateFirst'), true);
       return;
     }
-    if (m !== 'idle') leaveToolbar();
+    // A mode that belongs to the toolbar on screen (v8) keeps it.
+    if (m !== 'idle' && !(state.toolbar && extMode(m)?.toolbar === state.toolbar)) leaveToolbar();
     if (ctx.draft) ctx.cancelDraft();
     if (m !== 'idle' && !state.open) { state.open = true; ctx.emit('open'); }
     const before = extMode();

@@ -20,7 +20,11 @@ export interface StoreOptions {
  * `status`: a product's own status (the overlay's `statuses`, D50); "" removes it.
  */
 /** A note change. `message` is not a field: it appends one message to the note's thread (D52). */
-export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen' | 'status'>> & { message?: NoteMessage };
+export type NotePatch = Partial<Pick<Note, 'body' | 'reply' | 'done' | 'to' | 'seen' | 'status'>> & {
+  message?: NoteMessage;
+  /** Replaces the note's `meta` (null removes it). Server side only (plugins, D70): `cleanPatch` never passes it from a page. */
+  meta?: Record<string, unknown> | null;
+};
 
 /** Keep only the fields a patch may carry, with the right types (the API takes them from the page). */
 export function cleanPatch(p: unknown): NotePatch {
@@ -205,6 +209,7 @@ export function createStore(opts: StoreOptions) {
         if (typeof patch.to === 'string' && n.type === 'text') n.to = patch.to;
         if (typeof patch.done === 'boolean') n.done = patch.done;
         if (typeof patch.status === 'string') n.status = patch.status || undefined;
+        if (patch.meta !== undefined) n.meta = patch.meta && Object.keys(patch.meta).length ? { ...patch.meta } : undefined;
         if (patch.message) n.messages = [...(Array.isArray(n.messages) ? n.messages : []), withTime(patch.message)];
         await writeFile(hit.file, hit.notes);
         await writeIndex();

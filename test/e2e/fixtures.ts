@@ -25,4 +25,6 @@ export const FIXTURES = {
   // Next.js 15 (D48): one app, served twice (webpack and Turbopack); own node_modules, installed by serve.mjs.
   next: { ...fixture('next', 5207, 'node serve.mjs 5207', 300_000) },
   'next-turbo': { ...fixture('next', 5208, 'node serve.mjs 5208 --turbopack', 300_000), name: 'next-turbo' },
+  // The voice plugin (D71), with a stand-in transcriber.
+  voice: vite('voice', 5209),
 } satisfies Record<string, Fixture>;

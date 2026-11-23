@@ -23,6 +23,7 @@ import { liveHub } from './live.ts';
 import { devServerTools } from './mcp-tools.ts';
 import type { ExtraTools } from '../mcp.ts';
 import { agentFor, type AgentOptions, type AgentPlugin } from './agent-hook.ts';
+import { PLUGIN_NAME, type PluginNotes, type PluginRoutes, type RedlinePlugin } from './plugins.ts';
 
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void;
@@ -120,6 +121,11 @@ export interface RedlineOptions {
    * options; or `agent({…})` from the package. Needs `@umage.ai/redline-agent` installed.
    */
   agent?: boolean | string | AgentOptions | AgentPlugin;
+  /**
+   * Server plugins (D70): opt-in packages that add routes under `<apiBase>/p/<name>/` and an overlay
+   * extension, e.g. `voice()` from `@umage.ai/redline-voice` (voice notes, recorded review sessions).
+   */
+  plugins?: RedlinePlugin[];
   /**
    * Where the API is mounted: a path prefix, default `/__redline` (D60). Set it when that path is taken, or
    * the app is served under a prefix (`/app/__redline`); the injected script tag then carries `data-api`, so
@@ -301,6 +307,20 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
   const agent = agentFor(opts.agent, root, base, undefined, dir);
   const live = liveHub();
   if (agent) extensions.push(agent.panel);
+  const pluginNotes: PluginNotes = {
+    list: req => store.list(req && { req }),
+    get: async (id, req) => (await store.list(req && { req })).find(n => n.id === id) ?? null,
+    create: (body, req) => createNote(body, req),
+    async update(id, patch, req) { const n = await store.update(id, patch, req && { req }); if (n) await hook('onUpdate', n, patch); return n; },
+  };
+  const plugins = new Map<string, PluginRoutes>();
+  for (const pl of opts.plugins ?? []) {
+    if (!pl || typeof pl.setup !== 'function' || !PLUGIN_NAME.test(String(pl.name))) throw new Error(`[redline] plugins: "${pl?.name}" needs a name of lowercase letters, digits and dashes, and setup()`);
+    if (plugins.has(pl.name)) throw new Error(`[redline] plugins: two plugins named "${pl.name}"`);
+    const routes = pl.setup({ root, dir, dirPath: path.resolve(root, dir), markdown: isMarkdownStore(store), base, app, serverRoot: opts.serverRoot, notes: pluginNotes }) ?? {};
+    plugins.set(pl.name, routes);
+    for (const u of routes.extensions ?? []) if (typeof u === 'string' && u) extensions.splice(agent ? extensions.length - 1 : extensions.length, 0, u);
+  }
   const prompt = opts.prompt !== undefined ? opts.prompt || false : isMarkdownStore(store) ? undefined : false;
   const fixedLabels = typeof opts.labels === 'function' ? null : normalizeLabels(opts.labels);
   const labelsFor = async (req: IncomingMessage): Promise<LabelDef[]> => {
@@ -317,6 +337,18 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
     try { await (opts.hooks?.[name] as ((...a: unknown[]) => unknown) | undefined)?.(...args); }
     catch (err) { console.warn(`[redline] hooks.${name} failed:`, err); }
   };
+  // A new note from the page (POST /notes) or a plugin: who wrote it, whether it is resolved, its link are
+  // the store's to say, never the page's; the app and build are set here.
+  async function createNote(body: NewNoteRequest, req?: IncomingMessage) {
+    fixTarget(body.note.target);
+    for (const k of STORE_OWNED) delete (body.note as Record<string, unknown>)[k];
+    body.note.app = app || undefined;
+    body.note.build = opts.build || undefined;
+    body.note.label = cleanLabel(body.note.label) || undefined;
+    const note = await store.create(body, req && { req });
+    await hook('onCreate', note);
+    return note;
+  }
 
   // Live changes (D41): one subscription to the store, shared by every open overlay, held only
   // while at least one is listening. Each gets `event: change` and re-reads /notes.
@@ -437,6 +469,16 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       // The agent panel (D53) checks its own callers: this machine only, whatever `network` says.
       if (agent && p.startsWith('/agent/')) return agent.handle(req, res, p, localCall(req));
 
+      // Server plugins (D70): their own routes, behind the same guards; writes need the x-redline header too.
+      const pm = /^\/p\/([a-z0-9-]+)(\/.*)?$/.exec(p);
+      if (pm) {
+        const pl = plugins.get(pm[1]);
+        if (!pl?.handle) return json(res, 404, { error: 'unknown plugin' });
+        if (!read && req.headers['x-redline'] !== '1') return json(res, 403, { error: 'missing x-redline header' });
+        await pl.handle(req, res, pm[2] ?? '/', { local: localCall(req) });
+        return;
+      }
+
       // Live pages (D65): open tabs keep a stream here so MCP tools can ask them; this machine only.
       if (read && p === '/live') {
         if (!localCall(req)) return json(res, 404, { error: 'live pages are for this machine only' });
@@ -464,15 +506,7 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       if (method === 'POST' && p === '/notes') {
         const body = JSON.parse(await readBody(req)) as NewNoteRequest;
         if (!body?.note?.page || !body.note.type) return json(res, 400, { error: 'note.page and note.type are required' });
-        fixTarget(body.note.target);
-        // Who wrote it, whether it is resolved, its link: the store's to say, never the page's.
-        for (const k of STORE_OWNED) delete (body.note as Record<string, unknown>)[k];
-        body.note.app = app || undefined;   // set here, never by the page
-        body.note.build = opts.build || undefined;
-        body.note.label = cleanLabel(body.note.label) || undefined;
-        const note = await store.create(body, { req });
-        await hook('onCreate', note);
-        return json(res, 200, note);
+        return json(res, 200, await createNote(body, req));
       }
       const m = /^\/notes\/([a-z0-9]+)$/.exec(p);
       if (m && method === 'PATCH') {
