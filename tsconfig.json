@@ -26,6 +26,7 @@
     "hub/src",
     "agent/src",
     "agent-bridge/src",
+    "voice/src",
     "examples/review-frontend",
     "test/unit",
     "test/e2e",

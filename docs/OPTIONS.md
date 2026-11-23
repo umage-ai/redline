@@ -1,6 +1,6 @@
 # Options
 
-Last updated: 2026-11-14 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
+Last updated: 2026-11-23 · Cap: 150 lines · Every option with its default, in one place. Detail lives in [USAGE.md](USAGE.md), [FRAMEWORKS.md](FRAMEWORKS.md) and the linked docs.
 
 The same option is spelled `camelCase` in Node (`redline({ … })`, `withRedline(cfg, { … })`, `redlineMiddleware({ … })`,
 the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o => …)`). "—" means the server doesn't have it.
@@ -19,6 +19,7 @@ the Angular builder's `redline` block) and `PascalCase` in .NET (`AddRedline(o =
 | `prompt` / `Prompt` | shown with the markdown store | The panel's **Copy prompt** text (`{open}`, `{page}`); `false` hides it (D47). |
 | `pageKey` / `PageKey` | `'route'` | `'path'` keeps hash routes (a deck's `#/3`) on one page (D26). |
 | `extensions` / `Extensions`, `ExtensionUrls` | none | Overlay extension modules (D21). |
+| `plugins` / — | none | Server plugins: routes under `<apiBase>/p/<name>/`, an extension, notes access (D70), e.g. `voice()`. |
 
 ## Notes and source
 
@@ -94,3 +95,13 @@ Set `window.redlineConfig = { … }` before the script loads, or `data-*` on its
 
 Per viewer, in the browser (⚙, D62): the CLI, and per CLI a model and effort from the lists the server offers (Claude Code's aliases and levels; an ACP agent's own, asked once); none picked: the options above. They apply to new sessions; "Reset to project defaults" forgets them.
 
+## `voice()` (`@umage.ai/redline-voice`, D71)
+
+| Option | Default | What it does |
+|---|---|---|
+| `transcribe` | `'browser'` | Engines tried in order until one returns text: `'browser'` (the page's Web Speech text), `{ url, model, apiKey \| apiKeyEnv, language, prompt, format }` (OpenAI-compatible, e.g. a Whisper server), `{ command, args, outputFile, format }` (`{file}`, `{dir}`, `{name}`, `{lang}`; default WAV 16 kHz), or `(audio) => text \| { text, segments }`. |
+| `live` | `'auto'` | Show the browser's live transcript while recording (Chrome, Edge). |
+| `language` | the browser's | BCP 47 (`'da-DK'`); engines get the base code (`da`). |
+| `notes`, `sessions` | `true`, `true` | Voice notes (Voice mode); the session recorder. |
+| `key`, `hotkey` | `v`, `alt+shift+v` | Voice mode's key; the shortcut that opens the session recorder. |
+| `maxSeconds`, `concurrency` | `300`, `1` | Longest voice note; transcriptions at once. |

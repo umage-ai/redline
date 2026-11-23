@@ -256,7 +256,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
 .zoom img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 
 /* toast */
-.toast { position: fixed; left: calc((100vw - var(--panel-w, 0px)) / 2); bottom: calc(64px + var(--lift, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
+.toast { position: fixed; z-index: 4; left: calc((100vw - var(--panel-w, 0px)) / 2); bottom: max(calc(64px + var(--lift, 0px)), var(--toast-above, 0px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 9px; background: var(--bg);
   border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); pointer-events: none; font-size: 12.5px; }
 .toast.err { border-color: var(--ink); color: #ffb3c0; }
 .toast.act { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; pointer-events: auto; max-width: calc(100vw - 16px); }
@@ -278,7 +278,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; padding: 1px
   .bar button, .tools button { min-height: 40px; padding: 6px 12px; }
   .tools button.sw { width: 30px; height: 30px; min-height: 0; padding: 0; }
   .tools .palette { gap: 10px; padding: 10px 12px; }
-  .toast { bottom: calc(76px + var(--lift, 0px)); }
+  .toast { bottom: max(calc(76px + var(--lift, 0px)), var(--toast-above, 0px)); }
   .pin { width: 28px; height: 28px; margin-top: -28px; border-radius: 14px 14px 14px 2px; font-size: 12px; }
   .pop header button { padding: 6px 10px; }
   .pop textarea, .card textarea { font-size: 16px; }

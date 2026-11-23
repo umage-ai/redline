@@ -130,6 +130,15 @@ it while working, an orange glow while it waits for your approval, green when do
 Claude Code reports. It is its own package: `npm i -D @umage.ai/redline-agent` ([agent/README.md](../agent/README.md);
 node-pty comes with it). It runs on this machine only, with the CLI's own permission prompts.
 
+### Voice notes and recorded sessions
+
+`npm i -D @umage.ai/redline-voice`, then `plugins: [voice({ transcribe })]` ([voice/README.md](../voice/README.md)): engines
+tried in order, `'browser'` (live Web Speech text), `{ url }` (your Whisper server, any OpenAI-compatible API), `{ command }`
+(whisper.cpp…) or a function. **Voice** (V) picks like Comment; talk, Enter saves: the body becomes the transcript (agents
+can't hear audio) with a 🎙 link, and the card shows its status (waiting, transcribing, done, failed ↻). **Record** (R,
+`Alt+Shift+V`): talk while you **Point** (P), **Draw** (D), **Shot** (S) or **Browse** (B: clicks and routes logged); Space
+pauses, Enter saves `.redline/sessions/<id>/` with a `session.md` lining up your words with what you showed, and a note to it.
+
 ## What gets written
 
 `.redline/INDEX.md` (open/done counts per page, regenerated on every change), `pages/<page>.md` (one file per URL path)
@@ -174,7 +183,8 @@ All optional; without them Redline behaves as described above. Types come from `
   `error`/`noteUpdated`/`noteRemoved`/`messageSent` events; v5: `addToolbar` (your own toolbar in place of the main one,
   with a hotkey; while it shows, the main toolbar's button keys rest, so its own may reuse a letter), `addWindow` (a floating window), `setStatus` (the toolbar's outline or a dot, and a ring or dot on the
   closed launcher) with the `status` event, and `setBadge` (the launcher bubble: open notes by default); v7: `toast(msg, { actions })`
-  (buttons on a toast, which waits while hovered; returns close).
+  (buttons on a toast, which waits while hovered); v8: `describe`, `screenshot`, `noteRequest`, a mode's `toolbar`, a toolbar's `onKey`.
+- **`plugins`**: server packages with their own routes (`/__redline/p/<name>/`), extension and notes access (D70).
 - **Embedding** (an extension, another product): `mount(opts)` from `@umage.ai/redline/overlay` or
   `@umage.ai/redline-overlay`, with your own transport, note statuses and threads, a sign-in gate and translated UI text
   ([SETUPS.md](SETUPS.md#embedding-the-overlay-in-your-product), [overlay/README.md](../overlay/README.md)).

@@ -16,6 +16,8 @@ notes on the running UI. Each note is stored as markdown that you read and close
   pages/<page-slug>.md         the notes for one URL path
   assets/<id>.png              screenshot, target outlined in red (sketches drawn on top)
   assets/<id>.svg              raw sketch, viewport coordinates
+  voice/<id>.webm              a voice note's recording (with @umage.ai/redline-voice)
+  sessions/<id>/session.md     a recorded review session: transcript lined up with screenshots
 ```
 
 Monorepos: every app's notes share the root `.redline/`. Page files are prefixed with the app
@@ -45,6 +47,11 @@ Make this secondary; Publish should be the primary action.
   A `status`, `messages` or `meta` in the anchor belongs to the product that keeps the notes:
   read them for context, but `[x]` is still what closes a note. `messages` is the reviewer's
   follow-up thread (newest last): act on the latest and answer with the `> ` reply as usual.
+- **Voice note** (`meta.voice`, a 🎙 Recording link): the body is the transcript of what the reviewer
+  said. While `meta.voice.status` is `queued` or `transcribing` the body says so: skip the note for now.
+- **Recorded session** (`meta.session`, 🎬): read the `session.md` it links. Its timeline lines up the
+  reviewer's words with what they pointed at (element, source, selector, screenshot) by time; "this"
+  means the element pointed at nearest in time. Close the session's note when all of it is done.
 
 ## Finding the code — in this order
 

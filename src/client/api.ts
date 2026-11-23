@@ -5,6 +5,9 @@ import type { RedlineApi, RedlineEvents, RedlineExtension, RedlinePageKey } from
 import type { Ctx } from './context.ts';
 import { BUILTIN_KEYS } from './input.ts';
 import { safely } from './dom.ts';
+import { describe } from './anchor.ts';
+import { enrich } from './draft.ts';
+import { themeOf } from './page-dom.ts';
 
 type Listener = (...a: unknown[]) => void;
 
@@ -50,7 +53,7 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     if (k && BUILTIN_KEYS.includes(k)) console.warn(`[redline] key "${key}" for "${id}" is taken by the overlay; use the button`);
   };
   return {
-    version: 7,
+    version: 8,
     addButton(b) {
       const key = b.key?.toLowerCase();
       if (key && BUILTIN_KEYS.includes(key)) console.warn(`[redline] key "${b.key}" for "${b.id}" is taken by the overlay; use the button`);
@@ -131,6 +134,30 @@ export function createApi(ctx: Ctx, on: (e: string, fn: Listener) => () => void,
     page: () => ctx.page,
     refresh: () => ctx.poll(true),
     render: () => { ctx.renderBar(); ctx.renderPanel(true); },
+    /* v8 */
+    describe: (el, x, y) => enrich(ctx, el, describe(el, x, y)),
+    screenshot(shot = {}) {
+      const r = shot.el?.getBoundingClientRect();
+      const box = r ? [r.x, r.y, r.width, r.height] as [number, number, number, number] : shot.box;
+      return ctx.shoot({ box, crop: shot.crop, sketch: shot.sketch ?? undefined });
+    },
+    async noteRequest(input) {
+      const el = input.whole ? null : input.el ?? null;
+      const target = el ? enrich(ctx, el, describe(el, input.x, input.y)) : undefined;
+      const r = el?.getBoundingClientRect();
+      const screenshot = input.screenshot === false ? undefined : await ctx.shoot({ box: r ? [r.x, r.y, r.width, r.height] : undefined });
+      const errors = ctx.errors();
+      return {
+        note: {
+          type: input.type ?? 'comment', page: ctx.page, url: location.href, title: document.title || undefined,
+          whole: !el || undefined, target,
+          viewport: [innerWidth, innerHeight, Math.round(devicePixelRatio * 100) / 100],
+          scroll: [Math.round(scrollX), Math.round(scrollY)], theme: themeOf(),
+          errors: errors.length ? errors.slice(-5) : undefined, body: input.body ?? '', label: input.label,
+        },
+        screenshot,
+      };
+    },
   };
 }
 
