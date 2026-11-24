@@ -2,7 +2,7 @@
 // (handler.ts); an embedding product passes its own object (D49). To change one call, wrap
 // the default: `{ ...httpTransport(), create: r => base.create(withTicket(r)) }`.
 
-import type { Note, NewNoteRequest, NotesResponse } from '../shared/types.ts';
+import type { Note, NewNoteRequest, NotesResponse, Target } from '../shared/types.ts';
 import { API_BASE } from '../shared/types.ts';
 import type { Token } from '../server/edit.ts';
 import type { OverlayConfig } from './options.ts';
@@ -39,6 +39,24 @@ export interface RedlineTransport {
    * Returns the unsubscribe.
    */
   subscribe?(changed: () => void, live: (up: boolean) => void): () => void;
+  /**
+   * Live pages (D65) and the change feed in one stream per tab (D72): `ask` when an MCP tool wants this
+   * page's console errors or the DOM around a note (answer with `reply`), `change` when notes changed
+   * (only from a store with a change feed), `up` as it connects and drops. Used when the config says `live`;
+   * `httpTransport` has it for a same-origin API without extra headers.
+   */
+  live?(q: LiveQuery, on: LiveHandlers): LiveConnection;
+}
+
+/** Where a live page is: its page key, path and title. */
+export interface LiveQuery { page: string; path: string; title: string }
+export interface LiveAsk { req: string; kind: string; target?: Target }
+export interface LiveHandlers { up(on: boolean): void; ask(a: LiveAsk): void; change(): void }
+export interface LiveConnection {
+  close(): void;
+  reply(req: string, data: unknown): void;
+  /** The page moved on (client-side routing). */
+  moved(q: LiveQuery): void;
 }
 
 /** How `httpTransport` authenticates on another origin (D60). Same-origin setups need neither. */
@@ -51,6 +69,8 @@ export interface HttpTransportOptions {
    */
   headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
 }
+
+const sameOrigin = (base: string) => { try { return new URL(base, location.href).origin === location.origin; } catch { return false; } };
 
 /** The dev server's API (or any server speaking it, docs/PROTOCOL.md) at `base`. */
 export function httpTransport(base = API_BASE, opts: HttpTransportOptions = {}): RedlineTransport {
@@ -97,6 +117,24 @@ export function httpTransport(base = API_BASE, opts: HttpTransportOptions = {}):
       },
     } : {}),
     edit: (req, mode) => api('POST', mode === 'apply' ? '/edit' : mode === 'dry' ? '/edit?dry=1' : '/edit?inspect=1', req),
+    ...(sameOrigin(base) && !opts.headers ? {
+      live(q: LiveQuery, on: LiveHandlers): LiveConnection {
+        let id = '';
+        const es = new EventSource(`${base}/live?${new URLSearchParams({ ...q })}`);
+        es.addEventListener('open', () => on.up(true));
+        es.addEventListener('hello', e => { id = JSON.parse((e as MessageEvent).data).id; });
+        es.addEventListener('ask', e => on.ask(JSON.parse((e as MessageEvent).data)));
+        es.addEventListener('change', () => on.change());
+        // A server without live pages answers 404: EventSource stops by itself (no retry on a failed open).
+        es.addEventListener('error', () => on.up(false));
+        const post = (p: string, body: object) => fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1' }, body: JSON.stringify(body) }).catch(() => {});
+        return {
+          close: () => es.close(),
+          reply: (req, data) => void post('/live/reply', { conn: id, req, data }),
+          moved: q2 => { if (id) void post('/live/moved', { conn: id, ...q2 }); },
+        };
+      },
+    } : {}),
     subscribe(changed, live) {
       if (opts.headers) return readFeed(`${base}/events`, send, changed, live);
       if (typeof EventSource !== 'function') return () => {};

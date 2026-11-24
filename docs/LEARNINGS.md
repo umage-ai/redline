@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-13 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-24 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -177,3 +177,6 @@ Prune entries whose cause is gone from the code.
 
 ## L63 — A worktree unit test failed now and then: `git commit` → "index.lock: File exists"
 - **Cause / fix:** the bridge's `git status` on a session's worktree (its state for the card) refreshes the index and takes `index.lock` for that; a commit at the same moment, the test's or a person's, fails. Every git the bridge runs now has `GIT_OPTIONAL_LOCKS=0` (git's own advice for background readers). **Guard:** `agent-worktrees.test.ts` "without optional locks".
+
+## L65 — With a few dev tabs open the dev server seemed to hang (requests pending, no error)
+- **Cause / fix:** over HTTP/1.1 a browser opens at most 6 connections per server, shared by all tabs, and an EventSource holds one for good; each tab held two or three (live pages, agent status, CLI window), so the app's own requests queued behind them. WebSockets (Vite's HMR) don't count. Fix: D72 (one stream per tab, let go when hidden or not needed, a toast when stalled). Fixtures can move off taken ports: `PW_PORT_OFFSET`. **Guard:** `streams.spec.ts`, `feed.test.ts`, `mcp-live.test.ts` "one stream per tab".

@@ -14,7 +14,9 @@ import { h, inFrame, Life, safely, storage } from './dom.ts';
 import { captureErrors } from './errors.ts';
 import { shieldApp } from './shield.ts';
 import { CSS } from './styles.ts';
-import { httpTransport, type StoredNote } from './transport.ts';
+import { httpTransport, type LiveConnection, type LiveQuery, type StoredNote } from './transport.ts';
+import { gatedFeed } from './feed.ts';
+import { answer } from './live.ts';
 import { ICON, type Ctx, type Layers, type Mode, type ViewState } from './context.ts';
 import type { MountOptions, OverlayConfig, RedlineHandle, ScreenshotRequest } from './options.ts';
 import { createApi, events, loadExtensions } from './api.ts';
@@ -349,13 +351,41 @@ function startLoop(ctx: Ctx) {
   life.on(window, 'resize', () => { reposition(); ctx.syncPanel(); });
   life.every(() => { if (!ctx.checkPage()) ctx.renderPins(); }, 500);
   // Live (D41): when the store has a change feed, it says "changed" and the overlay re-reads at
-  // once; polling then only backs it up. Without one, nothing is opened.
+  // once; polling then only backs it up. One stream per tab, held only while needed (D72): live pages
+  // (MCP asks, D65) and the change feed share it while the tab is visible; without live pages the change
+  // feed alone, while the overlay is open. A hidden tab lets go after a while and catches up on return.
   let live = false;
-  if (ctx.config.events && ctx.transport.subscribe) {
-    life.add(ctx.transport.subscribe(() => void ctx.poll(), up => { live = up; }));
-  }
+  const stall = {
+    probe: () => ctx.transport.config(),
+    stalled: () => { console.warn(`[redline] ${ctx.t('tooManyStreams')}`); ctx.toast(ctx.t('tooManyStreams'), true, 20_000); },
+  };
+  const t = ctx.transport;
+  let conn: LiveConnection | null = null, sent = '';
+  const where = (): LiveQuery => ({ page: ctx.page, path: location.pathname + location.search, title: document.title });
+  const feed = ctx.config.live && t.live && !inFrame() ? gatedFeed({
+    open(up) {
+      const c: LiveConnection = t.live!(where(), {
+        up: on => { live = on && !!ctx.config.events; up(on); },
+        change: () => void ctx.poll(),
+        ask: a => c.reply(a.req, answer(a, ctx.errors)),
+      });
+      conn = c; sent = JSON.stringify(where());
+      return () => { c.close(); if (conn === c) conn = null; live = false; };
+    },
+    resumed: () => void ctx.poll(), stall,
+  }) : ctx.config.events && t.subscribe ? gatedFeed({
+    open(up) {
+      const stop = t.subscribe!(() => void ctx.poll(), on => { live = on; up(on); });
+      return () => { stop(); live = false; };
+    },
+    want: () => state.open, resumed: () => void ctx.poll(), stall,
+  }) : null;
+  if (feed) life.add(() => feed.stop());
   let lastPoll = 0;
   life.every(() => {
+    feed?.update();
+    // Client-side routing: the live page's key and path follow.
+    if (conn && JSON.stringify(where()) !== sent) { sent = JSON.stringify(where()); conn.moved(where()); }
     if (document.hidden) return;
     const every = live ? 30_000 : state.open ? 2000 : 6000;
     if (Date.now() - lastPoll >= every) { lastPoll = Date.now(); void ctx.poll(); }

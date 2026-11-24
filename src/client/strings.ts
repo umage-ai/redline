@@ -93,6 +93,7 @@ export const STRINGS = {
   saveFailed: 'Could not save: {error}',
   saving: 'Saving…',
   savingLarge: 'Large pages take a little longer to screenshot. Hold on…',
+  tooManyStreams: 'The dev server isn’t answering this tab: the browser’s connections to it are probably used up. Over HTTP/1.1 a browser allows 6 per server, shared by every tab, and each tab’s live updates hold one. Close some tabs of this app (hidden ones let go after 15 s), or serve the dev server over https, which uses HTTP/2 and has no such limit.',
   wantedSource: 'Wanted source (keeps the markup): `{html}`',
   // sketch
   box: '▭ Box',

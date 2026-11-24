@@ -17,11 +17,11 @@ const note = (over: Partial<Note>): Note => ({
 });
 
 /** Serve the given notes as the store's, and record the overlay's PATCHes. */
-async function fakeStore(page: Page, notes: () => Note[], events = false) {
+async function fakeStore(page: Page, notes: () => Note[], events = false, extra: Record<string, unknown> = {}) {
   const patches: { id: string; body: unknown }[] = [];
   await page.route('**/__redline/config', async route => {
     const real = await (await route.fetch()).json();
-    await route.fulfill({ json: { ...real, dir: 'notes.example', events } });
+    await route.fulfill({ json: { ...real, dir: 'notes.example', events, ...extra } });
   });
   await page.route(/\/__redline\/notes(\?.*)?$/, route => route.fulfill({ json: { version: String(notes().length) + notes().map(n => n.id + n.done).join(), root: 'notes.example', notes: notes() } }));
   await page.route(/\/__redline\/notes\/[a-z0-9]+$/, async (route: Route) => {
@@ -72,8 +72,8 @@ test('a pushed change shows a colleague\'s new note at once, not on the next pol
   await fakeStore(page, () => notes, true);
   let push!: () => void;
   const pushed = new Promise<void>(r => { push = r; });
-  // The stream answers once the test pushes; then the overlay re-reads /notes.
-  await page.route('**/__redline/events', async route => {
+  // The tab's one stream (live pages, D72) answers once the test pushes; then the overlay re-reads /notes.
+  await page.route(u => u.pathname === '/__redline/live', async route => {
     await pushed;
     await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' }, body: 'retry: 60000\n\nevent: change\ndata: {}\n\n' });
   });
@@ -89,6 +89,18 @@ test('a pushed change shows a colleague\'s new note at once, not on the next pol
   await expect(ui(page, '.pin')).toHaveCount(1, { timeout: 3000 });
   // The overlay is closed, so its poll runs every 6 s: well under that means the push did it.
   expect(Date.now() - t).toBeLessThan(3000);
+});
+
+test('without live pages (another machine), the change feed is only held while the overlay is open (D72)', async ({ page }) => {
+  await fakeStore(page, () => [], true, { live: false });
+  let opened = 0;
+  await page.route('**/__redline/events', async route => { opened++; await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: 'retry: 60000\n\n' }); });
+  await page.goto(f.url, { waitUntil: 'domcontentloaded' });
+  await expect(ui(page, '.launcher')).toBeAttached();
+  await page.waitForTimeout(1500);
+  expect(opened).toBe(0);
+  await page.keyboard.press('Alt+Shift+KeyR');
+  await expect.poll(() => opened).toBe(1);
 });
 
 test('without a change feed the overlay never opens /events', async ({ page }) => {
