@@ -1,7 +1,6 @@
-// The page's side of live pages (D65): a stream to the dev server so MCP tools can ask this page what
-// only it knows (the console errors it saw, the DOM around a note's target now). Started by the
-// injected script for a same-origin API without extra headers; a server without /live (404, .NET)
-// just ends it. Answers go back as POSTs with the x-redline header.
+// The page's side of live pages (D65): MCP tools ask this page what only it knows (the console errors
+// it saw, the DOM around a note's target now). The stream is the transport's `live` (one per tab, also
+// the change feed, D72), held by mount.ts while the tab is visible; answers go back as POSTs.
 
 import type { Target } from '../shared/types.ts';
 import { resolve } from './anchor.ts';
@@ -30,29 +29,12 @@ export function outline(el: Element): Record<string, unknown> {
   };
 }
 
-export function startLive(apiBase: string, page: () => string, errors: () => string[]) {
-  if (typeof EventSource === 'undefined') return;
-  let id = '';
-  const post = (p: string, body: object) => fetch(`${apiBase}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-redline': '1' }, body: JSON.stringify(body) }).catch(() => {});
-  const q = () => new URLSearchParams({ page: page(), path: location.pathname + location.search, title: document.title });
-  const es = new EventSource(`${apiBase}/live?${q()}`);
-  es.addEventListener('hello', e => { id = JSON.parse((e as MessageEvent).data).id; });
-  es.addEventListener('ask', e => {
-    const a = JSON.parse((e as MessageEvent).data) as { req: string; kind: string; target?: Target };
-    let data: unknown;
-    if (a.kind === 'console') data = { errors: errors(), url: location.href };
-    else if (a.kind === 'dom' && a.target) {
-      const el = resolve(a.target);
-      data = el ? outline(el) : { missing: true, url: location.href };
-    }
-    void post('/live/reply', { conn: id, req: a.req, data });
-  });
-  // A server without live pages answers 404: EventSource stops by itself (no retry on a failed open).
-  // Client-side routing: the page key and path follow, checked when the URL changes.
-  let last = location.href;
-  setInterval(() => {
-    if (!id || location.href === last) return;
-    last = location.href;
-    void post('/live/moved', { conn: id, page: page(), path: location.pathname + location.search, title: document.title });
-  }, 1000);
+/** The answer to an MCP tool's ask: the console errors this page saw, or the DOM around a note's target now. */
+export function answer(a: { kind: string; target?: Target }, errors: () => string[]): unknown {
+  if (a.kind === 'console') return { errors: errors(), url: location.href };
+  if (a.kind === 'dom' && a.target) {
+    const el = resolve(a.target);
+    return el ? outline(el) : { missing: true, url: location.href };
+  }
+  return undefined;
 }

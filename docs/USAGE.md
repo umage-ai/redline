@@ -1,6 +1,6 @@
 # Using Redline
 
-Last updated: 2026-11-14 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
+Last updated: 2026-11-24 · Cap: 200 lines · The reviewer's features, coding agents and MCP, the note files, extending and embedding.
 
 Setup per framework: [FRAMEWORKS.md](FRAMEWORKS.md). Every option and its default: [OPTIONS.md](OPTIONS.md).
 
@@ -96,7 +96,7 @@ Optional: `npx redline init --mcp` registers `redline mcp` (`.mcp.json`, plus VS
 without one it reads `.redline/`. Codex: `codex mcp add redline -- npx -y @umage.ai/redline mcp`. The dev server also
 serves the tools over HTTP at `/__redline/mcp` (local callers; `mcpTokens: ['…']` lets bearer-token agents in from
 elsewhere; through `next dev` too). That endpoint (Node only) adds tools that need the running app, answered by the
-tabs that have it open: `note_dom` (the DOM around a note's element now), `page_console` (their console errors),
+visible tabs that have it open (a tab hidden for 15 s lets go of its stream, D72): `note_dom` (the DOM around a note's element now), `page_console` (their console errors),
 `check_page` (a page's status, plus those errors). With the agent panel it adds `working_on` (the note a session is on:
 its tag and tab say so), `attach` (a file or link on the session's 📎), `list_agent_sessions` and `get_agent_session`
 (state, notes, branch, transcript tail). Sessions the toolbar starts get it wired in: Claude Code through `--mcp-config`,

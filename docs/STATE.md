@@ -1,6 +1,6 @@
 # State
 
-Last updated: 2026-11-14 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
+Last updated: 2026-11-24 · Cap: 150 lines · Rewrite sections in place; this is a snapshot, not a log.
 
 ## Status
 
@@ -40,7 +40,7 @@ README and LICENSE. Later releases go through `.github/workflows/publish.yml` (T
 | Toolbar centred left of the open notes panel, wraps when short of room (phones: one scrolling row); `HEAD` answered on GET routes | ✅ | `extend.spec.ts`, `mobile.spec.ts`, `extend.test.ts` |
 | Sketch: scroll recorded, svg + composited png, containing-element anchor | ✅ | `overlay.spec.ts` |
 | Live agent replies, done/reopen/delete from the panel (assets removed) | ✅ | `overlay.spec.ts` |
-| Live pages (D65): open tabs keep `/__redline/live` (this machine only); the HTTP MCP's `note_dom`, `page_console`, `check_page` ask them, and say so when none is open. Agent tools (D66): `working_on` (tag + tab), `attach`, `list_agent_sessions`, `get_agent_session`; sessions Redline starts get the MCP with their own bearer and id. Node only (stdio and .NET: the note tools) | ✅ | `mcp-live.test.ts`, `live.spec.ts`, `agent.spec.ts` |
+| Live pages (D65): visible tabs keep `/__redline/live` (this machine only; also the change feed, D72: one stream per tab, let go 15 s after the tab hides, the agent feed only while open, a toast when the browser's 6 connections are used up); the HTTP MCP's `note_dom`, `page_console`, `check_page` ask them, and say so when none is open. Agent tools (D66): `working_on` (tag + tab), `attach`, `list_agent_sessions`, `get_agent_session`; sessions Redline starts get the MCP with their own bearer and id. Node only (stdio and .NET: the note tools) | ✅ | `mcp-live.test.ts`, `live.spec.ts`, `agent.spec.ts`, `streams.spec.ts`, `feed.test.ts` |
 | Panel cards show relative age ("3 weeks ago", exact stamp on hover); open notes over 14 days flagged amber as possibly stale. Skill asks agents to end replies with the fix commit hash | ✅ | `age.test.ts` |
 | Source + components: React 19, SvelteKit 2 / Svelte 5, Astro 7, Vue 3.5, Solid 1.9, Preact 11 (Vite 8), Angular 22 (D23) | ✅ | `frameworks.spec.ts` |
 | Angular CLI: `@umage.ai/redline:dev-server` builder wraps `ng serve` (middleware + dev-only template source locations); `ng build` untouched | ✅ Angular 22, real `ng serve` | `frameworks.spec.ts`, `extend.spec.ts`; not in `test:package` yet |

@@ -1,7 +1,6 @@
 # Decisions
 
-Last updated: 2026-11-14 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if.
-Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
+Last updated: 2026-11-24 · Cap: 200 lines · Format: `## D<n> — title (date)` then Decision / Why / Revisit if. Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instead of deleting them.
 
 ## D1 — Dev-server plugin first, Chrome extension later (2026-10-13)
 - **Decision:** ship as a Vite plugin (plus an Astro wrapper and a generic connect middleware) that serves the client and writes files. **Why:** the dev server can write straight into the repo and knows the root. It's dev-only by construction, and all the apps we built it for run on Vite. An extension can't write to disk without a helper process. **Revisit if:** we need non-Vite apps or staging/prod URLs. The extension would reuse `dist/client.js`.
@@ -195,3 +194,6 @@ Amend an entry when it changes; mark superseded ones `(superseded by Dn)` instea
 
 ## D69 — The note popover drags; after a save the agent offers to take the note, in a toast (2026-11-14)
 - **Decision:** the popover moves by its header (with `draggable`; kept until the draft closes, focus stays in the text). After a save the agent extension shows a toast with actions (extension API v7): **This note** and, with more open, **All N** (the Notes scope), gone after 8 s unless hovered, closed when the agent toolbar opens, off per viewer in ⚙ › Notes (`redline.agent.offer`). Not a modal or a third "this page" button. **Why:** the box hid the very thing being described; and the loop is note → send, without a detour through the agent toolbar, while a reviewer who batches notes can ignore it. **Revisit if:** "This note" in fresh mode spawns too many sessions (then send to an idle session).
+
+## D72 — One stream per tab, held only while needed; a stall says why (2026-11-24)
+- **Decision:** browsers allow 6 HTTP/1.1 connections per server, for every tab, and each EventSource holds one. A local tab's live-pages stream (`/live`, D65) also carries `change` (D41), so it holds one (`/config` says `live` to this machine; `transport.live`). Every stream goes through `gatedFeed` (`src/client/feed.ts`): open while wanted and the tab is visible, closed 15 s after either ends, reopened with a catch-up. Live pages are wanted always (MCP asks the visible tab); `/events` without live pages and the agent status feed only while the overlay is open (closed: `/info` every 5 s); the CLI window while shown. Stall check: a stream not connected after 5 s, or just connected, and a plain `/config` unanswered for 5 s → it lets go for a minute and a toast explains (close tabs, or https → HTTP/2). Not one stream shared across tabs, not WebSockets yet ([plans/websockets.md](../plans/websockets.md)). **Why:** a few dev tabs with the agent on held all six; the app's own requests hung. **Revisit if:** MCP must reach hidden tabs, or the WebSocket plan lands.

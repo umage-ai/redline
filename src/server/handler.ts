@@ -396,6 +396,8 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       // The agent panel is for this machine only: other callers `network` lets in don't get it.
       if (read && p === '/config') return json(res, 200, {
         ...config, extensions: agent && !localCall(req) ? extensions.slice(0, -1) : extensions,
+        // Live pages (D65) for this machine: the tab's one stream, which also carries the change feed (D72).
+        ...(localCall(req) ? { live: true } : {}),
         labels: await labelsFor(req), guide: GUIDE_PATHS.find(g => existsSync(path.join(root, g))) ?? null,
       });
       if (read && p.startsWith('/assets/')) {
@@ -437,10 +439,13 @@ export function createHandler(opts: RedlineOptions & { serverRoot: string; clien
       // The agent panel (D53) checks its own callers: this machine only, whatever `network` says.
       if (agent && p.startsWith('/agent/')) return agent.handle(req, res, p, localCall(req));
 
-      // Live pages (D65): open tabs keep a stream here so MCP tools can ask them; this machine only.
+      // Live pages (D65): open tabs keep a stream here so MCP tools can ask them; this machine only. The
+      // same stream carries `change` from a store with a change feed, so a tab holds one connection (D72).
       if (read && p === '/live') {
         if (!localCall(req)) return json(res, 404, { error: 'live pages are for this machine only' });
         live.open(req, res, new URL(url, 'http://x').searchParams);
+        listen(res);
+        req.on('close', () => unlisten(res));
         return;
       }
 

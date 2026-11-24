@@ -16,6 +16,7 @@ import type { RedlineApi, RedlineStatus, RedlineWindow } from '../../src/shared/
 import { API_BASE } from '../../src/shared/types.ts';
 import type { PromptView, Span } from '../../agent-bridge/src/screen.ts';
 import { bridgeClient, type BridgeClient } from '../../agent-bridge/src/client.ts';
+import { gatedFeed } from '../../src/client/feed.ts';
 import { pickCli, pickFor, recallCli, recallOffer, recallScope, recallSettings, rememberCli, rememberOffer, rememberScope, rememberSettings, type Cli, type PerCli, type Scope } from './settings.ts';
 
 export { pickCli };
@@ -1270,14 +1271,25 @@ export default async function agentPanel(rl: RedlineApi) {
     for (const t of tags.values()) if (t.el.isConnected) renderTag(t); else tags.delete(t.note.id);
   }
 
-  // The status feed: every session, with the toolbar and window closed; `clis` when an ACP agent's
-  // models and effort levels arrive (D62). The client reconnects by itself (a dev-server restart); a
-  // stale token (another server process) re-reads /info.
-  client.watch(
-    g => { group = g as Group; sync(); },
-    c => { setup.clis = c as Cli[]; if (view === 'settings') refreshSettings(); sync(); },
-    i => { setup = i as unknown as Setup; group = setup; pick = pickCli(clis(), pick, setup.cli); sync(); },
-  );
+  // The status feed: every session; `clis` when an ACP agent's models and effort levels arrive (D62). The
+  // client reconnects by itself (a dev-server restart); a stale token (another server process) re-reads
+  // /info. Held only while the overlay is open in a visible tab (D72: browsers allow 6 connections per
+  // server over HTTP/1.1, for every tab); otherwise /info is read every 5 s, enough for the launcher's status.
+  const onInfo = (i: unknown) => { setup = i as Setup; group = setup; pick = pickCli(clis(), pick, setup.cli); sync(); };
+  const feed = gatedFeed({
+    open: up => client.watch(
+      g => { group = g as Group; sync(); },
+      c => { setup.clis = c as Cli[]; if (view === 'settings') refreshSettings(); sync(); },
+      onInfo, up,
+    ),
+    want: () => rl.isOpen(),
+  });
+  rl.on('open', () => feed.update());
+  rl.on('close', () => feed.update());
+  setInterval(() => {
+    feed.update();
+    if (!feed.opened && document.visibilityState !== 'hidden') void client.refresh().then(onInfo, () => { /* down: next time */ });
+  }, 5000);
   // The CLI window: keys there acknowledge a finished turn; a session it started is the one shown.
   window.addEventListener('message', e => {
     if (e.origin !== location.origin || e.source !== frame?.contentWindow) return;

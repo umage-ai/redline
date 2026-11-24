@@ -9,6 +9,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { createHandler } from '../../src/server/handler.ts';
+import { createStore } from '../../src/server/store.ts';
 import { agent } from '../../agent/src/index.ts';
 import { claudeCode } from '../../agent-bridge/src/adapters.ts';
 import { MCP_TOKEN } from '../../agent/src/server.ts';
@@ -142,4 +143,32 @@ test('Claude Code gets the MCP servers as an --mcp-config file (owner-only, remo
   assert.deepEqual(cfg, { mcpServers: { redline: { type: 'http', url: 'http://localhost:5173/__redline/mcp', headers: { authorization: 'Bearer t', 'x-redline-agent-session': 's1' } } } });
   const none = await claudeCode.start!({ args: [], instructions: { text: '' } });
   assert.deepEqual(none.args, [], 'no MCP servers: no flag');
+});
+
+test('one stream per tab (D72): /config says live to this machine only; /live also carries the change feed', async () => {
+  const fire = new Set<() => void>();
+  const s = await serve({
+    network: true,
+    store: ({ root, dir }: { root: string; dir: string }) => Object.assign(createStore({ root, dir }), { subscribe(fn: () => void) { fire.add(fn); return () => fire.delete(fn); } }),
+  });
+  try {
+    assert.equal((await (await fetch(`${s.url}/__redline/config`)).json()).live, true);
+    const remote = await new Promise<string>(resolve => {
+      const res = { statusCode: 0, setHeader() {}, end(b: string) { resolve(b); }, writeHead() {}, write() {}, on() {} };
+      s.h.api({ url: '/__redline/config', method: 'GET', headers: { host: '192.168.1.2:5173' }, socket: { remoteAddress: '192.168.1.9' }, on() {} } as never, res as never, () => resolve(''));
+    });
+    assert.equal(JSON.parse(remote).live, undefined);
+    const ac = new AbortController();
+    const r = await fetch(`${s.url}/__redline/live?page=/&path=/&title=T`, { signal: ac.signal });
+    const reader = r.body!.getReader(), dec = new TextDecoder();
+    let got = '';
+    for (let i = 0; i < 20 && !got.includes('event: hello'); i++) got += dec.decode((await reader.read()).value);
+    assert.equal(fire.size, 1, 'the store is subscribed while a tab listens');
+    for (const f of fire) f();
+    for (let i = 0; i < 20 && !got.includes('event: change'); i++) got += dec.decode((await reader.read()).value);
+    assert.match(got, /event: change/);
+    ac.abort();
+    for (let i = 0; i < 50 && fire.size; i++) await new Promise(res => setTimeout(res, 20));
+    assert.equal(fire.size, 0, 'and let go when it closes');
+  } finally { s.close(); }
 });

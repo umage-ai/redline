@@ -6,6 +6,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import css from '@xterm/xterm/css/xterm.css';
 import { API_BASE } from '../../src/shared/types.ts';
+import { gatedFeed } from '../../src/client/feed.ts';
 import { pickFor, recallCli, recallSettings, type Cli } from './settings.ts';
 
 const BASE = `${API_BASE}/agent`;
@@ -97,18 +98,26 @@ async function main() {
   const hideStart = () => { start.style.display = 'none'; term.focus(); };
 
   if (!id) return showStart();
-  const es = new EventSource(`${BASE}/stream?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`);
-  es.addEventListener('hello', e => {
-    const h = JSON.parse((e as MessageEvent).data);
-    term.reset();
-    if (h.scrollback) term.write(h.scrollback);
-    if (h.running) { hideStart(); void post('/resize', { cols: term.cols, rows: term.rows }); }
-    else showStart(h.exitCode);
+  // The session's output: held while this tab is visible, let go a while after it is hidden (D72), and
+  // opened again on return: `hello` brings the scrollback, so nothing is lost.
+  gatedFeed({
+    open(up) {
+      const es = new EventSource(`${BASE}/stream?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`);
+      es.onopen = () => up(true);
+      es.addEventListener('hello', e => {
+        const h = JSON.parse((e as MessageEvent).data);
+        term.reset();
+        if (h.scrollback) term.write(h.scrollback);
+        if (h.running) { hideStart(); void post('/resize', { cols: term.cols, rows: term.rows }); }
+        else showStart(h.exitCode);
+      });
+      es.addEventListener('start', () => { term.reset(); hideStart(); });
+      es.addEventListener('data', e => term.write(JSON.parse((e as MessageEvent).data)));
+      es.addEventListener('exit', e => showStart(JSON.parse((e as MessageEvent).data).exitCode));
+      es.onerror = () => { up(false); if (es.readyState === EventSource.CLOSED) showStart(undefined, 'Lost the dev server; reload the page.'); };
+      return () => es.close();
+    },
   });
-  es.addEventListener('start', () => { term.reset(); hideStart(); });
-  es.addEventListener('data', e => term.write(JSON.parse((e as MessageEvent).data)));
-  es.addEventListener('exit', e => showStart(JSON.parse((e as MessageEvent).data).exitCode));
-  es.onerror = () => { if (es.readyState === EventSource.CLOSED) showStart(undefined, 'Lost the dev server; reload the page.'); };
 }
 
 void main();

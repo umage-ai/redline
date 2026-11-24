@@ -20,7 +20,7 @@ npm i @umage.ai/redline-overlay
 import { mount, httpTransport } from '@umage.ai/redline-overlay';
 
 const rl = await mount({
-  transport: myStore,             // load / create / update / remove / assetUrl (+ optional message, subscribe, edit)
+  transport: myStore,             // load / create / update / remove / assetUrl (+ optional message, subscribe, live, edit)
   shadowMode: 'closed',           // a store-published extension
   hostTag: 'acme-review', namespace: 'acme',
   theme: { '--ink': '#0a84ff' },

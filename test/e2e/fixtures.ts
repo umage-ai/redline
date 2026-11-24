@@ -7,22 +7,24 @@ const bin = (p: string) => `node "${path.join(repo, 'node_modules', p)}"`;
 
 export interface Fixture { name: string; dir: string; url: string; command: string; timeout?: number }
 
-const fixture = (name: string, port: number, command: string, timeout?: number): Fixture =>
-  ({ name, dir: path.join(repo, 'test/fixtures', name), url: `http://localhost:${port}`, command, timeout });
-const vite = (name: string, port: number) => fixture(name, port, `${bin('vite/bin/vite.js')} --config vite.config.mjs --port ${port} --strictPort`);
+// PW_PORT_OFFSET=1000 moves every fixture (6199…) when other apps hold the usual ports.
+const OFFSET = Number(process.env.PW_PORT_OFFSET) || 0;
+const fixture = (name: string, at: number, command: (port: number) => string, timeout?: number): Fixture =>
+  ({ name, dir: path.join(repo, 'test/fixtures', name), url: `http://localhost:${at + OFFSET}`, command: command(at + OFFSET), timeout });
+const vite = (name: string, at: number) => fixture(name, at, port => `${bin('vite/bin/vite.js')} --config vite.config.mjs --port ${port} --strictPort`);
 
 // cwd is the fixture folder (SvelteKit and Astro read their config from cwd).
 export const FIXTURES = {
-  vanilla: fixture('vanilla', 5199, `${bin('vite/bin/vite.js')} --config vite.config.mjs --port 5199 --strictPort`),
-  react: fixture('react', 5200, `${bin('vite/bin/vite.js')} --config vite.config.mjs --port 5200 --strictPort`),
-  sveltekit: fixture('sveltekit', 5201, `${bin('vite/bin/vite.js')} dev --config vite.config.mjs --port 5201 --strictPort`),
-  astro: fixture('astro', 5202, `${bin('astro/bin/astro.mjs')} dev --port 5202`),
+  vanilla: vite('vanilla', 5199),
+  react: vite('react', 5200),
+  sveltekit: fixture('sveltekit', 5201, port => `${bin('vite/bin/vite.js')} dev --config vite.config.mjs --port ${port} --strictPort`),
+  astro: fixture('astro', 5202, port => `${bin('astro/bin/astro.mjs')} dev --port ${port}`),
   // Own node_modules (Angular needs its own TypeScript): serve.mjs installs them on first run.
-  angular: fixture('angular', 5203, 'node serve.mjs --port 5203', 300_000),
+  angular: fixture('angular', 5203, port => `node serve.mjs --port ${port}`, 300_000),
   vue: vite('vue', 5204),
   solid: vite('solid', 5205),
   preact: vite('preact', 5206),
   // Next.js 15 (D48): one app, served twice (webpack and Turbopack); own node_modules, installed by serve.mjs.
-  next: { ...fixture('next', 5207, 'node serve.mjs 5207', 300_000) },
-  'next-turbo': { ...fixture('next', 5208, 'node serve.mjs 5208 --turbopack', 300_000), name: 'next-turbo' },
+  next: { ...fixture('next', 5207, port => `node serve.mjs ${port}`, 300_000) },
+  'next-turbo': { ...fixture('next', 5208, port => `node serve.mjs ${port} --turbopack`, 300_000), name: 'next-turbo' },
 } satisfies Record<string, Fixture>;

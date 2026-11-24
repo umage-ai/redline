@@ -34,7 +34,7 @@ npm run build          # esbuild → dist/ (vite.js, astro.js, server.js, cli.js
 npm run dev            # rebuild on change
 npm run typecheck      # tsc --noEmit (src, test/unit, test/e2e)
 npm test               # unit tests (node:test, runs .ts directly) + docs check
-npm run test:e2e       # build + Playwright against 10 fixture servers (installed Chrome; PW_CHROMIUM=1 for bundled; PW_FIXTURES=vue,angular starts only those)
+npm run test:e2e       # build + Playwright against 10 fixture servers (installed Chrome; PW_CHROMIUM=1 for bundled; PW_FIXTURES=vue,angular starts only those; PW_PORT_OFFSET=1000 moves them off taken ports)
 npm run check          # everything: typecheck, unit, docs, e2e. Run before calling work done.
 npm run test:package   # pack → install the tarball into temp React/SvelteKit/Astro/node apps → type + browser tests; also the hub and overlay packages (slow; runs on prepublishOnly)
 # Release: on main, `npm run release -- patch|minor|major` → tag v<version> → .github/workflows/publish.yml publishes (D13). Never `npm publish` locally.

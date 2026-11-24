@@ -41,17 +41,19 @@ export async function bridgeClient(base: string) {
     /**
      * The status feed: `onGroup` with every session whenever one changes, `onClis` when an ACP agent's
      * models arrive. Reconnects by itself; a stale token (another server process) re-reads /info first.
-     * Returns a function that closes it.
+     * `onUp` hears it connect and drop. Returns a function that closes it.
      */
-    watch(onGroup: (g: GroupInfo) => void, onClis?: (c: CliInfo[]) => void, onInfo?: (i: BridgeInfo) => void): () => void {
+    watch(onGroup: (g: GroupInfo) => void, onClis?: (c: CliInfo[]) => void, onInfo?: (i: BridgeInfo) => void, onUp?: (on: boolean) => void): () => void {
       let es: EventSource | null = null, closed = false;
       const connect = () => {
         es?.close();
         if (closed) return;
         es = new EventSource(`${base}/stream?status=1&token=${encodeURIComponent(setup.token)}`);
         for (const ev of ['hello', 'status']) es.addEventListener(ev, e => onGroup(JSON.parse((e as MessageEvent).data)));
+        es.onopen = () => onUp?.(true);
         es.addEventListener('clis', e => { setup.clis = JSON.parse((e as MessageEvent).data); onClis?.(setup.clis); });
         es.onerror = async () => {
+          onUp?.(false);
           if (es?.readyState !== EventSource.CLOSED || closed) return;
           try { setup = await getInfo(base); onInfo?.(setup); setTimeout(connect, 1000); } catch { /* down: retried on the next call */ }
         };

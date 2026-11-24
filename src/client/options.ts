@@ -42,6 +42,8 @@ export interface OverlayConfig {
   pageKey?: PageKeyMode;
   /** The transport has a change feed (`subscribe`). */
   events?: boolean;
+  /** The server has live pages for this caller (D65): one stream per tab carries MCP asks and the change feed (`transport.live`, D72). */
+  live?: boolean;
   /** The self-starting script also runs inside iframes (D60; the `allowInIframe` server option). `mount()` ignores it. */
   allowInIframe?: boolean;
   /**
