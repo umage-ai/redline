@@ -79,7 +79,11 @@ function numbered(L: Line[], end: number): Row[] | null {
   return rows.length >= 2 && rows[0].n === 1 && rows.some(r => r.selected) ? rows : null;
 }
 
-/** A trust-dialog list: the ❯ row and its neighbours at the same text column, right above the hint. */
+/**
+ * A trust-dialog list: the ❯ row and its neighbours at the same text column, right above the hint (only blank
+ * lines between). The agent's own input box (`❯ your prompt…` wrapped onto indented lines) sits above a rule
+ * and the status lines, whose last one can read like a hint ("shift+tab to cycle"): never a menu.
+ */
 function unnumbered(L: Line[], hintAt: number): Row[] | null {
   let c = -1;
   for (let i = hintAt - 1; i >= Math.max(0, hintAt - 12); i--) if (/^\s*[❯›]\s+\S/.test(L[i].text)) { c = i; break; }
@@ -90,6 +94,7 @@ function unnumbered(L: Line[], hintAt: number): Row[] | null {
   while (a > 0 && isRow(a - 1)) a--;
   while (b + 1 < hintAt && isRow(b + 1)) b++;
   if (b === a) return null;
+  for (let i = b + 1; i < hintAt; i++) if (L[i].text.trim()) return null;
   return L.slice(a, b + 1).map((l, k) => ({ i: a + k, label: (k + a === c ? l.text.slice(col) : l.text).trim(), selected: k + a === c, desc: [] }));
 }
 
