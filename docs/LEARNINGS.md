@@ -183,3 +183,6 @@ Prune entries whose cause is gone from the code.
 
 ## L65 — With a few dev tabs open the dev server seemed to hang (requests pending, no error)
 - **Cause / fix:** over HTTP/1.1 a browser opens at most 6 connections per server, shared by all tabs, and an EventSource holds one for good; each tab held two or three (live pages, agent status, CLI window), so the app's own requests queued behind them. WebSockets (Vite's HMR) don't count. Fix: D72 (one stream per tab, let go when hidden or not needed, a toast when stalled). Fixtures can move off taken ports: `PW_PORT_OFFSET`. **Guard:** `streams.spec.ts`, `feed.test.ts`, `mcp-live.test.ts` "one stream per tab".
+
+## L66 — Typing a prompt into the agent's CLI opened the question card as soon as it ran onto a second line
+- **Cause:** the screen reader (`parsePrompt`, D53) takes a `❯` row plus same-column lines above a key hint as a list without numbers (the trust dialog). Claude Code's auto-mode footer, "⏵⏵ auto mode on (shift+tab to cycle)", matched the hint pattern ("Tab to"), and a wrapped or multi-line prompt in the input box gave the extra rows. **Fix:** such a list counts only when nothing but blank lines sits between it and the hint (the input box has a rule and status lines below it). **Guard:** `agent-screen.test.ts` "…the input line is never a menu" (`claude-multiline-input`, a real 2.1.332 screen).

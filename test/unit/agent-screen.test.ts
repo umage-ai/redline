@@ -42,6 +42,9 @@ test('prompt: a list without numbers needs the key hint; the input line is never
   assert.equal(parsePrompt(screen('claude-idle-input')), null);
   // A multi-line prompt typed into the input box (❯ plus indented lines) is not a menu either.
   assert.equal(parsePrompt([{ text: '❯ Use the AskUserQuestion tool to ask me' }, { text: '  two questions at once' }, { text: '  and tell me.' }, { text: '────────────' }, { text: '  ? for shortcuts' }]), null);
+  // Nor under Claude Code's auto-mode footer, "shift+tab to cycle", which reads like a key hint: the card
+  // opened as soon as a typed prompt ran onto a second line (a real Claude Code 2.1.332 screen).
+  assert.equal(parsePrompt(screen('claude-multiline-input')), null);
 });
 
 test('prompt: a menu already answered, left on screen with output below it, is not a menu (the card used to stay up)', () => {
