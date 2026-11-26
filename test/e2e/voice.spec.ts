@@ -91,10 +91,11 @@ test('a session: Point keeps the toolbar, S is a screenshot not sketch, clicks a
   expect(md).toMatch(/\*\*1:00\*\* “And take a picture\.”/);
   expect(md).toMatch(/✏️ \*\*Drew on the page\*\* over `button` “Pay now”/);
   expect((await fs.readdir(path.join(dir, 'shots'))).length).toBe(3);
+  // The pointer note is updated after session.json says done, so wait for it (a read mid-write finds no note).
+  await expect.poll(async () => (await notes()).find(n => n.id === r.note)?.body ?? '').toContain('transcribed by fake-whisper');
   const [pointer] = await notes();
   expect(pointer.id).toBe(r.note);
   expect(pointer.body).toContain(`[${r.dir}/session.md]`);
-  expect(pointer.body).toContain('transcribed by fake-whisper');
 });
 
 test('Esc stops pointing but stays in the session; Discard asks once more', async ({ page }) => {
