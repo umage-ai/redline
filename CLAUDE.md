@@ -55,7 +55,7 @@ npx playwright test -c dotnet/playwright.config.ts      # browser smoke: Razor/B
 dotnet pack dotnet/Redline.slnx                         # the NuGet packages
 ```
 
-The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact,next,voice}`, ports 5199–5206, Next on 5207 webpack + 5208 Turbopack, voice on 5209) load `dist/`, so **rebuild before e2e**. They use the root `node_modules`, except Angular (own TypeScript major) and Next (large): their `serve.mjs` installs their own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
+The e2e fixtures (`test/fixtures/{vanilla,react,sveltekit,astro,angular,vue,solid,preact,next,voice}`, ports 5199–5206, Next on 5207 webpack + 5208 Turbopack, voice on 5214) load `dist/`, so **rebuild before e2e**. They use the root `node_modules`, except Angular (own TypeScript major) and Next (large): their `serve.mjs` installs their own on first run. Playwright reuses fixture servers that are already running locally, so restart them after
 changing server-side code (handler/store/plugin), and restart Next's after any rebuild (L47). Client-only changes just need a rebuild and a page reload.
 
 ## Architecture (the parts that span files)

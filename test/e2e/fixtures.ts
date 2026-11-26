@@ -28,5 +28,5 @@ export const FIXTURES = {
   next: { ...fixture('next', 5207, port => `node serve.mjs ${port}`, 300_000) },
   'next-turbo': { ...fixture('next', 5208, port => `node serve.mjs ${port} --turbopack`, 300_000), name: 'next-turbo' },
   // The voice plugin (D71), with a stand-in transcriber.
-  voice: vite('voice', 5209),
+  voice: vite('voice', 5214),   // not 5209: the hub test's own (L48); .NET uses 5210-5213
 } satisfies Record<string, Fixture>;

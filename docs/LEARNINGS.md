@@ -1,6 +1,6 @@
 # Learnings
 
-Last updated: 2026-11-24 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
+Last updated: 2026-11-26 · Cap: 200 lines · Format: `## L<n> — symptom` then Cause / Fix / Guard.
 Prune entries whose cause is gone from the code.
 
 ## L1 — `net::ERR_INVALID_HTTP_RESPONSE` on every HTML page
@@ -131,7 +131,7 @@ Prune entries whose cause is gone from the code.
 
 ## L48 — CI: `Port 5207 is already in use` in `hub.spec.ts`; passed on Windows
 - **Cause:** the hub test starts its own Vite server on a fixed port, which the new Next fixture also took. Windows let both bind (IPv4 vs IPv6 `localhost`); Linux didn't.
-- **Fix:** the hub test uses 5209; a fixture port must not reuse a spec's own. **Guard:** `hub.spec.ts` "the hub test's dev server port is not a fixture's".
+- **Fix:** the hub test uses 5209; a fixture port must not reuse a spec's own (the voice fixture took 5209 in 0.11.0 and failed the release run; it is on 5214, and the hub port now moves with `PW_PORT_OFFSET` so the guard sees clashes locally too). **Guard:** `hub.spec.ts` "the hub test's dev server port is not a fixture's".
 
 ## L49 — Tab capture: another note's pin in the screenshot on a big or slow page
 - **Cause / fix:** the overlay was hidden, then a fixed ~170 ms wait; the stream runs at 5 fps and a slow page paints late, so the video still held an old frame. Now waits for a frame captured after the hide (`requestVideoFrameCallback`, max 800 ms). **Guard:** `capture.spec.ts` "tab capture" (Chrome `--auto-accept-this-tab-capture`; caught the old code 1 run in 3).

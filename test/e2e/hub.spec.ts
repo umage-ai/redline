@@ -12,7 +12,8 @@ import { createHub } from '../../hub/src/server.ts';
 import { FIXTURES } from './fixtures.ts';
 import { comment, openOverlay, ui } from './helpers.ts';
 
-const PORT = 5209;   // after the fixtures (5199-5208); .NET samples use 5210-5213
+// After Next (5207-5208); .NET samples use 5210-5213, the voice fixture 5214. Moves with PW_PORT_OFFSET like the fixtures.
+const PORT = 5209 + (Number(process.env.PW_PORT_OFFSET) || 0);
 let db: Db, dir: string, close: () => Promise<void>, hubUrl: string, key: string;
 let vite: ViteDevServer | undefined;
 
